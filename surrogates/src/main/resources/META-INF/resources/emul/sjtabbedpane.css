@@ -1,0 +1,25 @@
+/* SwingBridge Emulators — https://github.com/vaadin/swingbridge-emulators
+ * The `emul-` class names and `data-emul-*` attributes on this page are ours.
+ */
+/* SJTabbedPane peers over Vaadin's vaadin-tabsheet, whose web component shows
+ * an indeterminate circular "loading" spinner (shadow [part="loader"]) whenever
+ * the selected tab has no attached content. An empty tab strip — every tab
+ * closed — is exactly that case (selected == null, no content), so the spinner
+ * sticks on forever. Swing's JTabbedPane has no loading concept and simply
+ * renders a blank content area when empty, so we suppress the loader.
+ *
+ * The loading state is owned entirely by the web component (Flow's TabSheet
+ * exposes no server-side lever for it), which is why this is fixed in CSS.
+ * The rule is confined to vaadin-tabsheet's own loader part — and in a migrated
+ * app every vaadin-tabsheet is an SJTabbedPane peer — so there is nothing for
+ * it to leak onto.
+ *
+ * Loaded via @StyleSheet on SJTabbedPane (not @CssImport): this file lives under
+ * META-INF/resources/ and is served as-is by the servlet container as a plain
+ * <link> stylesheet in the global document scope (so ::part() reaches the
+ * exposed loader part). That keeps it out of the Vite frontend bundle, so
+ * adding/shipping it never forces a dev-bundle rebuild. Any app compiling
+ * against the emulators/surrogates jars gets it, not just the Sampler. */
+vaadin-tabsheet::part(loader) {
+    display: none;
+}

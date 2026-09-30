@@ -1,0 +1,78 @@
+name: Maven Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      # Run every JDK even if one fails — SB-Emulators requires JDK 24+ (JEP 491 unpins virtual
+      # threads blocked inside synchronized, load-bearing for loom-based callSwing).
+      fail-fast: false
+      matrix:
+        java: [ '24', '25' ]
+    name: maven build (JDK ${{ matrix.java }})
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          # setup-java's built-in Maven cache keys on pom.xml hashes.
+          cache: maven
+      # install, not verify: -Pkit builds every shipped testapp stage out of the assembled
+      # distribution kit, and those builds resolve com.vaadin.swingbridge:*:<ver>-SNAPSHOT from
+      # ~/.m2 — the way a migrator's app resolves it. One run suffices, since Maven finishes each
+      # module's lifecycle before starting the next. That invoker run is ALL -Pkit adds; the kit's
+      # own checks, including the shipped-launcher smoke test, are in the default build.
+      # Both JDKs run it: the standalone testapp poms carry their own JDK-24 enforcer, and that is
+      # part of what the shipped copies are being exercised for.
+      - run: ./mvnw -B -C -ntp install -Pkit
+      - name: Publish test report
+        uses: mikepenz/action-junit-report@v5
+        if: always()
+        with:
+          check_name: Maven test report (JDK ${{ matrix.java }})
+          report_paths: '**/target/surefire-reports/TEST-*.xml'
+      - name: Upload build reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          # unique per matrix job — upload-artifact@v4 rejects duplicate names
+          name: maven-build-reports-jdk${{ matrix.java }}
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+            zip-distro/target/invoker-reports/
+            zip-distro/target/placeholders.txt
+            zip-distro/target/*-dist.zip
+            migration-tool/target/*-dist.zip
+
+  # The migration tools ship as two shell scripts and two .cmd twins, and the .cmd twins are the
+  # half no Linux run can execute. This job builds :migration-tool alone and lets its DistZipIT
+  # drive `bin\import-swap.cmd` out of the assembled zip. Accepted scope: the kit's own KitSmokeIT
+  # stays Linux-only — it needs the whole reactor installed, and a full Windows reactor build is
+  # not worth its minutes for one more script run. testapps/crud/swing is committed, so the IT has
+  # its input on a bare checkout.
+  windows-scripts:
+    runs-on: windows-latest
+    name: shipped launchers (Windows)
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '24'
+          cache: maven
+      - run: .\mvnw.cmd -B -C -ntp -pl migration-tool -am verify
+      - name: Upload build reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-scripts-reports
+          path: |
+            migration-tool/target/surefire-reports/
+            migration-tool/target/failsafe-reports/

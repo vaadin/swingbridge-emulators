@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-surrogates</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (surrogates)</name>
+    <description>Vaadin components extended directly to reproduce one Swing component's
+        behaviour in full. Used as the peers the emulators drive, and as the API a migrated view
+        rewrites onto once it is ready to become Vaadin-shaped.</description>
+
+    <!-- Classes that extend Vaadin components directly (is-a) for 100% Swing-functionality
+         coverage. Pure Java throughout, src/main and src/test alike.
+         See D_emulator_surrogate_split / surrogates/decisions.md. -->
+
+
+    <dependencies>
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-core</artifactId>
+        </dependency>
+        <!-- RTE backs SJEditorPane — JEditorPane's single peer (SD_sjeditorpane_rte). Commercial but
+             license-free unless an editor is rendered. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-rich-text-editor-flow</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- VaadinSession's interface references jakarta.servlet.http.HttpSessionBindingListener;
+             needed on the compile classpath but provided by the container at runtime. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.kaributesting</groupId>
+            <artifactId>karibu-testing-v24</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

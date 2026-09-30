@@ -1,0 +1,341 @@
+/*
+ * App-specific styles. Loaded alongside Lumo via AppShell's @StyleSheet.
+ *
+ * Goal: nudge Lumo toward a Java Swing (cross-platform Metal L&F) feel —
+ * tighter typography, square corners, beveled fields, grey-gradient
+ * buttons. Not pixel-perfect; just "reads as a Swing app at a glance."
+ */
+
+/* ---------- 1. Global Lumo token overrides ---------- */
+
+html {
+    /* Swing's "Dialog" logical font ≈ a system sans-serif. Pick the
+       closest cross-platform stand-ins. */
+    --lumo-font-family: "Dialog", "Liberation Sans", "DejaVu Sans",
+                        "Helvetica Neue", "Helvetica", sans-serif;
+
+    /* Swing's default body text is ~12px. Lumo defaults are ~16px. */
+    --lumo-font-size-xxs: 0.625rem;  /* 10 */
+    --lumo-font-size-xs:  0.6875rem; /* 11 */
+    --lumo-font-size-s:   0.75rem;   /* 12 */
+    --lumo-font-size-m:   0.75rem;   /* 12 — body */
+    --lumo-font-size-l:   0.875rem;  /* 14 */
+    --lumo-font-size-xl:  1rem;      /* 16 */
+    --lumo-font-size-xxl: 1.25rem;   /* 20 */
+    --lumo-font-size-xxxl:1.5rem;    /* 24 */
+
+    --lumo-line-height-s: 1.1;
+    --lumo-line-height-m: 1.25;
+    --lumo-line-height-l: 1.4;
+
+    /* Component heights. Swing buttons/fields run ~22-26px. */
+    --lumo-size-xs: 1.125rem; /* 18 */
+    --lumo-size-s:  1.25rem;  /* 20 */
+    --lumo-size-m:  1.5rem;   /* 24 */
+    --lumo-size-l:  1.75rem;  /* 28 */
+    --lumo-size-xl: 2.25rem;  /* 36 */
+
+    /* Spacing — much tighter than Lumo defaults. */
+    --lumo-space-xs: 0.125rem; /* 2 */
+    --lumo-space-s:  0.25rem;  /* 4 */
+    --lumo-space-m:  0.375rem; /* 6 */
+    --lumo-space-l:  0.625rem; /* 10 */
+    --lumo-space-xl: 1rem;     /* 16 */
+
+    /* No rounded corners — Swing Metal is square. */
+    --lumo-border-radius-s: 0;
+    --lumo-border-radius-m: 0;
+    --lumo-border-radius-l: 0;
+
+    /* Metal-flavoured palette. */
+    --lumo-base-color: #ECEAE3;
+    --lumo-tint: #ffffff;
+    --lumo-shade: #000;
+
+    --lumo-tint-5pct:  rgba(255, 255, 255, 0.40);
+    --lumo-tint-10pct: rgba(255, 255, 255, 0.55);
+    --lumo-tint-20pct: rgba(255, 255, 255, 0.70);
+
+    --lumo-shade-5pct:  rgba(0, 0, 0, 0.05);
+    --lumo-shade-10pct: rgba(0, 0, 0, 0.12);
+    --lumo-shade-20pct: rgba(0, 0, 0, 0.20);
+    --lumo-shade-30pct: rgba(0, 0, 0, 0.30);
+    --lumo-shade-40pct: rgba(0, 0, 0, 0.45);
+    --lumo-shade-50pct: rgba(0, 0, 0, 0.60);
+    --lumo-shade-60pct: rgba(0, 0, 0, 0.70);
+    --lumo-shade-70pct: rgba(0, 0, 0, 0.80);
+    --lumo-shade-80pct: rgba(0, 0, 0, 0.90);
+    --lumo-shade-90pct: #000;
+
+    --lumo-primary-color:        #4079B5;
+    --lumo-primary-color-50pct:  rgba(64, 121, 181, 0.5);
+    --lumo-primary-color-10pct:  rgba(64, 121, 181, 0.18);
+    --lumo-primary-text-color:   #1F4F84;
+    --lumo-primary-contrast-color: #fff;
+
+    --lumo-body-text-color:      #000;
+    --lumo-header-text-color:    #000;
+    --lumo-secondary-text-color: #404040;
+    --lumo-tertiary-text-color:  #707070;
+    --lumo-disabled-text-color:  #909090;
+
+    --lumo-contrast-5pct:  rgba(0,0,0,0.05);
+    --lumo-contrast-10pct: rgba(0,0,0,0.10);
+    --lumo-contrast-20pct: rgba(0,0,0,0.20);
+    --lumo-contrast-30pct: rgba(0,0,0,0.30);
+    --lumo-contrast-40pct: rgba(0,0,0,0.45);
+    --lumo-contrast-50pct: rgba(0,0,0,0.60);
+    --lumo-contrast-60pct: rgba(0,0,0,0.70);
+    --lumo-contrast-70pct: rgba(0,0,0,0.80);
+    --lumo-contrast-80pct: rgba(0,0,0,0.90);
+    --lumo-contrast-90pct: #000;
+    --lumo-contrast: #000;
+
+    /* Flatten Lumo's soft drop shadows — Metal stays sharp. */
+    --lumo-box-shadow-xs: 0 0 0 1px #707070;
+    --lumo-box-shadow-s:  0 0 0 1px #707070;
+    --lumo-box-shadow-m:  1px 1px 3px rgba(0,0,0,0.30);
+    --lumo-box-shadow-l:  2px 2px 4px rgba(0,0,0,0.30);
+    --lumo-box-shadow-xl: 3px 3px 5px rgba(0,0,0,0.35);
+}
+
+body {
+    background: var(--lumo-base-color);
+    color: #000;
+}
+
+/* ---------- 2. Buttons: Metal Ocean blue-grey gradient ----------
+ *
+ * Java's default L&F since JDK 5 is Metal/Ocean — buttons are a soft
+ * blue-grey, not pure grey. Palette here is roughly:
+ *   highlight #DCE8F4 → #C0D4EA   (top half, light to mid blue-grey)
+ *   shade     #A6BFDC → #8BA8C8   (bottom half, mid to deeper)
+ *   border    #6F8AAD              (Ocean's secondary1)
+ */
+
+vaadin-button {
+    background: linear-gradient(to bottom, #DCE8F4 0%,  #C0D4EA 50%,
+                                            #A6BFDC 50%, #8BA8C8 100%);
+    color: #000;
+    border: 1px solid #6F8AAD;
+    border-radius: 0;
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.55);
+    min-width: 4em;
+    padding: 0 0.75em;
+    height: var(--lumo-size-m);
+    font-weight: 400;
+    cursor: default;
+}
+vaadin-button:hover {
+    background: linear-gradient(to bottom, #EBF2FA 0%,  #D2E0F1 50%,
+                                            #B9CFE6 50%, #9DB7D4 100%);
+}
+vaadin-button:active,
+vaadin-button[active] {
+    background: #8BA8C8;
+    box-shadow: inset 1px 1px 1px rgba(0,0,0,0.25);
+}
+vaadin-button[disabled] {
+    background: #D5DDE7;
+    color: #98A4B5;
+    box-shadow: none;
+}
+
+/* Primary (default) button: deeper Ocean blue. */
+vaadin-button[theme~="primary"] {
+    background: linear-gradient(to bottom, #98BBE0 0%, #6F9DCB 50%,
+                                            #4980B6 50%, #2F6BA8 100%);
+    color: #fff;
+    border: 1px solid #1F4F84;
+    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4);
+}
+vaadin-button[theme~="primary"]:hover {
+    background: linear-gradient(to bottom, #ABC9E8 0%, #84ACD3 50%,
+                                            #5A8EBE 50%, #3A77B0 100%);
+}
+
+/* Tertiary-inline buttons (e.g. the tab-close "x" in the TabbedPanes demo)
+ * are inline affordances embedded in text/headers, not raised Metal buttons.
+ * The Vaadin theme="tertiary-inline" variant strips Lumo's chrome, but the
+ * blanket vaadin-button rule above re-paints the Swing gradient/border/min-
+ * width onto them. Opt them back out so the variant renders as intended:
+ * no box, no fixed width, snug around the label. Higher specificity than the
+ * base vaadin-button rule, so this wins. */
+vaadin-button[theme~="tertiary-inline"] {
+    background: none;
+    border: none;
+    border-radius: var(--lumo-border-radius-s);
+    box-shadow: none;
+    min-width: 0;
+    padding: 0 0.25em;
+    height: auto;
+    color: inherit;
+    cursor: pointer;
+}
+vaadin-button[theme~="tertiary-inline"]:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+vaadin-button[theme~="tertiary-inline"]:active,
+vaadin-button[theme~="tertiary-inline"][active] {
+    background: rgba(0, 0, 0, 0.15);
+    box-shadow: none;
+}
+
+/* Drawer router-links should look like Swing flat list items, not
+   blue text links. */
+a[href][router-link] {
+    color: var(--lumo-body-text-color);
+    text-decoration: none;
+    padding: 2px 6px;
+    display: block;
+}
+a[href][router-link]:hover {
+    background: #D7E2F0;
+    color: #000;
+}
+a[href][router-link][highlight] {
+    background: var(--lumo-primary-color);
+    color: #fff;
+}
+
+/* ---------- 3. Text inputs: white interior, sunken 1px bevel ---------- */
+
+vaadin-text-field,
+vaadin-password-field,
+vaadin-text-area,
+vaadin-combo-box,
+vaadin-integer-field,
+vaadin-number-field,
+vaadin-select {
+    --lumo-contrast-10pct: #fff; /* defeat Lumo's grey field background */
+}
+
+vaadin-text-field::part(input-field),
+vaadin-password-field::part(input-field),
+vaadin-text-area::part(input-field),
+vaadin-combo-box::part(input-field),
+vaadin-integer-field::part(input-field),
+vaadin-number-field::part(input-field),
+vaadin-select::part(input-field) {
+    background: #fff;
+    border: 1px solid #707070;
+    border-top-color: #999;
+    border-left-color: #999;
+    border-radius: 0;
+    box-shadow: inset 1px 1px 0 #ddd;
+    padding: 0 4px;
+}
+vaadin-text-field[focus-ring]::part(input-field),
+vaadin-password-field[focus-ring]::part(input-field),
+vaadin-text-area[focus-ring]::part(input-field),
+vaadin-combo-box[focus-ring]::part(input-field),
+vaadin-integer-field[focus-ring]::part(input-field),
+vaadin-number-field[focus-ring]::part(input-field),
+vaadin-select[focus-ring]::part(input-field) {
+    border-color: #4079B5;
+    box-shadow: 0 0 0 1px #4079B5;
+}
+
+/* ---------- 4. Checkboxes: small square, black tick on white ----------
+ *
+ * Vaadin's checkbox renders the tick via [part="checkbox"]::after with
+ *   content: var(--vaadin-checkbox-checkmark-char, var(--lumo-icons-checkmark));
+ * but the var() fallback doesn't resolve in our setup — content lands
+ * empty and the tick disappears. Wire the public custom prop directly
+ * to the lumo-icons codepoint. We also keep the box white when checked
+ * (default Lumo flips it to primary blue) and stain the tick black so
+ * it reads against the white background.
+ */
+vaadin-checkbox {
+    --vaadin-checkbox-size: 13px;
+    --vaadin-checkbox-border-radius: 0;
+}
+vaadin-checkbox::part(checkbox) {
+    border: 1px solid #707070;
+    background: #fff;
+    box-shadow: inset 1px 1px 0 #ddd;
+}
+vaadin-checkbox[checked]::part(checkbox) {
+    /* Override Lumo's checked-bg → primary-color rule. */
+    background: #fff;
+    border-color: #707070;
+}
+/*
+ * Vaadin's check-glyph rule resolves
+ *   content: var(--vaadin-checkbox-checkmark-char, var(--lumo-icons-checkmark))
+ * but the chained var() falls through to "" in this build. Override the
+ * ::after's content directly with the unicode check ✓ (U+2713) — every
+ * system sans-serif has it, so we don't depend on the lumo-icons font.
+ */
+vaadin-checkbox[checked]::part(checkbox)::after {
+    content: "\2713";
+    color: #1F4F84;
+    font-family: "DejaVu Sans", "Liberation Sans", sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1;
+    text-align: center;
+}
+
+/* ---------- 5. Dialogs / overlays: square, hard border ---------- */
+
+vaadin-dialog-overlay::part(overlay),
+vaadin-confirm-dialog-overlay::part(overlay) {
+    border-radius: 0;
+    border: 1px solid #707070;
+    background: var(--lumo-base-color);
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.35);
+}
+vaadin-dialog-overlay::part(header),
+vaadin-confirm-dialog-overlay::part(header) {
+    background: var(--lumo-base-color);
+    border-bottom: 1px solid #B0B0B0;
+    padding: 4px 8px;
+}
+vaadin-dialog-overlay::part(content),
+vaadin-confirm-dialog-overlay::part(content) {
+    padding: 8px;
+}
+
+/* ---------- 6. App layout: tighter, flatter ---------- */
+
+vaadin-app-layout::part(navbar) {
+    background: linear-gradient(to bottom, #F5F4ED, #DDDBD2);
+    border-bottom: 1px solid #B0B0B0;
+    padding: 0 8px;
+    min-height: 30px;
+}
+vaadin-app-layout::part(drawer) {
+    background: var(--lumo-base-color);
+    border-right: 1px solid #B0B0B0;
+    padding: 4px;
+}
+
+vaadin-drawer-toggle {
+    color: #000;
+}
+
+h1 {
+    font-size: 0.875rem !important;
+    font-weight: bold;
+    margin: 0;
+}
+
+/* Vaadin's app-running-in-dev-mode info banner — silence so screenshots
+   focus on the app, not the toolchain notice. */
+vaadin-notification-card {
+    /* Optional: keep visible during development. */
+}
+
+/* ---------- 7. TitledBorder legend ---------- */
+/*
+ * The legend itself is rendered by a runtime-injected <style> block in
+ * surrogates SHelper.ensureTitledBorderStyleInjected (selector
+ * [data-emul-border-title]::before). That rule places the legend at
+ * top: -0.6em above the panel, which means panel children at static y=0
+ * collide with it. Reserve top space here so first-row content sits
+ * below the legend.
+ */
+[data-emul-border-title] {
+    padding-top: 0.8em;
+}

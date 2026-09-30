@@ -1,0 +1,93 @@
+/* SwingBridge Emulators — https://github.com/vaadin/swingbridge-emulators
+ * The `emul-` class names and `data-emul-*` attributes on this page are ours.
+ */
+/*
+ * The SB-Emulators-supplied half of D_theme_is_lookandfeel: the fill a component gets
+ * when its background is an L&F default rather than a colour the app asked for.
+ *
+ * These are ordinary class rules on purpose. An inline style would outrank
+ * every stylesheet short of !important, which would make SB-Emulators' own default
+ * un-overridable by the standard Vaadin mechanisms a migrator has — so a
+ * default belongs in the cascade where the migrator's CSS can beat it, and an
+ * app-set colour stays inline where it beats the theme. The cascade is the
+ * priority mechanism; SB-Emulators needs none of its own.
+ *
+ * Tokens are the --vaadin-* base styles, which every Vaadin 25 theme defines
+ * (Aura, Lumo, and the bare base styles alike), so SB-Emulators never picks a theme and
+ * the migrator's own theme binds the value. Both are light-dark()-based
+ * upstream, so dark mode adapts without SB-Emulators knowing about it.
+ *
+ * To restyle: override these two selectors from your own stylesheet.
+ */
+
+/*
+ * D_layout_owns_child_sizing: the seam between a child's preferred size and its
+ * parent layout's opinion about it. A child writes its pref as
+ * `width: var(--emul-layout-w, 850px)`; its parent layout writes the variable —
+ * `auto` to take the axis over, `initial` to let the pref stand.
+ *
+ * Registered solely for `inherits: false`. Custom properties inherit by default,
+ * so a BorderLayout CENTER panel carrying `--emul-layout-w: auto` would hand that
+ * `auto` to every descendant, erasing the preferred widths of children whose own
+ * parent (an absolute-layout panel, say) never wrote the variable. Non-inheriting
+ * means an unset value is the guaranteed-invalid value, which is exactly what
+ * makes each child's `var()` fall back to its own pref.
+ *
+ * No `initial-value`: the universal `*` syntax allows omitting it, and the
+ * guaranteed-invalid initial IS the "pref stands" state.
+ */
+@property --emul-layout-w {
+    syntax: "*";
+    inherits: false;
+}
+
+@property --emul-layout-h {
+    syntax: "*";
+    inherits: false;
+}
+
+/*
+ * Metal's "control"/"window" surfaces. --vaadin-background-color is an opaque
+ * rgb(), which is load-bearing rather than incidental: an opaque Swing panel
+ * must be able to curtain what it covers, and the container token below cannot
+ * because it is translucent.
+ */
+.emul-bg-default {
+    background-color: var(--vaadin-background-color);
+}
+
+/*
+ * Chrome strips — toolbars and menu bars — which read as raised against the
+ * page rather than as part of it. Translucent by design upstream, so it tints
+ * whatever is behind rather than hiding it. Never use this for a fill that has
+ * to be opaque.
+ */
+.emul-bg-chrome {
+    background-color: var(--vaadin-background-container);
+}
+
+/*
+ * JOptionPane's messageType glyph tint — the spirit of Swing's L&F-supplied
+ * coloured error/warning/info icons.
+ *
+ * These need a chain rather than a single base token because the base styles
+ * define no semantic status colours, and that is deliberate on Vaadin's part:
+ * its own answer to "this is an error" is a component theme variant, which
+ * vaadin-icon does not offer. So Aura's palette first, Lumo's second, and a
+ * literal last — reached only under the bare base styles, where nothing else
+ * defines a status colour and a fixed value is the honest answer.
+ *
+ * Keeping the two theme names in one stylesheet rather than at the Java call
+ * sites means an Aura palette change is one edit here.
+ */
+.emul-msg-error {
+    color: var(--aura-red-text, var(--lumo-error-color, #d32f2f));
+}
+
+.emul-msg-warning {
+    color: var(--aura-orange-text, var(--lumo-warning-color, #f57c00));
+}
+
+.emul-msg-info {
+    color: var(--aura-blue-text, var(--lumo-primary-color, #1976d2));
+}

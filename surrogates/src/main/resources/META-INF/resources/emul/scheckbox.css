@@ -1,0 +1,43 @@
+/* SwingBridge Emulators — https://github.com/vaadin/swingbridge-emulators
+ * The `emul-` class names and `data-emul-*` attributes on this page are ours.
+ */
+/* A grouped java.awt.Checkbox paints as a radio button — in the JDK a live
+ * peer property read off `group != null` (XCheckboxPeer.paint), not a
+ * construction-time type choice. SCheckbox#setRadioLook writes the
+ * `emul-radio` theme name; this file is the whole rendering half of that.
+ *
+ * Two mechanisms, because only one of them is honoured at 25.2.3. The box
+ * shape goes through --vaadin-checkbox-border-radius, a documented style
+ * property the theme's own rules read, so it crosses the shadow boundary by
+ * inheritance. The glyph does not: --vaadin-checkbox-checkmark-char is
+ * likewise documented, but the chained var() it feeds falls through in this
+ * build, so the knob is set (harmless, and correct the day it is wired) while
+ * the ::part rule below is what actually lands. Author ::part() declarations
+ * outrank the shadow tree's own for normal declarations.
+ *
+ * The [checked] qualifier is not decoration. An app's own Swing-look sheet
+ * may carry `vaadin-checkbox[checked]::part(checkbox)::after { content }` of
+ * its own (the Sampler and both testapps do, to replace a checkmark glyph
+ * that falls through to empty); at equal specificity the later sheet wins,
+ * and this file is linked before the app's. Matching [checked] too outranks
+ * it, and costs nothing — the dot only renders when checked anyway.
+ *
+ * If a future theme honours neither, the degradation is benign and visual
+ * only: a grouped Checkbox keeps the checkmark glyph while its mutual
+ * exclusion (emulator-side, vaadinx.awt.CheckboxGroup) is unaffected.
+ * Bucket (c), no WARN.
+ *
+ * Loaded via @StyleSheet on SCheckbox (not @CssImport): the file lives under
+ * META-INF/resources/ and is served as a plain <link> in the global document
+ * scope, keeping it out of the Vite frontend bundle so shipping it never
+ * forces a dev-bundle rebuild. That scope is also a hard requirement rather
+ * than a preference here — Vaadin's styling docs note ::part() selectors do
+ * not work from a shadow-DOM-injected sheet. */
+vaadin-checkbox[theme~="emul-radio"] {
+    --vaadin-checkbox-border-radius: 50%;
+    --vaadin-checkbox-checkmark-char: "●";
+}
+
+vaadin-checkbox[theme~="emul-radio"][checked]::part(checkbox)::after {
+    content: "●";
+}

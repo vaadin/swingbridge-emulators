@@ -1,0 +1,454 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Vaadin's company-wide parent, as vaadin/flow uses it. It contributes little we do not
+         already state ourselves (<url>, <scm>, <licenses> and <developers> are all overridden
+         below): a vaadin-prereleases <snapshotRepository>, and a `release` profile of its own
+         (-Prelease) which does our GPG signing and Central publishing — see <profiles>. Empty
+         relativePath: it resolves from Central, never ../pom.xml. -->
+    <parent>
+        <groupId>com.vaadin</groupId>
+        <artifactId>vaadin-parent</artifactId>
+        <version>3.0.3</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.vaadin.swingbridge</groupId>
+    <artifactId>swingbridge-emulators-parent</artifactId>
+    <version>0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>SwingBridge Emulators (parent)</name>
+    <description>SwingBridge Emulators: a runtime emulation library of the Swing API running on top of Vaadin 25</description>
+    <!-- child.project.url.inherit.append.path on <project> above: Maven otherwise appends each
+         module's path to the inherited URL, so :emulators would publish
+         .../swingbridge-emulators/swingbridge-emulators and the add-ons
+         .../third-party/swingbridge-emulators-jcalendar-1.4 — all 404s, and Central validates every
+         artifact's metadata independently. The repo URL is the right one for every module.
+         NOTE the attribute belongs on <project>, not on <url>; Maven silently ignores it there
+         (measured on 3.9.16) and the appended path comes back. Its <scm> counterparts below do
+         sit on their own element. -->
+    <url>https://github.com/vaadin/swingbridge-emulators</url>
+
+    <licenses>
+        <!-- THE DEFAULT, NOT THE ONLY LANE. PROVENANCE.md § Lanes is the authoritative map
+             (D_licence_lanes). Every module Vaadin authored with no JDK expression in it inherits
+             this block — re-measured on every build by JdkSimilarityTest (D_similarity_gate), which
+             is what makes Apache-2.0 a safe default: a new module inherits it and is measured from
+             its first build. Four modules override it with their own, because Maven replaces
+             <licenses> rather than merging it: :emulators and :emulators-printing are GPLv2+CE,
+             since they are a derivative work of OpenJDK (D_gplv2_ce_relicense), and the two
+             third-party add-ons take their upstream library's licence, jgoodies-forms-1.2.1 BSD and
+             jcalendar-1.4 LGPL-2.1 (M1D_addon_upstream_licence). Each of the four overrides
+             <resources> below too, for the same reason. -->
+        <license>
+            <name>Apache License Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+            <distribution>repo</distribution>
+            <comments>Vaadin-authored, and carrying no OpenJDK expression. SPDX: Apache-2.0. See
+                LICENSE-APACHE-2.0 and PROVENANCE.md, both inside this jar's META-INF/.</comments>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>mavi</id>
+            <name>Martin Vysny</name>
+            <email>mavi@vaadin.com</email>
+        </developer>
+    </developers>
+    <!-- Maven Central validates SCM metadata per artifact; connection + developerConnection are
+         both required, and <tag> is what maven-release-plugin (or a hand-cut tag) rewrites.
+         inherit.append.path=false for the same reason as <url> above. -->
+    <scm child.scm.connection.inherit.append.path="false"
+         child.scm.developerConnection.inherit.append.path="false"
+         child.scm.url.inherit.append.path="false">
+        <connection>scm:git:https://github.com/vaadin/swingbridge-emulators.git</connection>
+        <developerConnection>scm:git:git@github.com:vaadin/swingbridge-emulators.git</developerConnection>
+        <url>https://github.com/vaadin/swingbridge-emulators</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <!-- Reactor build order is dependency-driven by Maven; the listing order below is
+         only for human orientation (libs first, then the add-ons). generator, sampler and the
+         kit are listed in the `default` profile at the bottom of this pom: built by default,
+         never published, and absent from a release reactor.
+
+         THE TESTAPPS ARE NOT MODULES, deliberately. Each stage directory under testapps/ carries a
+         standalone pom and the Maven wrapper, and is built from its own directory resolving
+         SB-Emulators by coordinate — the way a migrator builds their app. As reactor modules they
+         inherited the BOM import, the versions, the JDK-24 enforcer and the surefire config that
+         the migration guide tells a migrator to write, so no round ever had to write them.
+         :zip-distro's -Pkit profile builds the *shipped* copies instead. See D_distribution_zip. -->
+    <modules>
+        <module>migration-annotations</module>
+        <module>migration-guardrails</module>
+        <module>migration-tool</module>
+        <module>surrogates</module>
+        <module>emulators</module>
+        <module>emulators-printing</module>
+        <!-- The only Spring-bearing module, deliberately: it exists so the Spring dependency
+             stays off every other classpath (D_library_servlet). -->
+        <module>emulators-spring</module>
+        <!-- Third-party library add-ons: each provides one third-party Swing library's API on
+             top of :emulators, as a standalone jar. Registered directly (no third-party/pom.xml
+             aggregator). -->
+        <module>third-party/jcalendar-1.4</module>
+        <module>third-party/jgoodies-forms-1.2.1</module>
+    </modules>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- Bytecode targets Java 21 (migrator compile compat); the *runtime* JVM must
+             be 24+ (JEP 491 unpins a callSwing UI fiber) — enforced below. See CLAUDE.md. -->
+        <maven.compiler.release>21</maven.compiler.release>
+
+        <vaadin.version>25.3.0</vaadin.version>
+        <slf4j.version>2.0.18</slf4j.version>
+        <blocking-dialogs.version>0.1</blocking-dialogs.version>
+        <junit.version>6.1.3</junit.version>
+        <tabscope.version>0.3</tabscope.version>
+        <!-- :emulators-spring only. vaadin-spring brings Spring FRAMEWORK (7.x) but not Spring
+             BOOT, so that module names the Boot artifacts itself and this is their version. It
+             is a floor to compile against, not something imposed on consumers — they are
+             `optional` there, so a migrated app's own starter picks the version it runs. Keep it
+             in step with what Vaadin resolves, and re-derive rather than guess:
+
+                 ./mvnw -C -pl emulators-spring dependency:tree -Dincludes=org.springframework.boot
+
+             SpringVersionDriftTest asserts this equals the Boot actually on the classpath, and
+             that the Boot/Framework generation pair is still the one the migration docs promise. -->
+        <spring-boot.version>4.1.1</spring-boot.version>
+
+        <!-- Maven plugin versions (resolved via maven-tools MCP). -->
+        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <maven-source-plugin.version>3.4.0</maven-source-plugin.version>
+        <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
+        <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
+        <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- junit-bom MUST precede vaadin-bom: first-declared wins in dependencyManagement,
+                 and vaadin-bom pins junit-jupiter-api to an older 6.0.x. Importing junit-bom
+                 first keeps the whole JUnit set (api/engine/platform) aligned at ${junit.version}
+                 and off Surefire's strict-alignment tripwire. -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Drives vaadin-core, vaadin-dev, vaadin-rich-text-editor-flow and the
+                 vaadin-maven-plugin in lockstep off one version. -->
+            <dependency>
+                <groupId>com.vaadin</groupId>
+                <artifactId>vaadin-bom</artifactId>
+                <version>${vaadin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- The blocking-dialog machinery EHelper.callSwing runs every peer->Swing event on:
+                 the runner-neutral API plus the virtual-thread runner (mvysny/vaadin-blocking-dialogs,
+                 Apache-2.0). Pinned exactly: the library is pre-1.0 and breaks APIs freely. -->
+            <dependency>
+                <groupId>com.github.mvysny.vaadin-blocking-dialogs</groupId>
+                <artifactId>vaadin-blocking-dialogs</artifactId>
+                <version>${blocking-dialogs.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.mvysny.vaadin-blocking-dialogs</groupId>
+                <artifactId>vaadin-uifiber-loom</artifactId>
+                <version>${blocking-dialogs.version}</version>
+            </dependency>
+
+            <!-- @NotNull / @Nullable nullability annotations used throughout src/main. -->
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>26.1.0</version>
+            </dependency>
+            <!-- Logging facade for library WARNs (EHelper.onUnimplemented, ...). -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <!-- Concrete slf4j binding: runtime logging in the apps, test-only in the libraries. -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <!-- Compile-only (provided): VaadinSession's interface references
+                 jakarta.servlet.http.HttpSessionBindingListener; the servlet container
+                 supplies the jar at runtime. -->
+            <dependency>
+                <groupId>jakarta.servlet</groupId>
+                <artifactId>jakarta.servlet-api</artifactId>
+                <version>6.1.0</version>
+            </dependency>
+            <!-- Browserless Vaadin testing; reaches components through the emulator peer field. -->
+            <dependency>
+                <groupId>com.github.mvysny.kaributesting</groupId>
+                <artifactId>karibu-testing-v24</artifactId>
+                <version>2.7.3</version>
+            </dependency>
+            <!-- (:emulators) Parses RTE-subset HTML back into a StyledDocument for JTextPane
+                 reverse sync (RteHtmlCodec.fromHtml); already Flow's transitive HTML parser. -->
+            <dependency>
+                <groupId>org.jsoup</groupId>
+                <artifactId>jsoup</artifactId>
+                <version>1.22.2</version>
+            </dependency>
+            <!-- (:emulators) Opens a URL in the system browser when the app hands a link to the user. -->
+            <dependency>
+                <groupId>com.vaadin</groupId>
+                <artifactId>open</artifactId>
+                <version>8.5.0.5</version>
+            </dependency>
+            <!-- (:emulators) Per-tab, F5-surviving scope powering the D_shutdown_lifecycle tab-close -> shutdown
+                 lifecycle. api scope in :emulators: the app (not the library) wires lifecycle per R_no_spi_selfregister. -->
+            <dependency>
+                <groupId>com.github.mvysny.vaadintabscope</groupId>
+                <artifactId>tab-scope</artifactId>
+                <version>${tabscope.version}</version>
+            </dependency>
+            <!-- (apps) Embedded-Jetty launcher so each app runs from a plain main(). -->
+            <dependency>
+                <groupId>com.github.mvysny.vaadin-boot</groupId>
+                <artifactId>vaadin-boot</artifactId>
+                <version>13.7</version>
+            </dependency>
+            <!-- (:emulators-printing) Graphics2D->PDF bridge behind the virtual PDF printer (D_printing).
+                 graphics2d declares no transitive deps by design, so pdfbox is pinned alongside it. -->
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>3.0.8</version>
+            </dependency>
+            <dependency>
+                <groupId>de.rototor.pdfbox</groupId>
+                <artifactId>graphics2d</artifactId>
+                <version>3.0.5</version>
+            </dependency>
+            <!-- (:migration-guardrails) The engine behind MigrationGuardrails' three build-time
+                 gates, and its one runtime dependency — test-scope by consumption, since the
+                 migrator adds that module in test scope (M1D_guardrails_artifact). Also
+                 :emulators' R12DeadHookTest. -->
+            <dependency>
+                <groupId>com.tngtech.archunit</groupId>
+                <artifactId>archunit</artifactId>
+                <version>1.5.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <!-- LICENSE-APACHE-2.0 + PROVENANCE.md ride inside every jar's META-INF, so an artifact
+             resolved by coordinate carries its own licence and its own provenance without a repo
+             checkout. PROVENANCE.md travels because it is the evidence for the licence — the record
+             that the module carries no JDK expression — not another module's paperwork.
+
+             PITFALL, and the reason the first entry below exists: naming <resources> at all
+             REPLACES Maven's default src/main/resources entry rather than adding to it. Dropping
+             that entry would leave e.g. :sampler's META-INF/services file or :emulators-spring's
+             AutoConfiguration.imports in the source tree but out of the jar.
+
+             A module that declares its own <resources> overrides this block ENTIRELY, which is
+             deliberate everywhere it happens, and always for the same reason: the module is not on
+             this lane, so the Apache text inside its jar would state terms we do not offer there.
+             :emulators and :emulators-printing ship the root LICENSE (GPLv2+CE) instead — their
+             per-file Oracle headers name it by reference ("the LICENSE file that accompanied this
+             code"), so a jar travelling without it points at nothing. BOTH third-party add-ons
+             ship *their own* LICENSE, each carrying its upstream library's licence
+             (M1D_addon_upstream_licence), and neither ships the root PROVENANCE.md, which is not
+             their lane's record. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <!-- The reactor root, so each module reaches the repo-root files. -->
+                <directory>${maven.multiModuleProjectDirectory}</directory>
+                <includes>
+                    <include>LICENSE-APACHE-2.0</include>
+                    <include>PROVENANCE.md</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
+            </resource>
+        </resources>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>${maven-compiler-plugin.version}</version>
+                    <configuration>
+                        <!-- Surface deprecation warnings at compile (off by default). -->
+                        <showDeprecation>true</showDeprecation>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <!-- add-opens: vaadin-uifiber-loom's LoomUtils reflects into ThreadBuilders$VirtualThreadBuilder
+                             (JDK-8308541).
+                             java.awt.headless: the suite is browser-side and must see the same JDK as
+                             CI. Without it a developer's DISPLAY leaks in and tests that pin what the
+                             real JDK answers — GraphicsEnvironmentTest.notHeadless asserts the JDK says
+                             headless where we say false — fail on a desktop and pass on CI. -->
+                        <argLine>--add-opens java.base/java.lang=ALL-UNNAMED -Djava.awt.headless=true</argLine>
+                        <!-- Legible failures without reading target/surefire-reports XML. -->
+                        <useFile>false</useFile>
+                        <trimStackTrace>false</trimStackTrace>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>${exec-maven-plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <!-- Encodes the JDK-24+-runtime rule (JEP 491). Bytecode is 21, but the JVM
+                 running the build/tests must be >=24 or a callSwing UI fiber deadlocks. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-jdk-24-plus</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[24,)</version>
+                                    <message>SB-Emulators requires a JDK 24+ runtime (JEP 491 unpins a callSwing UI fiber). See CLAUDE.md.</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Two release switches, deliberately different. The `release` PROPERTY (-Drelease) is
+             this pom's own: set, it takes the never-published modules out of the reactor (the
+             `default` profile below) and turns the `packaging` profile on. The `release` PROFILE
+             (-Prelease) is vaadin-parent's, and does the GPG signing and the Central publishing.
+             RELEASES RUN ONLY ON VAADIN'S RELEASE INFRASTRUCTURE, never by hand (DEVELOPING.md
+             § Run commands).
+
+             `packaging` adds what vaadin-parent lacks — the source and javadoc jars Central
+             requires, with the javadoc setup — and only under the `release` property, so an
+             ordinary install attaches neither and runs no javadoc; a local javadoc check runs
+             javadoc:jar directly (DEVELOPING.md § Run commands).
+             SIGNING AND PUBLISHING ARE VAADIN'S RELEASE INFRASTRUCTURE, unmodified: vaadin-parent
+             reads the GPG credentials from the properties file named by -Dgpg.passphrase.file
+             (properties-maven-plugin, at initialize) and signs at verify; its
+             central-publishing-maven-plugin then uploads to the Portal and AUTO-PUBLISHES, waiting
+             until the release is published — a successful deploy is a release on Central, with no
+             manual step and no undo. Without that file -Prelease fails with an NPE at initialize.
+
+             The plugins are inherited by every module. generator, sampler and zip-distro are not
+             in a release reactor at all — they are the `default` profile's modules, which the
+             `release` property deactivates — and neutralise the plugins anyway via maven.source.skip /
+             maven.javadoc.skip / gpg.skip / maven.deploy.skip=true in their own <properties>; the
+             testapps are not reactor modules at all. So the published set is the 7 library modules —
+             migration-annotations, migration-guardrails, migration-tool, surrogates,
+             emulators, emulators-printing, emulators-spring — plus BOTH third-party add-ons, which
+             publish because a migrated pom is told to resolve them by coordinate. Five of the nine
+             publish under this pom's Apache-2.0 (D_licence_lanes); the other four state their own
+             in a <licenses> block: emulators and emulators-printing GPLv2+CE, jgoodies-forms-1.2.1
+             BSD, jcalendar-1.4 LGPL-2.1 (M1D_addon_upstream_licence). For jcalendar, upstream's
+             licence is also what makes the artifact correctly licensed whether or not the reading
+             that an API-compatible reimplementation is not a derivative work holds, so a release
+             rests on nothing contestable there. -->
+        <profile>
+            <id>packaging</id>
+            <activation>
+                <property>
+                    <name>release</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven-source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals><goal>jar-no-fork</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <!-- true: with false, a failed javadoc run still attaches a jar, and
+                                 the release ships pages with content silently missing. -->
+                            <failOnError>true</failOnError>
+                            <doclint>all,-missing</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals><goal>jar</goal></goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- The modules that are built but never published: generator (a maintainer tool),
+             sampler (the validation testbed) and zip-distro (the distribution kit). They are in the
+             reactor unless the `release` property is set (-Drelease, the release infrastructure's
+             switch), so a release reactor never contains them and the skip properties in their own
+             poms are belt and braces. -Pkit is zip-distro's own profile and does not touch this. -->
+        <profile>
+            <id>default</id>
+            <activation>
+                <property>
+                    <name>!release</name>
+                </property>
+            </activation>
+            <modules>
+                <module>generator</module>
+                <module>sampler</module>
+                <!-- Last: it assembles the distribution kit out of what the modules above produced
+                     (docs, testapp sources, the add-ons' migration addenda). -->
+                <module>zip-distro</module>
+            </modules>
+        </profile>
+        <!-- Active only inside Eclipse / jdtls / VS Code Java (m2e sets m2e.version); the
+             command-line build never sees it. Moves the IDE's output out of target/classes, where
+             JDT would otherwise mix its own class files (different synthetic-class naming, and code
+             javac accepts but JDT rejects — the "Unresolved compilation problem" stale mode in
+             CLAUDE.md § Building) into what Maven builds and tests against. -->
+        <profile>
+            <id>ide-output</id>
+            <activation><property><name>m2e.version</name></property></activation>
+            <build><directory>${project.basedir}/target/ide</directory></build>
+        </profile>
+    </profiles>
+</project>

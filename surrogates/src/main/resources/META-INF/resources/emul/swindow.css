@@ -1,0 +1,162 @@
+/* SwingBridge Emulators — https://github.com/vaadin/swingbridge-emulators
+ * The `emul-` class names and `data-emul-*` attributes on this page are ours.
+ */
+/* Undecorated-window chrome for SWindow-family surrogates (SJWindow always;
+ * SFrame/SJFrame/SJDialog when the migrated app calls setUndecorated(true)).
+ *
+ * A Swing undecorated window is a bare content rect: no title bar, no
+ * window borders. The Vaadin Dialog overlay renders padding, a border
+ * radius, and (for frames) a header with title + close-X — this class
+ * strips those. The box-shadow is deliberately KEPT: on a desktop an
+ * undecorated window sits over the wallpaper, but in a browser it floats
+ * over live page content, and a shadowless white rect there is illegible.
+ * R_layouts_close_enough close-enough divergence, documented at SWindow.setUndecoratedChrome.
+ *
+ * Loaded via @StyleSheet on SWindow (not @CssImport): this file lives under
+ * META-INF/resources/ and is served as-is by the servlet container as a
+ * plain <link> stylesheet in the global document scope (so ::part() reaches
+ * the exposed overlay parts). That keeps it out of the Vite frontend bundle,
+ * so adding/shipping it never forces a dev-bundle rebuild. Any app compiling
+ * against the emulators/surrogates jars gets it, not just the Sampler.
+ *
+ * Every selector here targets `vaadin-dialog`, never `vaadin-dialog-overlay`.
+ * Vaadin 25.2 stopped rendering overlays outside their component, and with it
+ * the overlay element stopped being a CSS target: the parts are re-exported off
+ * `vaadin-dialog` and only reachable there. The class goes on the host via
+ * `addClassName` (there is no `setOverlayClassName` any more). A rule written
+ * against the overlay element does not error — it silently never matches, which
+ * is how four of these went dead unnoticed; Karibu sees no CSS, so only a
+ * browser measurement catches it. */
+
+vaadin-dialog.emul-undecorated::part(overlay) {
+    border-radius: 0;
+}
+
+vaadin-dialog.emul-undecorated::part(content) {
+    padding: 0;
+}
+
+/* The title bar (header title + SFrame's close-X chrome). Hidden rather
+ * than removed server-side so setUndecorated(false) restores it without
+ * re-plumbing the header slot. */
+vaadin-dialog.emul-undecorated::part(header) {
+    display: none;
+}
+
+/* Glass pane (JRootPane busy-curtain idiom). The pane is the root pane's first
+ * child, sibling of the layered pane — the JDK's own containment and index
+ * (rootPane.add(glassPane, 0), JRootPane.java:660). This rule makes it fill the
+ * root pane and sit above everything beneath, and — because pointer-events:auto
+ * on the topmost element intercepts clicks — blocks all mouse input to the
+ * content underneath. That IS the Swing contract: a *visible* glass pane
+ * swallows events (no listener needed); an *invisible* one (the default) is
+ * display:none via the pane's own setVisible, so it neither paints nor blocks.
+ * Keyboard focus can still tab into components behind it — the same gotcha real
+ * Swing's glass pane has unless the app also grabs focus (accepted limitation,
+ * see D_glasspane_structural/SD_glasspane_structural).
+ *
+ * The containing block is `.emul-rootpane`'s `position: relative`. That retired
+ * the former `emul-has-glasspane` → `::part(content) { position: relative }`
+ * rule: the positioned ancestor is now an ordinary light-DOM box, so the same
+ * declaration serves the Dialog and the inline `@MainWindow` path instead of one
+ * needing a shadow-part reach the other cannot use.
+ *
+ * Note the z-order inversion this rule exists to reconcile: Swing paints the
+ * *lower* child index on top, which is why the glass pane is at index 0; CSS
+ * paints later siblings on top. z-index restores the JDK's answer. */
+.emul-glasspane {
+    position: absolute;
+    inset: 0;
+    /* Comfortably above any in-content positioned descendant: the content
+     * pane is a static Div and forms no stacking context, so its children's
+     * z-indexes compete in the same context as the glass pane. */
+    z-index: 1000;
+    pointer-events: auto;
+}
+
+/* Content-pane span, for the RootPaneContainer-shaped surrogates (SJFrame /
+ * SJDialog / SJWindow, whose RootPaneScaffold adds emul-has-contentpane to the
+ * host). Without these two rules a setSize()d window renders its content pane
+ * at intrinsic height inside a bounded body: measured, a setSize(520,320) frame
+ * put 123px of content in a 290px body, squashing a BorderLayout CENTER
+ * JScrollPane to 72px and leaving 167px of the window empty. That is R_layouts_close_enough's
+ * structural limb, not its cosmetic one, so it has to be right.
+ *
+ * The body becomes a column so the menubar slot (a sibling of the content pane,
+ * SD_sjmenubar/D_menu_tree) takes its intrinsic height and the content pane absorbs the rest —
+ * the split a plain height:100% cannot express, since 26px of bar plus a
+ * full-height pane overflows by exactly the bar.
+ *
+ * flex-basis MUST stay auto. With flex:1 1 0 an unsized window has no content
+ * height to size itself from and collapses: measured, the same demo frame with
+ * no setSize went from a 68px overlay to 40px with a zero-height content pane.
+ * auto keeps the intrinsic size as the basis, so an unsized window still
+ * auto-sizes while a bounded one still grows; min-height:0 is what lets it
+ * shrink below its content when bounded, which BorderLayout's minmax(0, 1fr)
+ * CENTER track needs. */
+vaadin-dialog.emul-has-contentpane::part(content) {
+    display: flex;
+    flex-direction: column;
+}
+
+.emul-contentpane {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ---- Root-pane chain (JRootPane containment) -------------------------
+ *
+ * The faithful JDK shape, which SB-Emulators now reproduces:
+ *
+ *   window body (::part(content), or the SJPanel peer when inline)
+ *     └── SJRootPane        .emul-rootpane
+ *         ├── glassPane     .emul-glasspane      (index 0, as in the JDK)
+ *         └── layeredPane   .emul-layeredpane
+ *             ├── menuBar   .emul-menubar
+ *             └── contentPane .emul-contentpane
+ *
+ * `JRootPane` holds {glassPane, layeredPane}; the *layeredPane* holds
+ * {menuBar, contentPane} — both in the same FRAME_CONTENT_LAYER, so the layered
+ * pane is not stacking them in z at all. `RootLayout` stacks them in y, reaching
+ * through the layered pane to do it ("technically, these are not our children",
+ * JRootPane.java:934).
+ *
+ * The root pane is both a flex *item* of the window body and a flex *container*
+ * for what is below it. flex-basis stays `auto` for the same measured reason
+ * `.emul-contentpane` does: with `1 1 0` an unsized window has no content height
+ * to size itself from and collapses. `position: relative` makes it the glass
+ * pane's containing block — which is what retired the `emul-has-glasspane`
+ * ::part(content) rule: the positioned ancestor is now an ordinary light-DOM box
+ * that the Dialog and inline paths share. */
+.emul-rootpane {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+}
+
+/* Measured exactly a layout no-op: a `display: contents` box generates no
+ * geometry, so menuBar and contentPane become direct flex items of
+ * .emul-rootpane's column and the height chain reads as if the layered pane were
+ * not there. Bare `Div`s here break both paths (the inline frame lost 152px) and
+ * cannot be repaired by styling the content pane, because `height: 100%` against
+ * a `height: auto` parent resolves to `auto`. Vaadin's own
+ * `vaadin-dialog-content` sits in this slot at `display: contents`, so the
+ * technique is the framework's.
+ *
+ * Scoped to the class, never to `vaadin-dialog ... [part]` or to JLayeredPane's
+ * peer as a type: JDesktopPane extends JLayeredPane, and a user-instantiated one
+ * must keep its own geometry. */
+.emul-layeredpane {
+    display: contents;
+}
+
+/* RootLayout gives the bar its preferred height and the content pane the
+ * remainder; `flex: 0 0 auto` + `.emul-contentpane`'s `flex: 1 1 auto` is that
+ * split. DOM order carries it — unlike Swing, where RootLayout reads the
+ * menuBar / contentPane fields and add order is irrelevant — so the bar is
+ * planted at index 0 of the layered pane, and a DOM-shape test pins it. */
+.emul-menubar {
+    flex: 0 0 auto;
+}

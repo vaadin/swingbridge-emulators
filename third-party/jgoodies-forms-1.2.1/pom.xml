@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>swingbridge-emulators-jgoodies-forms-1.2.1</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. The starter-prototype status is
+         stated here too: M1D_addon_starter_status lists every migrator-facing place that says
+         it, and a Central listing is one of them. -->
+    <name>SwingBridge Emulators add-on: JGoodies Forms 1.2.1</name>
+    <description>JGoodies Forms 1.2.1's FormLayout API on top of SwingBridge Emulators, so a
+        migrated application keeps compiling after rewriting its com.jgoodies imports to
+        vaadinx.jgoodies. A BSD-licensed fork of the upstream sources with the pixel layout
+        engine replaced by one emitting CSS Grid. Starter prototype: shipped as-is at the
+        coverage it has.</description>
+
+    <!-- Third-party add-on: provides JGoodies Forms 1.2.1's FormLayout API on top of SB-Emulators, so a
+         migrated app keeps compiling after `com.jgoodies.` -> `vaadinx.jgoodies.`.
+
+         The two version slots carry different facts, and neither can express the other's.
+         artifactId carries the UPSTREAM version: which API surface you get. Forms 1.9 renamed
+         FormFactory to FormSpecs, so a migrator on 1.2.1 cannot use a fork of 1.9. <version>
+         is SB-Emulators', and is this add-on's own release train — our fixes and improvements plus the
+         emulator ABI it was built against — so swingbridge-emulators-jgoodies-forms-1.2.1:0.4 supersedes
+         swingbridge-emulators-jgoodies-forms-1.2.1:0.1 for the very same Forms API. Ordinary Maven semantics on
+         the half that evolves; the upstream half never does.
+
+         This module is a FORK: upstream BSD-licensed sources with rewritten imports, plus a
+         CSS-emitting replacement for the layout engine (which cannot run server-side). The
+         <licenses> block below overrides the parent's Apache-2.0 — Maven replaces rather than
+         merges it. See PROVENANCE.md and LICENSE.
+
+         Nothing in :emulators / :surrogates knows this module exists, and it must stay that
+         way — a core change made to accommodate an add-on is the experiment failing. -->
+
+    <licenses>
+        <license>
+            <name>The BSD License</name>
+            <url>https://opensource.org/licenses/BSD-3-Clause</url>
+            <distribution>repo</distribution>
+            <comments>Forked from JGoodies Forms 1.2.1, copyright 2002-2008 JGoodies Karsten
+                Lentzsch. The BSD retention clause applies to this module's sources; see
+                LICENSE.</comments>
+        </license>
+    </licenses>
+
+    <!-- PUBLISHED by a release build, like the library modules. The rule is D_kit_tool_zip: everything
+         a migrated pom can be told to reference must be resolvable by coordinate, and this
+         module's own MIGRATION.md tells an app to depend on it. The distribution kit does carry
+         this jar, but only in tools/lib/ as a swap-table source for the import-swap tool — the
+         migrated app resolves it by coordinate, so a coordinate that is not on Central has nothing
+         left to fall back on. The BSD
+         retention clause is satisfied for a source or binary redistribution either way: LICENSE
+         ships in the module and in the jar, every forked file keeps its upstream copyright header,
+         and the <licenses> block above names the BSD terms in the published pom — see
+         PROVENANCE.md § Licence. -->
+
+    <dependencies>
+        <!-- FormLayout implements vaadinx.awt.LayoutManager2 + CssEmittingLayoutManager, and
+             its specs reference vaadinx.awt.Container / Component. No :surrogates dependency —
+             a layout manager never touches one. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- VaadinSession's interface references jakarta.servlet.http.HttpSessionBindingListener;
+             needed to compile but provided by the container at runtime, as in :emulators. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.kaributesting</groupId>
+            <artifactId>karibu-testing-v24</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <!-- Maven's default resource directory, restored: naming <resources> at all replaces
+                 the default, and the swap table the import-swap tool reads lives here. Dropping it
+                 leaves the table in the source tree but out of the jar, where the tool cannot find
+                 it and silently rewrites nothing for this add-on's types. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The migrator-facing addendum ships inside the jar, so an agent that resolved this
+                 artifact by coordinate can read the migration instructions without a repo checkout
+                 (and offline). Authored at the module root next to README/PROVENANCE; this block is
+                 the only copy step. MigrationDocTest guards both halves.
+
+                 LICENSE rides along for the same one-line cost: the 3-clause BSD licence this fork
+                 carries asks that a binary redistribution reproduce the notice in the materials
+                 shipped with it, and a jar that travels on its own carries no other materials. -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>MIGRATION.md</include>
+                </includes>
+                <targetPath>META-INF/emul</targetPath>
+            </resource>
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- Configuration only — no execution here; the parent's `packaging` attach-javadocs is what runs it,
+                 and this merges over the parent's doclint. The fork's javadoc is upstream's, and it
+                 links upstream classes this fork never vendored (the builders, factories, extras,
+                 MacLayoutStyle, AbstractUnitConverter), where the import swap left the references pointing at
+                 vaadinx.* names that do not exist; it also carries upstream's <tt> and uncaptioned
+                 tables. Each is a doclint error that fails the javadoc run. Rewriting upstream's
+                 prose in a frozen fork (M1D_addon_starter_status) to satisfy a linter is not worth
+                 the diff, so those three groups are off here and only here; a dead link renders as
+                 plain text. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
+                <configuration>
+                    <doclint>all,-missing,-reference,-html,-accessibility</doclint>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

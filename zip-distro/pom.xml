@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-zip-distro</artifactId>
+    <packaging>jar</packaging>
+    <name>SwingBridge Emulators (distribution kit)</name>
+
+    <!-- Assembles the distribution kit: one download a stranger unzips and runs a Swing→emulators
+         migration from, without cloning this repository. Layout, rationale and the rejected
+         alternatives: D_distribution_zip.
+
+         THE MIGRATED APP RESOLVES SB-EMULATORS BY COORDINATE — from Central for a release, from
+         the ~/.m2 that the same `clean install` populated for a development kit. That is what lets
+         one kit shape serve both, and it is why there is no lib/ for the *library*: two copies of
+         SB-Emulators on one machine go stale against each other the moment the maintainer rebuilds.
+
+         The tools are the exception, and a narrow one (D_kit_tool_zip). tools/ is unpacked from
+         :migration-tool's own distribution zip — bin/ + lib/, run with `java -cp "lib/*"` — and
+         this module then drops the three table-carrying jars (:emulators and both add-ons) into
+         tools/lib/, because ImportSwap's swap table travels inside those jars rather than being
+         compiled into the tool. So the kit's tools need a JDK and nothing else: no Maven, no
+         network, which is what the air-gapped enterprise the kit names as first-class actually has.
+
+         The jar this module produces is empty and skipped; the artifacts are the zip and, beside
+         it, target/unzipped/ — the same tree unpacked, which the guide-loop skills and the integration
+         tests both read. The zip is a GitHub Release asset, never a Central artifact.
+
+         DEFAULT BUILD: assemble, unpack, and run every check — layout, links, placeholders, and the
+         end-to-end run of a shipped launcher over a shipped app (all of it offline, seconds). At
+         `install` it also rebuilds every testapp stage in place under testapps/ (below; ~45 s).
+         -Pkit ADDS: an invoker run building every shipped testapp stage from the unzipped kit,
+         at the paths a customer sees. CI enables it. -->
+
+    <properties>
+        <!-- Not published and not installed: the kit is a GitHub Release asset, not a Maven
+             artifact — nothing resolves it by coordinate, and there is no jar here to install
+             either. Also no-op the source/javadoc/gpg plugins the parent's profiles bind. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <gpg.skip>true</gpg.skip>
+
+        <!-- The kit's root directory name, inside the zip and under target/unzipped/. Referenced by
+             the assembly descriptor, the invoker configuration and the integration tests. -->
+        <kit.dir>swingbridge-emulators-${project.version}</kit.dir>
+
+        <!-- The tool zip's unpacked root, under target/. A fileSet reads tools/ out of here; the
+             unpack is what strips the zip's own base directory, which maven-assembly's
+             dependencySet/unpack cannot do. -->
+        <tool.dist>${project.build.directory}/tool-dist/swingbridge-migration-tool-${project.version}</tool.dist>
+
+        <maven-assembly-plugin.version>3.8.0</maven-assembly-plugin.version>
+        <maven-dependency-plugin.version>3.9.0</maven-dependency-plugin.version>
+        <maven-failsafe-plugin.version>3.6.0</maven-failsafe-plugin.version>
+        <maven-invoker-plugin.version>3.10.1</maven-invoker-plugin.version>
+
+        <!-- -Dtestapps.skip=true skips the in-place testapp rebuild bound to `install` below — for
+             one run, from the command line. KEEP THE DEFAULT false. The rebuild costs ~45 s; the
+             last time it did not exist cost a hunt across two sessions: every F5 on
+             testapps/crud logged vaadin-tab-scope's "Invalid state: uis doesn't contain given ui",
+             it appeared right after the vaadin-blocking-dialogs switch and not on main, so it was
+             chased as that switch's regression — branch-vs-main runs in Playwright, a probe
+             listener in crud, a read of tab-scope's and Flow's sources, a list of leads to bisect.
+             The cause was none of it: crud/1-emulators/target/classes/ still carried a
+             META-INF/services file from before crud moved to Spring Boot, so
+             SwingBridgeEmulatorsBootstrap ran twice (once from ServiceLoader, once as the
+             auto-configuration's bean), TabScope.setup ran twice, and each UI got two detach
+             listeners. "Not on main" was, by every sign, a scratch worktree with no target/ at all. The root
+             `clean install` had been run throughout; it just never reached testapps/. -->
+        <testapps.skip>false</testapps.skip>
+    </properties>
+
+    <dependencies>
+        <!-- The tools, as the zip :migration-tool builds of itself: bin/ + lib/, unpacked into the
+             kit's tools/. Not a jar this module repackages — it consumes a finished thing, tested
+             where the tool lives. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-tool</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+            <classifier>dist</classifier>
+        </dependency>
+
+        <!-- THE SWAP TABLES, and nothing else these three carry. ImportSwap unions every
+             META-INF/emul/ported-types.tsv on its classpath, so :emulators contributes the core
+             rows and each add-on its own — which is why the kit's tools/lib/ needs these jars while
+             the tool's own zip must not have them (add-ons cannot be in it without core learning
+             they exist). Every transitive is excluded: the tool reads these jars' resources and
+             never their classes, so without the exclusions all of Vaadin would land in tools/lib/,
+             which DistZipIT and KitLayoutIT both check for. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-jcalendar-1.4</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-jgoodies-forms-1.2.1</artifactId>
+            <version>${project.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No main sources: the module's output is the assembly. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven-jar-plugin.version}</version>
+                <configuration>
+                    <skipIfEmpty>true</skipIfEmpty>
+                </configuration>
+            </plugin>
+
+            <!-- Unpacks the tool's distribution zip so a fileSet can copy its contents into
+                 tools/ WITHOUT the zip's own versioned base directory. That stripping is the whole
+                 reason for the detour: a dependencySet with unpack=true keeps the base directory,
+                 and a fileSet cannot read inside a zip. Never a fileSet off ../migration-tool/target
+                 either — that couples this build to another module's output by path. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>${maven-dependency-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>unpack-tool-dist</id>
+                        <phase>prepare-package</phase>
+                        <goals><goal>unpack</goal></goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>com.vaadin.swingbridge</groupId>
+                                    <artifactId>swingbridge-migration-tool</artifactId>
+                                    <version>${project.version}</version>
+                                    <type>zip</type>
+                                    <classifier>dist</classifier>
+                                    <outputDirectory>${project.build.directory}/tool-dist</outputDirectory>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven-assembly-plugin.version}</version>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/dist.xml</descriptor>
+                    </descriptors>
+                    <appendAssemblyId>false</appendAssemblyId>
+                </configuration>
+                <executions>
+                    <!-- Two executions over ONE descriptor: the zip that ships, and the same tree
+                         unpacked for the tests and the guide-loop skills to read. The `dir` format
+                         writes ${outputDirectory}/${finalName}/${kit.dir}, hence finalName
+                         "unzipped" — target/unzipped/swingbridge-emulators-<version>/. -->
+                    <execution>
+                        <id>zip</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                        <configuration>
+                            <formats><format>zip</format></formats>
+                            <finalName>${kit.dir}-dist</finalName>
+                            <!-- Not attached: nothing resolves the kit by coordinate. -->
+                            <attach>false</attach>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>unzipped</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                        <configuration>
+                            <formats><format>dir</format></formats>
+                            <finalName>unzipped</finalName>
+                            <attach>false</attach>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- The kit's own checks, in integration-test because they read the assembled tree.
+                 All of them stay in the default build: they are what catches a guide link or a
+                 placeholder drifting out of what the descriptor ships, and — since the tools stopped
+                 needing Maven — running a shipped launcher over a shipped app costs a JVM start. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven-failsafe-plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <kit.root>${project.build.directory}/unzipped/${kit.dir}</kit.root>
+                        <kit.zip>${project.build.directory}/${kit.dir}-dist.zip</kit.zip>
+                        <kit.slots>${project.basedir}/src/main/kit-slots.txt</kit.slots>
+                        <kit.version>${project.version}</kit.version>
+                    </systemPropertyVariables>
+                    <useFile>false</useFile>
+                    <trimStackTrace>false</trimStackTrace>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- `clean verify` of every testapp stage IN PLACE, under testapps/, so that the root
+                 `./mvnw -C clean install` is a full rebuild in fact: the testapps are not reactor
+                 modules, so without this their target/ survives every root clean (what that cost:
+                 the testapps.skip property's comment above).
+
+                 Not -Pkit's run, which builds the *shipped* copies out of target/unzipped/ and never
+                 touches the working tree; that one stays, for the kit's paths.
+
+                 Bound to `install`, not `integration-test`: the stages resolve SB-Emulators by
+                 coordinate, so they are only worth building once the reactor has installed into
+                 ~/.m2 — under a plain `verify` they would build against the previous install's
+                 jars, the stale-artifact failure CLAUDE.md §Building warns about. This module is
+                 declared last, so every artifact a stage consumes is installed by then.
+                 -Dtestapps.skip skips it. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-invoker-plugin</artifactId>
+                <version>${maven-invoker-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>rebuild-testapps-in-place</id>
+                        <phase>install</phase>
+                        <goals><goal>run</goal></goals>
+                        <configuration>
+                            <skipInvocation>${testapps.skip}</skipInvocation>
+                            <projectsDirectory>${project.basedir}/../testapps</projectsDirectory>
+                            <pomIncludes>
+                                <pomInclude>*/*/pom.xml</pomInclude>
+                            </pomIncludes>
+                            <goals>
+                                <goal>clean</goal>
+                                <goal>verify</goal>
+                            </goals>
+                            <streamLogs>true</streamLogs>
+                            <!-- The run is in the working tree: no build.log beside each pom. -->
+                            <noLog>true</noLog>
+                            <!-- Apart from -Pkit's reports, whose project names are the same relative paths. -->
+                            <reportsDirectory>${project.build.directory}/invoker-reports/in-place</reportsDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- CI: `./mvnw -B -C -ntp install -Pkit`. Builds every shipped testapp stage from the
+             unzipped kit, at the paths a customer sees, resolving SB-Emulators by coordinate out of
+             the ~/.m2 the same run installed into. Do NOT stage a private repository with
+             invoker:install — it installs only the reactor's own artifacts, so Vaadin would
+             re-download on every invocation. `verify`, not `install`: nothing consumes a testapp.
+
+             This is ALL the profile adds. The kit's own checks — layout, links, placeholders and
+             KitSmokeIT's shipped-launcher run — are in the default build: none of them touches the
+             network any more. -->
+        <profile>
+            <id>kit</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-invoker-plugin</artifactId>
+                        <version>${maven-invoker-plugin.version}</version>
+                        <configuration>
+                            <goals>
+                                <goal>verify</goal>
+                            </goals>
+                            <streamLogs>true</streamLogs>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>build-shipped-testapps</id>
+                                <phase>integration-test</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <projectsDirectory>${project.build.directory}/unzipped/${kit.dir}/testapps</projectsDirectory>
+                                    <pomIncludes>
+                                        <pomInclude>*/*/pom.xml</pomInclude>
+                                    </pomIncludes>
+                                </configuration>
+                            </execution>
+                            <!-- The host-app seeds, each from the example-pom.xml a migrator copies —
+                                 which is what makes "the seed builds as shipped" a gate rather than a
+                                 claim. The pom is not named pom.xml so no IDE or language server
+                                 imports a seed as a project inside the kit; the invoker is handed the
+                                 file directly instead. The Spring seed's verify also boots its
+                                 context, through the SpringWiringTest the migrator keeps. -->
+                            <execution>
+                                <id>build-shipped-seeds</id>
+                                <phase>integration-test</phase>
+                                <goals><goal>run</goal></goals>
+                                <configuration>
+                                    <projectsDirectory>${project.build.directory}/unzipped/${kit.dir}/guides/1-swing-to-emulators/seed</projectsDirectory>
+                                    <pomIncludes>
+                                        <pomInclude>*/example-pom.xml</pomInclude>
+                                    </pomIncludes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+</project>

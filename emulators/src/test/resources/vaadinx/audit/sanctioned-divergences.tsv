@@ -1,0 +1,24 @@
+# Divergences from the JDK oracle that a maintainer looked at and accepted, for
+# vaadinx.audit.JdkReturnValueDiffer. Tab-separated:
+#
+#   emulator simple name <TAB> bean property <TAB> setter arg type <TAB> reason
+#
+# The arg type is part of the key on purpose: sanctioning setFoo(int) must not also
+# sanction the hand-written setFoo(char) overload beside it, which is where the
+# interesting divergences hide.
+#
+# A row is a claim, not a mute button: name the rule that permits the divergence
+# (R_vaadin_first, R_layouts_close_enough, R_match_swing_errors sub-bucket (b), a
+# D*/SD* entry). "Known" or "wontfix" is not a reason. An unreasoned divergence
+# belongs in the report, where triage can still reach it.
+Frame	ExtendedState	int	D_frame_state_pairs — the JDK gates this write behind isFrameStateSupported, and a browser supports no frame state, so NORMAL is the faithful answer. The oracle disagrees only because it runs under a window manager.
+Frame	State	int	D_frame_state_pairs — same gate as ExtendedState.
+JFrame	DefaultLookAndFeelDecorated	boolean	R_match_swing_errors sub-bucket (b) — L&F dispatch is permanently out of scope.
+UIManager	LookAndFeel	String	R_match_swing_errors sub-bucket (b) — L&F dispatch is permanently out of scope, so there is no class to fail to load.
+JSplitPane	DividerLocation	double	R_layouts_close_enough — the JDK answers -5 / -2 here, which is unlaid-out pixel arithmetic rather than a contract worth reproducing.
+Component	Bounds	Rectangle	R_layouts_close_enough — dummy bounds are stated policy; no server-side geometry exists to answer with. D_pixel_layout_not_planned.
+Component	Location	Point	R_layouts_close_enough — as Bounds.
+Component	Size	Dimension	R_layouts_close_enough — as Bounds.
+JInternalFrame	Bounds	Rectangle	R_layouts_close_enough — as Component.Bounds; the frame renders as a Dialog overlay that sizes itself (D_internal_frames).
+JInternalFrame	Layout	LayoutManager	R_match_swing_errors sub-bucket (b) — the JDK's answer here is a BasicInternalFrameUI$Handler, i.e. the L&F's own layout manager installed by the UI, and setLayout redirects to the content pane on both layers. With no UI there is nothing to answer but null.
+JFileChooser	CurrentDirectory	File	D_jfilechooser_park — getCurrentDirectory round-trips its field because there is no server FS browse. The JDK's body validates against a real filesystem (a dir that does not exist reverts to the previous one, then walks up to a traversable parent), which would make the answer depend on the box the app is deployed on for a chooser whose picker is the browser's.

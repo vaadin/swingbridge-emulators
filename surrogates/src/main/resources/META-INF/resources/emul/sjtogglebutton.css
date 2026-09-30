@@ -1,0 +1,34 @@
+/* SwingBridge Emulators — https://github.com/vaadin/swingbridge-emulators
+ * The `emul-` class names and `data-emul-*` attributes on this page are ours.
+ */
+/* SJToggleButton peers over vaadin-button (not a checkbox) so a bare
+ * JToggleButton renders as a stays-pressed button — its real Swing look —
+ * instead of a checkbox glyph (SD_sjtogglebutton_button_peer). SJToggleButton#setModel mirrors the
+ * ButtonModel's selected state onto the host's aria-pressed attribute
+ * (also the correct a11y state for a toggle); this rule paints the
+ * depressed look off it.
+ *
+ * Pixel fidelity is close-enough per R_layouts_close_enough — the exact Swing "sunken bevel"
+ * isn't reproduced: a darker fill plus an inset shadow carry the pressed look.
+ *
+ * The fill goes through --vaadin-button-background, never a background
+ * declaration: Aura paints the button from a `background` rule whose
+ * specificity ties this selector's and which loads later, so a plain
+ * background-color lost and the pressed toggle looked unpressed (measured on
+ * crud under Aura). Both Aura and Lumo read the property, so no specificity
+ * race is needed in either.
+ *
+ * Scoped to aria-pressed, which only SJToggleButton sets on a vaadin-button
+ * — SJButton (also a vaadin-button) never carries it, so there is nothing
+ * for this to leak onto. Loaded via @StyleSheet on SJToggleButton (not
+ * @CssImport): the file lives under META-INF/resources/ and is served as a
+ * plain <link> in the global document scope, keeping it out of the Vite
+ * frontend bundle so shipping it never forces a dev-bundle rebuild. Any app
+ * compiling against the surrogates jar gets it, not just the Sampler. */
+/* --vaadin-* base tokens rather than --lumo-*: base styles are defined in every
+ * Vaadin 25 theme, so a migrated app on Aura (the 25 default) gets the depressed
+ * look rather than falling through to the literal (D_theme_is_lookandfeel). */
+vaadin-button[aria-pressed="true"] {
+    --vaadin-button-background: var(--vaadin-background-container-strong, rgba(0, 0, 0, 0.16));
+    box-shadow: inset 0 2px 4px 0 var(--vaadin-border-color, rgba(0, 0, 0, 0.3));
+}

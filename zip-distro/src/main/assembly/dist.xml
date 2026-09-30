@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 http://maven.apache.org/xsd/assembly-2.2.0.xsd">
+    <id>dist</id>
+
+    <!-- THE KIT MIRRORS THE REPOSITORY'S GEOMETRY, deliberately and load-bearingly: guides at
+         guides/1-swing-to-emulators/, the worked example at testapps/crud/, the add-on addenda at
+         third-party/*/. That is what lets every link in the shipped docs stay relative and keep
+         resolving after the unzip, instead of being rewritten at assembly time — which would turn
+         a persona leak into a working link and hide it. A prettier docs/ + examples/ layout would
+         cost exactly that. Nothing here is generated: tools/ is unpacked from :migration-tool's own
+         distribution zip and the three swap-table jars come off the dependency list, so the kit must
+         never become a second copy of anything. -->
+
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>true</includeBaseDirectory>
+    <baseDirectory>swingbridge-emulators-${project.version}</baseDirectory>
+
+    <fileSets>
+        <!-- The kit's own hand-maintained surface: the welcome README, the placeholders, and the
+             your-app/swing/ slot the customer fills with their own app (D_kit_your_app_slot).
+             Filtered, so the README can state the version this kit was built from. The two
+             excludes are files that ship under a different name or to a different path, below. -->
+        <fileSet>
+            <directory>${project.basedir}/src/main/kit</directory>
+            <outputDirectory>.</outputDirectory>
+            <filtered>true</filtered>
+            <excludes>
+                <exclude>kit-CLAUDE.md</exclude>
+                <exclude>claude-skills/**</exclude>
+            </excludes>
+        </fileSet>
+
+        <!-- Claude Code discovers .claude/skills/ in the working directory, so unzipping and
+             opening Claude Code in the kit is the whole install step. Kept under claude-skills/ in
+             this repository rather than .claude/skills/ so the kit's skills do not also show up as
+             this repository's own. Three skills, one per shape of migration: an example testapp,
+             the your-app/ slot, and a folder in place. Each does the migration in its own session
+             rather than spawning anything (D_kit_no_subagent). There was a fourth, /lsp-preflight,
+             until the language server stopped being a gate (M1D_lsp_recommended). -->
+        <fileSet>
+            <directory>${project.basedir}/src/main/kit/claude-skills</directory>
+            <outputDirectory>.claude/skills</outputDirectory>
+        </fileSet>
+
+        <!-- tools/, out of :migration-tool's own distribution zip (unpacked by the dependency
+             plugin at prepare-package so the zip's versioned base directory is stripped). The
+             launchers need their executable bit and a fileSet's fileMode applies to every file in
+             it, so they come in a pass of their own; first writer wins in an assembly, so this
+             order is load-bearing — copying them 0644 first would leave a script nobody can run.
+             The three swap-table jars land in tools/lib/ via the dependencySet below. -->
+        <fileSet>
+            <directory>${tool.dist}</directory>
+            <outputDirectory>tools</outputDirectory>
+            <includes>
+                <include>bin/*</include>
+            </includes>
+            <excludes>
+                <exclude>bin/*.cmd</exclude>
+            </excludes>
+            <fileMode>0755</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+        <fileSet>
+            <directory>${tool.dist}</directory>
+            <outputDirectory>tools</outputDirectory>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+
+        <!-- The migrator-facing guides, verbatim and at the repository's own path. A link out of
+             this tree to anything the kit does not ship reddens GuideLinkScopeTest in :emulators. -->
+        <fileSet>
+            <directory>${project.basedir}/../guides</directory>
+            <outputDirectory>guides</outputDirectory>
+        </fileSet>
+
+        <!-- Each add-on's migration addendum and its licence text — the licence lane travels with
+             what it covers, which matters more in a redistributed zip than in a repository.
+             BOTH add-ons carry their own LICENSE, because neither is under the kit's root one:
+             each takes the licence of the upstream library whose API it reproduces
+             (M1D_addon_upstream_licence) — jgoodies-forms-1.2.1 BSD, jcalendar-1.4 LGPL-2.1. The
+             kit's root LICENSE is Apache-2.0 and governs what Vaadin wrote around the jars; a
+             reader who finds only that one would conclude the wrong terms for these two, which is
+             why they travel.
+             NOT PROVENANCE.md: it is a maintainer record of how each module was made, not part of
+             any licence obligation, and its links point into the decision logs. Sources are not
+             shipped either — the add-ons are resolved by coordinate like everything else. -->
+        <fileSet>
+            <directory>${project.basedir}/../third-party/jcalendar-1.4</directory>
+            <outputDirectory>third-party/jcalendar-1.4</outputDirectory>
+            <includes>
+                <include>MIGRATION.md</include>
+                <include>LICENSE</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../third-party/jgoodies-forms-1.2.1</directory>
+            <outputDirectory>third-party/jgoodies-forms-1.2.1</outputDirectory>
+            <includes>
+                <include>MIGRATION.md</include>
+                <include>LICENSE</include>
+            </includes>
+        </fileSet>
+
+        <!-- The worked example, both stages, unpacked at the repository's paths — this is what the
+             guide's `testapps/crud` link lands on, and a zip inside a zip would be opaque to it.
+             The finished 1-emulators/ is the answer key: a customer running a real migration is
+             welcome to read it, and only this repository's own doc-quality probe must not.
+             The excludes are shared by all three testapp fileSets: build output, the Vaadin
+             frontend scaffolding a build regenerates, and the app's own runtime debris. -->
+        <!-- mvnw needs its executable bit, and a fileSet's fileMode applies to every file in it —
+             so the wrappers come in a pass of their own, and the pass that carries everything else
+             excludes them. First writer wins in an assembly, so the order here is load-bearing:
+             copying them 0644 first would leave a wrapper nobody can run. -->
+        <fileSet>
+            <directory>${project.basedir}/../testapps/crud</directory>
+            <outputDirectory>testapps/crud</outputDirectory>
+            <includes>
+                <include>*/mvnw</include>
+                <include>*/mvnw.cmd</include>
+            </includes>
+            <fileMode>0755</fileMode>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../testapps/crud</directory>
+            <outputDirectory>testapps/crud</outputDirectory>
+            <excludes>
+                <exclude>*/mvnw</exclude>
+                <exclude>*/mvnw.cmd</exclude>
+                <exclude>**/target/**</exclude>
+                <exclude>**/node_modules/**</exclude>
+                <exclude>**/src/main/frontend/generated/**</exclude>
+                <exclude>**/src/main/bundles/**</exclude>
+                <exclude>**/log/**</exclude>
+                <!-- The migration log of the round that produced this stage: maintainer notes,
+                     not part of the example. -->
+                <exclude>**/STUMBLES.md</exclude>
+                <!-- Claude Code's per-folder write-tracking state (.claude/.cc-writes/), gitignored and so
+                     invisible to git, but not to a fileSet. -->
+                <exclude>**/.claude/**</exclude>
+                <exclude>**/*.db.mv.db</exclude>
+                <!-- Gitignored IDE state: present in a developer's working tree, absent from a
+                     checkout, and so a zip whose contents depend on who built it. It is not merely
+                     untidy — a .project / .classpath is what makes jdtls adopt the customer's copy
+                     of a testapp as an Eclipse project and compile into its target/, which a
+                     migration then meets as a build failure it did not cause (2026-09-09 round).
+                     KitLayoutIT asks git the general question over the assembled kit. -->
+                <exclude>**/.classpath</exclude>
+                <exclude>**/.project</exclude>
+                <exclude>**/.settings/**</exclude>
+            </excludes>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+
+        <!-- jlawyer-shape ships stage 1 only. Shipping its finished stage 2 as well would hand a
+             first-time reader a second answer key, where one (crud's, which the guide links) is
+             what the docs actually need; and the honest question a demo answers is whether a
+             stranger gets from Swing to browser on the guides alone.
+
+             It carries LICENSE and PROVENANCE.md, unlike the add-ons and like the inventory app:
+             this app is AGPL-3.0, because one real j-lawyer source file plus three of its icons are
+             vendored in it verbatim. LICENSE is the AGPL text (the same one the vendored file's own
+             header carries, which also travels inside swing/**) so that a redistribution delivers
+             the licence with the work; PROVENANCE.md is so a stranger unzipping the kit can find out
+             what they were handed without reading a 1,000-line source file. NOTE this is not the
+             kit's own licence — the kit's root LICENSE is Apache-2.0 and governs what Vaadin wrote
+             around the jars; this one governs this app only, and the distinction is the reason both
+             are present. The modified stage-2 copy, which carries the AGPL 5(a) modification notice,
+             does not ship at all. -->
+
+        <fileSet>
+            <directory>${project.basedir}/../testapps/jlawyer-shape</directory>
+            <outputDirectory>testapps/jlawyer-shape</outputDirectory>
+            <includes>
+                <include>swing/mvnw</include>
+                <include>swing/mvnw.cmd</include>
+            </includes>
+            <fileMode>0755</fileMode>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../testapps/jlawyer-shape</directory>
+            <outputDirectory>testapps/jlawyer-shape</outputDirectory>
+            <includes>
+                <include>README.md</include>
+                <include>PROVENANCE.md</include>
+                <include>LICENSE</include>
+                <include>swing/**</include>
+            </includes>
+            <excludes>
+                <exclude>swing/mvnw</exclude>
+                <exclude>swing/mvnw.cmd</exclude>
+                <exclude>**/target/**</exclude>
+                <exclude>**/log/**</exclude>
+                <!-- The migration log of the round that produced this stage: maintainer notes,
+                     not part of the example. -->
+                <exclude>**/STUMBLES.md</exclude>
+                <!-- Claude Code's per-folder write-tracking state (.claude/.cc-writes/), gitignored and so
+                     invisible to git, but not to a fileSet. -->
+                <exclude>**/.claude/**</exclude>
+                <exclude>**/*.db.mv.db</exclude>
+                <!-- Gitignored IDE state — see the crud fileSet above for why it is not merely untidy. -->
+                <exclude>**/.classpath</exclude>
+                <exclude>**/.project</exclude>
+                <exclude>**/.settings/**</exclude>
+            </excludes>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+
+        <!-- inventory ships stage 1 only, like jlawyer-shape, and is the one adopted third-party
+             app in the kit. Its licence lane is PROVENANCE.md, not a LICENSE file: the upstream
+             grant is an informal README paragraph ("keep the class header or add reference to
+             this GitHub repository") reproduced verbatim there, and shipping that file beside the
+             sources is how the kit honours the grant's second limb; the @author headers in the
+             sources honour the first. So unlike the jgoodies fork's, this PROVENANCE.md travels
+             (D_kit_what_ships). -->
+        <fileSet>
+            <directory>${project.basedir}/../testapps/inventory</directory>
+            <outputDirectory>testapps/inventory</outputDirectory>
+            <includes>
+                <include>swing/mvnw</include>
+                <include>swing/mvnw.cmd</include>
+            </includes>
+            <fileMode>0755</fileMode>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/../testapps/inventory</directory>
+            <outputDirectory>testapps/inventory</outputDirectory>
+            <includes>
+                <include>README.md</include>
+                <include>PROVENANCE.md</include>
+                <include>swing/**</include>
+            </includes>
+            <excludes>
+                <exclude>swing/mvnw</exclude>
+                <exclude>swing/mvnw.cmd</exclude>
+                <exclude>**/target/**</exclude>
+                <exclude>**/log/**</exclude>
+                <!-- The migration log of the round that produced this stage: maintainer notes,
+                     not part of the example. -->
+                <exclude>**/STUMBLES.md</exclude>
+                <!-- Claude Code's per-folder write-tracking state (.claude/.cc-writes/), gitignored and so
+                     invisible to git, but not to a fileSet. -->
+                <exclude>**/.claude/**</exclude>
+                <exclude>**/*.db.mv.db</exclude>
+                <!-- Gitignored IDE state — see the crud fileSet above for why it is not merely untidy. -->
+                <exclude>**/.classpath</exclude>
+                <exclude>**/.project</exclude>
+                <exclude>**/.settings/**</exclude>
+            </excludes>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+    </fileSets>
+
+    <dependencySets>
+        <!-- The kit's one concession to shipping jars, and it ships them as SWAP TABLES rather than
+             as the library: ImportSwap unions every META-INF/emul/ported-types.tsv in tools/lib/, so
+             these three are what make the kit's Phase 2 rewrite core types and both add-ons' types
+             in one pass. The migrated app still resolves SB-Emulators by coordinate — nothing in
+             any shipped pom points at tools/lib/. Transitives off, and the includes explicit: the
+             tool zip's own jars arrive by fileSet above, and Vaadin must not arrive at all. -->
+        <dependencySet>
+            <outputDirectory>tools/lib</outputDirectory>
+            <useProjectArtifact>false</useProjectArtifact>
+            <useTransitiveDependencies>false</useTransitiveDependencies>
+            <includes>
+                <include>com.vaadin.swingbridge:swingbridge-emulators:jar</include>
+                <include>com.vaadin.swingbridge:swingbridge-emulators-jcalendar-1.4:jar</include>
+                <include>com.vaadin.swingbridge:swingbridge-emulators-jgoodies-forms-1.2.1:jar</include>
+            </includes>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </dependencySet>
+    </dependencySets>
+
+    <files>
+        <!-- Ships as CLAUDE.md; kept under another name here so Claude Code working in this
+             repository does not load the kit's agent brief as a nested one of its own. -->
+        <file>
+            <source>${project.basedir}/src/main/kit/kit-CLAUDE.md</source>
+            <outputDirectory>.</outputDirectory>
+            <destName>CLAUDE.md</destName>
+        </file>
+        <!-- The kit's root LICENSE is Apache-2.0: everything Vaadin wrote that the kit ships is on
+             that lane (PROVENANCE.md § Lanes) — the guides, the skills, the kit's own docs, the
+             crud worked example. So the root file is the repository's LICENSE-APACHE-2.0, not its
+             LICENSE: the kit mirrors the repository's geometry for its docs' links, and no link
+             reaches either licence file, so mirroring the names would buy nothing and would put
+             GPL text where a reader looks first for the kit's terms. It is NOT the only licence in
+             the zip; the README's "Licences" paragraph maps the rest. -->
+        <file>
+            <source>${project.basedir}/../LICENSE-APACHE-2.0</source>
+            <outputDirectory>.</outputDirectory>
+            <destName>LICENSE</destName>
+        </file>
+        <!-- The one GPLv2+CE artefact in the kit is the swingbridge-emulators jar in tools/lib/, so
+             its text travels beside it, as the add-ons' does beside their addenda. The jar also
+             carries it at META-INF/LICENSE, which satisfies GPLv2 §1; this copy is for the
+             reader, who would otherwise find only Apache text anywhere they look. Named after the
+             jar so it sorts beside it, and harmless in lib/: the launchers' lib/* classpath
+             wildcard expands to .jar files only. -->
+        <file>
+            <source>${project.basedir}/../LICENSE</source>
+            <outputDirectory>tools/lib</outputDirectory>
+            <destName>swingbridge-emulators-LICENSE.txt</destName>
+            <fileMode>0644</fileMode>
+        </file>
+    </files>
+</assembly>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 http://maven.apache.org/xsd/assembly-2.2.0.xsd">
+    <id>dist</id>
+
+    <!-- The tool as a standalone download: bin/ + lib/, run with `java -cp "lib/*"`. Published to
+         Central as this module's `dist` classifier, so "I came through Maven Central rather than
+         through the kit" is a one-line answer; the distribution kit unpacks the same zip into its
+         tools/ and adds the table-carrying jars. Rationale, and the shapes rejected (a tools/pom.xml
+         with exec:java, a launcher jar, a shaded jar): D_kit_tool_zip.
+
+         lib/ holds the ENGINE ONLY — this jar and its runtime dependencies. No emulators jar and no
+         add-on jar: the add-ons cannot be here without core learning they exist, and keeping the
+         emulators jar out keeps this module free of :emulators and the rule one sentence — the tool
+         ships the engine, whoever assembles a classpath drops table jars into lib/. -->
+
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>true</includeBaseDirectory>
+    <baseDirectory>swingbridge-migration-tool-${project.version}</baseDirectory>
+
+    <files>
+        <!-- The licence text of the two swingbridge-* jars in lib/ — :migration-tool and
+             :migration-annotations, both Apache-2.0 (D_licence_lanes) — shipped as LICENSE because
+             Apache-2.0 §4(a) wants it conveyed with the copies, and this zip publishes to Central
+             on its own (dist classifier) rather than only inside the kit, so it cannot lean on the
+             kit's root copy, even though that one is the same Apache-2.0 text.
+             THIRD-PARTY.md beside it covers the two third-party jars; D_no_notice_file
+             (emulators/decisions.md) is why that file is not called NOTICE. -->
+        <file>
+            <source>${project.basedir}/../LICENSE-APACHE-2.0</source>
+            <outputDirectory>.</outputDirectory>
+            <destName>LICENSE</destName>
+            <fileMode>0644</fileMode>
+        </file>
+    </files>
+
+    <fileSets>
+        <!-- The launchers need their executable bit, and a fileSet's fileMode applies to every file
+             in it — so they come in a pass of their own and the pass carrying everything else
+             excludes them. First writer wins in an assembly, so this order is load-bearing: copying
+             them 0644 first would leave a script nobody can run. (Same trick, same reason, as the
+             kit's own dist.xml.) The .cmd twins need no bit. -->
+        <fileSet>
+            <directory>${project.basedir}/src/main/dist</directory>
+            <outputDirectory>.</outputDirectory>
+            <includes>
+                <include>bin/*</include>
+            </includes>
+            <excludes>
+                <exclude>bin/*.cmd</exclude>
+            </excludes>
+            <fileMode>0755</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+        <fileSet>
+            <directory>${project.basedir}/src/main/dist</directory>
+            <outputDirectory>.</outputDirectory>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </fileSet>
+    </fileSets>
+
+    <dependencySets>
+        <!-- This jar plus its runtime dependencies: archunit, slf4j-api, migration-annotations.
+             `runtime` keeps the test scope out. -->
+        <dependencySet>
+            <outputDirectory>lib</outputDirectory>
+            <useProjectArtifact>true</useProjectArtifact>
+            <scope>runtime</scope>
+            <fileMode>0644</fileMode>
+            <directoryMode>0755</directoryMode>
+        </dependencySet>
+    </dependencySets>
+</assembly>

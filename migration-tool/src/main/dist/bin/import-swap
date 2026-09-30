@@ -1,0 +1,16 @@
+#!/bin/sh
+# Phase 2 of the Swing→emulators migration: rewrite java.awt / javax.swing references onto
+# their vaadinx emulators.
+#
+#   bin/import-swap <app>/src/main/java --dry-run --report import-swap.md
+#
+# The wildcard classpath IS the launcher, and for this tool it is also the configuration:
+# every META-INF/emul/ported-types.tsv in ../lib is unioned into the swap table. With no
+# table-carrying jar there the run fails with a message naming the fix — see README.md.
+set -e
+DIR=$(cd "$(dirname "$0")/.." && pwd)
+JAVA=java
+if [ -n "$JAVA_HOME" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+fi
+exec "$JAVA" -cp "$DIR/lib/*" com.vaadin.swingbridge.migration.tool.importswap.ImportSwap "$@"

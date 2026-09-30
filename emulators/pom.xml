@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-emulators</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently — so every published module states
+         its own. -->
+    <name>SwingBridge Emulators</name>
+    <description>Runtime emulation of the Swing API on top of Vaadin: the vaadinx.awt and
+        vaadinx.swing classes a Swing application compiles against after rewriting its
+        javax.swing imports, each storing Swing state, firing Swing events and driving a Vaadin
+        component underneath.</description>
+
+    <!-- GPLv2+CE, overriding the parent's Apache-2.0 default (Maven replaces rather than merges):
+         this module is a derivative work of OpenJDK, the whole jar including its Vaadin-authored
+         files (D_gplv2_ce_relicense, D_licence_lanes). The <resources> override below moves with
+         it. name + url are the Jakarta / feature-pack convention for this licence, so licence
+         scanners already recognise the pair. -->
+    <licenses>
+        <license>
+            <name>GPL2 w/ CPE</name>
+            <url>https://www.gnu.org/software/classpath/license.html</url>
+            <distribution>repo</distribution>
+            <comments>GNU General Public License version 2 only, with the "Classpath" exception — the
+                same licence as OpenJDK, of which this module is a derivative work. SPDX:
+                GPL-2.0-only WITH Classpath-exception-2.0. See LICENSE and PROVENANCE.md, both
+                inside this jar's META-INF/.</comments>
+        </license>
+    </licenses>
+
+    <properties>
+        <!-- Which audit tool `exec:exec` runs, and where the differ writes its report.
+             -Daudit.main=vaadinx.audit.StateDropSweep for the static state-drop sweep. -->
+        <audit.main>vaadinx.audit.JdkReturnValueDiffer</audit.main>
+        <audit.report>target/jdk-return-value-audit.md</audit.report>
+    </properties>
+
+    <!-- vaadinx.awt.* / vaadinx.swing.* classes reproducing the Swing API surface
+         (has-a Vaadin peer) — the import-swap target user code compiles against.
+         Pure Java throughout. See D_emulator_surrogate_split / emulators/architecture.md. -->
+
+    <dependencies>
+        <!-- :emulators uses a surrogate as the peer once one exists for a component. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-surrogates</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- UI fibers EHelper.callSwing wraps every peer->Swing event in
+             (D_callswing_funnel / R_callswing_envelope), and the virtual-thread runner they run
+             on. No blocking-dialogs types on the public API surface. -->
+        <dependency>
+            <groupId>com.github.mvysny.vaadin-blocking-dialogs</groupId>
+            <artifactId>vaadin-blocking-dialogs</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.vaadin-blocking-dialogs</groupId>
+            <artifactId>vaadin-uifiber-loom</artifactId>
+        </dependency>
+        <!-- Tab-close detector for the D_shutdown_lifecycle shutdown lifecycle. Reaches the app's compile
+             classpath transitively (default compile scope) — the app, not the library,
+             wires lifecycle per R_no_spi_selfregister. -->
+        <dependency>
+            <groupId>com.github.mvysny.vaadintabscope</groupId>
+            <artifactId>tab-scope</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.jetbrains</groupId>
+            <artifactId>annotations</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-core</artifactId>
+        </dependency>
+        <!-- Opens a URL in a browser. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>open</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- RteHtmlCodec.fromHtml parses RTE-subset HTML back into a StyledDocument
+             (JTextPane reverse sync). -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+        </dependency>
+        <!-- VaadinSession's interface references jakarta.servlet.http.HttpSessionBindingListener;
+             needed to compile but provided by the container at runtime. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.kaributesting</groupId>
+            <artifactId>karibu-testing-v24</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Bytecode-level call-graph reads for R12DeadHookTest, which needs the
+             JDK's own java.desktop call graph as its oracle (D_dead_hook_lint).
+             Reflection cannot answer "does the JDK call this method". -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Overrides the parent's <resources> ENTIRELY (Maven replaces, never merges): the parent
+             ships LICENSE-APACHE-2.0, and this jar is GPLv2+CE — its per-file Oracle headers name
+             LICENSE by reference ("the LICENSE file that accompanied this code"), so a jar that
+             travels without it points at nothing. The default src/main/resources entry has to be
+             restated, or it is lost with the rest — and here it carries ported-types.tsv, without
+             which the import-swap tool finds no table and rewrites nothing. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${maven.multiModuleProjectDirectory}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>PROVENANCE.md</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
+            </resource>
+        </resources>
+        <plugins>
+            <!-- JdkReturnValueAuditTest runs the return-value differ as a gate, and the differ
+                 reflects over protected members on both layers; without these opens the JDK
+                 oracle answers InaccessibleObjectException and every protected pair reads as a
+                 divergence. Repeats the parent's two flags because a module-level argLine
+                 replaces the inherited one rather than appending to it — keep -Djava.awt.headless
+                 in step with the parent's, whose comment explains it. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>--add-opens java.base/java.lang=ALL-UNNAMED
+                        --add-opens java.desktop/javax.swing=ALL-UNNAMED
+                        --add-opens java.desktop/javax.swing.text=ALL-UNNAMED
+                        --add-opens java.desktop/javax.swing.table=ALL-UNNAMED
+                        --add-opens java.desktop/javax.swing.tree=ALL-UNNAMED
+                        --add-opens java.desktop/java.awt=ALL-UNNAMED
+                        -Djava.awt.headless=true</argLine>
+                </configuration>
+            </plugin>
+            <!-- The same audit's on-demand main, for a maintainer sweeping by hand under xvfb
+                 (which widens the sweep past the ~60 classes a headless JDK will not construct).
+                 Not bound to a lifecycle phase: the main reports, the test gates. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <!-- exec:exec, not exec:java: the opens are JVM options, and exec:java
+                         runs in Maven's own JVM where they arrive too late to matter. -->
+                    <executable>java</executable>
+                    <classpathScope>test</classpathScope>
+                    <arguments>
+                        <!-- vaadin-uifiber-loom's LoomUtils reflects into ThreadBuilders$VirtualThreadBuilder;
+                             R_callswing_envelope puts a callSwing on every peer→Swing seam the
+                             differ trips, so this is as mandatory here as in the parent's argLine. -->
+                        <argument>--add-opens</argument>
+                        <argument>java.base/java.lang=ALL-UNNAMED</argument>
+                        <argument>--add-opens</argument>
+                        <argument>java.desktop/javax.swing=ALL-UNNAMED</argument>
+                        <argument>--add-opens</argument>
+                        <argument>java.desktop/javax.swing.text=ALL-UNNAMED</argument>
+                        <argument>--add-opens</argument>
+                        <argument>java.desktop/javax.swing.table=ALL-UNNAMED</argument>
+                        <argument>--add-opens</argument>
+                        <argument>java.desktop/javax.swing.tree=ALL-UNNAMED</argument>
+                        <argument>--add-opens</argument>
+                        <argument>java.desktop/java.awt=ALL-UNNAMED</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>${audit.main}</argument>
+                        <argument>${audit.report}</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

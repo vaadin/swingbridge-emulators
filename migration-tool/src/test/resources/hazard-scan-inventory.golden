@@ -1,0 +1,24 @@
+H_system_exit	System.exit / Runtime exit-halt  [ArchUnit-gated]	2
+H_static_frame_singleton	Static frame singletons  [ArchUnit-gated, ⚠silent]	3
+H_custom_layoutmanager	Custom LayoutManager  [→ cloud-OK]	0
+H_timezone_drift	Timezone-sensitive date code — bucket 1 (import-swap, usually fine)	7
+H_timezone_drift	Timezone — bucket 3 (java.time, pass BrowserTimeZone.get() by hand)	1
+H_background_thread_context	Background threads the app starts itself carry no EmulatorContext (dates drift; component updates throw)	1
+H_shared_calendar	Shared mutable Calendar (unshare)	0
+H_showdialog_direction	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	2
+H_preferences_read	Preferences read (must run under a live UI)	0
+H_unswapped_printing	Unswapped printing — prints on the SERVER  [⚠silent, the scan is the only net]	0
+H_platform_shellout	Shell-outs and Desktop calls — they run on the SERVER; triage by intent  [⚠silent]	1
+H_platform_shellout	Platform checks — they now describe the server; triage what they gate	14
+H_htmldocument_mutators	HTMLDocument mutators (WARN and change nothing)	0
+H_html_pane_links	HTML pane links — the panes  [⚠silent]	0
+H_html_pane_links	HTML pane links — non-web href in an HTML resource  [⚠silent]	0
+H_uncaught_handler	JVM-wide uncaught-exception handler (split it: UI half → VaadinSession ErrorHandler)	0
+H_edt_thread_handler	Per-EDT uncaught handler — compiles, runs, does nothing  [⚠silent]	0
+H_sun_awt_exception_handler	sun.awt.exception.handler — removed from the JDK, already dead on the desktop	0
+H_layout_numbers	Reading layout numbers (dummy values, not rendered geometry)	13
+H_cancelable_close	Cancelable tab close (browser owns unload — save proactively)	1
+H_plaintext_http	Password fields — every component value now crosses the network; serve over HTTPS	10
+H_modal_under_monitor	synchronized regions: a modal dialog shown inside one freezes the session when another listener enters the same monitor	6
+H_fq_awt_component	Fully-qualified java.awt.Component / Container in code	0
+H_instanceof_ported_event	instanceof on ported event types (returns false vs vaadinx.awt.event.*)	0
