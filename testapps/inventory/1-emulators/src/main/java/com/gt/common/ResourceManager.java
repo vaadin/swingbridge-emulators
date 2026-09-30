@@ -25,7 +25,7 @@ public class ResourceManager {
     public static final String resourceMapFile = "string-resource.ini";
     private static final String a = "gt?Pass,e#. ";
     @IntentionallyStatic(value = IntentionallyStatic.Reason.WORLD_GLOBAL_READ_MOSTLY,
-            note = "loaded once, under the method lock, from string-resource.ini or StrConstants; never written after")
+            note = "deployment config: loaded once, under the method's lock, from string-resource.ini or the built-in defaults")
     private static Map<String, String> stringConstantsMap;
 
     public static synchronized String getString(String key) {

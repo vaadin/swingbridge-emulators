@@ -37,6 +37,7 @@ H_custom_layoutmanager	§7	Custom LayoutManager  [→ cloud-OK]	implements +Layo
 H_timezone_drift	§7	Timezone-sensitive date code — bucket 1 (import-swap, usually fine)	\b(SimpleDateFormat|Calendar|GregorianCalendar)\b
 H_timezone_drift	§7	Timezone — bucket 3 (java.time, pass BrowserTimeZone.get() by hand)	DateTimeFormatter\.ofPattern|\.(now)\(\)|ZoneId\.systemDefault|TimeZone\.getDefault
 H_background_thread_context	§7	Background threads the app starts itself carry no EmulatorContext (dates drift; component updates throw)	new +Thread|Executors\.|ExecutorService
+H_worker_scope_reads	§7	SwingWorker.doInBackground bodies — nothing routed to session or tab scope is reachable here	doInBackground
 H_shared_calendar	§7	Shared mutable Calendar (unshare)	static +[A-Za-z0-9_.]*Calendar
 H_showdialog_direction	§7	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	\.showDialog\s*\(
 H_preferences_read	§7	Preferences read (must run under a live UI)	Preferences\.(userRoot|userNodeForPackage|systemRoot|systemNodeForPackage)

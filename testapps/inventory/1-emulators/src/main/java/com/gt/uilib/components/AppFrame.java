@@ -10,11 +10,14 @@ import com.gt.uilib.components.button.LogOutButton;
 import com.ca.ui.FormerSingletons;
 import com.vaadin.flow.server.VaadinSession;
 import org.apache.log4j.Logger;
+import vaadinx.BrowserFileTransfer;
 import vaadinx.swing.MainWindow;
 import vaadinx.swing.border.EtchedBorder;
 import vaadinx.awt.event.WindowAdapter;
 import vaadinx.awt.event.WindowEvent;
 import vaadinx.awt.event.WindowListener;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.awt.Dimension;
@@ -41,10 +44,11 @@ import vaadinx.swing.SwingUtilities;
 public class AppFrame extends JFrame {
 
     public static final String loginPanel = com.ca.ui.panels.LoginPanel.class.getName();
-    private static final String LOGGED_IN = AppFrame.class.getName() + ".isLoggedIn";
-    private AbstractFunctionPanel currentWindow;
     public static final boolean debug = true;
     static final Logger logger = Logger.getLogger(AppFrame.class);
+    /** Was {@code static boolean isLoggedIn}: a login belongs to the user, so it lives in the session. */
+    private static final String LOGGED_IN = AppFrame.class.getName() + ".isLoggedIn";
+    private AbstractFunctionPanel currentWindow;
     private JMenuBar menuBar;
     private JPanel bodyPanel;
     private JPanel toolBarPanel;
@@ -192,10 +196,14 @@ public class AppFrame extends JFrame {
 
             readmanualItem.addActionListener(e -> {
                 try {
-                    // The desktop shelled out to "cmd.exe /c start help.pdf"; the reader is now in a browser.
-                    try (java.io.InputStream in = AppFrame.class.getResourceAsStream("/help.pdf")) {
-                        vaadinx.BrowserFileTransfer.openDownloadDialog(in.readAllBytes(), "help.pdf");
+                    // was `cmd.exe /c start help.pdf` — that opens it on the server; the manual now
+                    // travels on the classpath and goes to the user's browser as a download
+                    byte[] file;
+                    try (InputStream in = AppFrame.class.getResourceAsStream("/help.pdf")) {
+                        if (in == null) throw new IOException("help.pdf is not on the classpath");
+                        file = in.readAllBytes();
                     }
+                    BrowserFileTransfer.openDownloadDialog(file, "help.pdf");
                 } catch (Exception e2) {
                     JOptionPane.showMessageDialog(AppFrame.this, "Could not open help file " + e2.getMessage(), "Error opening file",
                             JOptionPane.ERROR_MESSAGE);

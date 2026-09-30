@@ -4,6 +4,7 @@ H_custom_layoutmanager	Custom LayoutManager  [→ cloud-OK]	0
 H_timezone_drift	Timezone-sensitive date code — bucket 1 (import-swap, usually fine)	7
 H_timezone_drift	Timezone — bucket 3 (java.time, pass BrowserTimeZone.get() by hand)	1
 H_background_thread_context	Background threads the app starts itself carry no EmulatorContext (dates drift; component updates throw)	1
+H_worker_scope_reads	SwingWorker.doInBackground bodies — nothing routed to session or tab scope is reachable here	3
 H_shared_calendar	Shared mutable Calendar (unshare)	0
 H_showdialog_direction	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	2
 H_preferences_read	Preferences read (must run under a live UI)	0

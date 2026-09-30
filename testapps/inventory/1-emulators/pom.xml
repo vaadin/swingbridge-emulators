@@ -13,7 +13,7 @@
          Then change three things and add your own dependencies:
 
            1. groupId / artifactId / name              — your app's coordinates
-           2. <argument>com.ca.ui.Main</argument> — your main()-hosting class, at the
+           2. <argument>com.example.app.Main</argument> — your main()-hosting class, at the
                                                          BOTTOM, once you have moved the seed's
                                                          classes into your own package
            3. swingbridge-emulators.version            — the version you are migrating against
@@ -35,7 +35,7 @@
     <artifactId>testapp-inventory-emulators</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Inventory Management System (Java, Swing, JGoodies, Hibernate, H2 Database) on SB-Emulators</name>
+    <name>Inventory Management System (Java, Swing, JGoodies, Hibernate, H2 Database, Jasper) — on SB-Emulators</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -113,10 +113,7 @@
             <version>${swingbridge-emulators.version}</version>
         </dependency>
 
-        <!-- ADD-ONS: one per third-party Swing library you route through addons.md. Uncomment the
-             ones you need and DELETE the upstream coordinate they replace (com.toedter:jcalendar,
-             com.jgoodies:forms) — leaving both means the upstream classes are still on the
-             classpath and your imports may bind back to them. -->
+        <!-- ADD-ONS: they replace com.toedter:jcalendar:1.4 and com.jgoodies:forms:1.2.1, which are gone. -->
         <dependency>
             <groupId>com.vaadin.swingbridge</groupId>
             <artifactId>swingbridge-emulators-jcalendar-1.4</artifactId>
@@ -177,9 +174,7 @@
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- ADD YOUR APP'S OWN DEPENDENCIES HERE — whatever its pre-migration pom declared,
-             minus the Look-and-Feel libraries (delete those outright) and minus any Swing
-             library you replaced with an add-on above. -->
+        <!-- The app's own dependencies, from its pre-migration pom, minus jcalendar and forms. -->
         <dependency>
             <groupId>org.hibernate</groupId>
             <artifactId>hibernate-core</artifactId>
@@ -299,11 +294,12 @@
                 <version>${exec-maven-plugin.version}</version>
                 <configuration>
                     <executable>${java.home}/bin/java</executable>
-                    <!-- The app writes ./log/ (and, under -Pfile-db, ./inventoryApp.db) relative to its
-                         working directory. Test scope so -Pfile-db's test resource can shadow the
-                         in-memory hibernate.cfg.xml; run with test-compile exec:exec. -->
-                    <workingDirectory>${project.build.directory}/run</workingDirectory>
+                    <!-- From the pre-migration pom: the app writes ./log/ (and, under -Pfile-db,
+                         ./inventoryApp.db) relative to its working directory; test scope so that
+                         -Pfile-db's test resource shadows src/main/resources' hibernate.cfg.xml.
+                         Launch with ./mvnw -C test-compile exec:exec, as before. -->
                     <classpathScope>test</classpathScope>
+                    <workingDirectory>${project.build.directory}/run</workingDirectory>
                     <arguments>
                         <argument>--add-opens</argument>
                         <argument>java.base/java.lang=ALL-UNNAMED</argument>
@@ -317,14 +313,8 @@
     </build>
 
     <profiles>
-        <profile>
-            <!-- Active only inside Eclipse / jdtls (m2e sets m2e.version); the command-line build never sees it. -->
-            <id>ide-output</id>
-            <activation><property><name>m2e.version</name></property></activation>
-            <build><directory>${project.basedir}/target/ide</directory></build>
-        </profile>
-        <!-- File-backed H2 instead of the in-memory default; `clean` when switching modes, since a
-             stale target/test-classes/hibernate.cfg.xml keeps shadowing. -->
+        <!-- From the pre-migration pom: file-backed H2 instead of the in-memory default. `clean` is
+             not optional when switching modes (see src/test/resources-filedb/README.md). -->
         <profile>
             <id>file-db</id>
             <build>
@@ -332,6 +322,17 @@
                     <testResource><directory>src/test/resources-filedb</directory></testResource>
                 </testResources>
             </build>
+        </profile>
+        <!-- Keep this one even if you use no IDE. It is active only inside Eclipse, VS Code Java or
+             the jdtls language server (their Maven support, m2e, sets m2e.version); a command-line
+             build never sees it. Without it the IDE compiles into target/classes, the folder Maven
+             and the running app use, with a compiler (JDT) that names some generated classes
+             differently from javac, and the app then fails with NoClassDefFoundError on a class
+             like MyPanel$3 in code nobody touched. -->
+        <profile>
+            <id>ide-output</id>
+            <activation><property><name>m2e.version</name></property></activation>
+            <build><directory>${project.basedir}/target/ide</directory></build>
         </profile>
         <profile>
             <id>production</id>

@@ -1,22 +1,3 @@
-/*
- * Copyright 2000-2026 Vaadin Ltd.
- * SPDX-License-Identifier: 0BSD
- *
- * A seed file: copy it into your app and license the result as you choose. This
- * notice need not be kept.
- *
- * Permission to use, copy, modify, and/or distribute this software for any
- * purpose with or without fee is hereby granted.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
- * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
- * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
- * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
 package com.ca.ui;
 
 import com.ca.db.model.ApplicationLog;
@@ -26,27 +7,22 @@ import com.ca.db.service.LoginUserServiceImpl;
 import com.github.mvysny.vaadinboot.VaadinBoot;
 import com.gt.uilib.components.AppFrame;
 import com.vaadin.swingbridge.fixture.Seed;
-import org.apache.commons.lang3.SystemUtils;
 import vaadinx.awt.event.ComponentEvent;
 import vaadinx.swing.SwingUtilities;
-import vaadinx.swing.UIManager;
 
 import java.awt.Dimension;
 import java.io.File;
 import java.util.Date;
 
 /**
- * The two entry points of the migrated app — the guide's Phase 3 split. Move your old
- * {@code main()}'s process-level work into {@link #main} and its frame construction into
- * {@link #mainUI}.
+ * The two entry points of the migrated app: {@link #main} once per JVM, {@link #mainUI} once per
+ * browser tab (from {@link AppRoute}).
  */
 public final class Main {
 
     /** Once per JVM. Everything here runs before the first request — {@code run()} blocks until shutdown. */
     public static void main(String[] args) throws Exception {
-        if (SystemUtils.IS_OS_WINDOWS) {
-            UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
-        }
+        // upstream's Windows look-and-feel switch is gone: look-and-feel is not emulated.
 
         File f = new File("log");
         f.mkdir();
@@ -57,6 +33,7 @@ public final class Main {
         // ../PROVENANCE.md.
         Seed.seedIfEmpty();
 
+        // a first-run bootstrap account writes a row every later session reads: once per deployment
         addUserForFirstTime();
 
         new VaadinBoot()
@@ -66,6 +43,8 @@ public final class Main {
 
     /** Once per browser tab, from {@link AppRoute}. */
     public static void mainUI() {
+        // upstream's single-instance guard (AppStarter) is deleted: its port is per JVM, so on a server
+        // the second user's probe would succeed and take the whole server down with System.exit(0).
         SwingUtilities.invokeLater(() -> {
             setApplicationStartLog();
             setUpAndShowGui();

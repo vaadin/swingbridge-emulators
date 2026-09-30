@@ -147,6 +147,7 @@ public class StockQueryPanel extends AbstractFunctionPanel {
             btnSaveToExcel.addActionListener(e -> {
                 JFileChooser jf = new JFileChooser();
                 jf.setFileSelectionMode(JFileChooser.FILES_ONLY);
+                jf.setDialogType(JFileChooser.SAVE_DIALOG);        // the next lines write the file: a SAVE
                 jf.setApproveButtonText("Select Save location");
                 jf.showSaveDialog(StockQueryPanel.this);
                 String fileName = jf.getSelectedFile().getAbsolutePath();

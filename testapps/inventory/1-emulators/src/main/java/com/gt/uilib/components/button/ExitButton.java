@@ -39,6 +39,7 @@ public class ExitButton extends ActionButton {
         if (res == JOptionPane.YES_OPTION) {
             // setVisible(false);
             logger.info("Shutting Down");
+            // disposing the last window ends this user's session, as System.exit ended the desktop JVM
             AppFrame.getInstance().dispose();
             // TODO: DB connection close
         }

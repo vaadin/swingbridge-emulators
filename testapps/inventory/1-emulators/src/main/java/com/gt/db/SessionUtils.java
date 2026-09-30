@@ -10,11 +10,9 @@ import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 
-import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.JVM_INFRASTRUCTURE;
-
 public class SessionUtils {
     static final Logger logger = Logger.getLogger(SessionUtils.class);
-    @IntentionallyStatic(JVM_INFRASTRUCTURE)
+    @IntentionallyStatic(IntentionallyStatic.Reason.JVM_INFRASTRUCTURE)
     private static final SessionFactory sessionFactory;
 
     static {

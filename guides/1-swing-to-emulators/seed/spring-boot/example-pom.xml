@@ -13,7 +13,7 @@
          Then change three things and add your own dependencies:
 
            1. groupId / artifactId / name                  — your app's coordinates
-           2. <mainClass>com.example.app.Main</mainClass> — your main()-hosting class, at the
+           2. the com.example.app.Main mainClass          — your main()-hosting class, at the
                                                              BOTTOM, once you have moved the
                                                              seed's classes into your own package
            3. swingbridge-emulators.version                — the version you are migrating

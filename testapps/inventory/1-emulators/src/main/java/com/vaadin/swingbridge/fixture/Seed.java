@@ -17,6 +17,7 @@ import com.ca.db.service.TransferServiceImpl;
 import com.ca.db.service.dto.ReturnedItemDTO;
 import com.ca.ui.panels.ItemReceiverPanel.ReceiverType;
 import com.gt.common.utils.DateTimeUtils;
+
 import com.vaadin.swingbridge.migration.IntentionallyStatic;
 
 import java.math.BigDecimal;
@@ -26,8 +27,6 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.IMMUTABLE_CONSTANT;
 
 /**
  * Seeds the inventory app to a known state, and prints what it left behind.
@@ -54,19 +53,20 @@ import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.IMMUTA
 public final class Seed {
 
     /** Fixed so every run produces byte-identical rows — a rubric can name dates and ids. */
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    // Never mutated after class init, and read only by seed(), which main() runs before boot.
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_1 = date(2026, 1, 15);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_2 = date(2026, 2, 3);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_3 = date(2026, 3, 21);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_1 = date(2026, 4, 10);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_2 = date(2026, 5, 5);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_3 = date(2026, 6, 1);
-    @IntentionallyStatic(IMMUTABLE_CONSTANT)
+    @IntentionallyStatic(IntentionallyStatic.Reason.IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_4 = date(2026, 6, 18);
 
     /**
@@ -337,8 +337,8 @@ public final class Seed {
     }
 
     private static Date date(int year, int month, int day) {
-        // Server zone on purpose: the seed runs from main(), before any browser exists. Midday, not
-        // midnight, so browsers a few zones west of the server still show the same calendar day.
+        // Server zone intended: reached only from main() (the seed), where no browser zone exists.
+        // Midday rather than midnight, so a browser within ±11 h of the server shows the same day.
         return Date.from(LocalDate.of(year, month, day).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant());
     }
 

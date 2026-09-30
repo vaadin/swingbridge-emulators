@@ -38,6 +38,7 @@ public class UIUtils {
         }
 
         if (parent instanceof JDateChooser) {
+            // on the desktop the recursion below reached the chooser's inner text field
             ((JDateChooser) parent).setDate(null);
         } else if (parent instanceof JTextField) {
             ((JTextField) parent).setText("");
@@ -58,6 +59,7 @@ public class UIUtils {
 
     public static void clearAllFields(Component parent) {
         if (parent instanceof JDateChooser) {
+            // on the desktop the recursion below reached the chooser's inner text field
             ((JDateChooser) parent).setDate(null);
         }
         if (parent instanceof JTextField) {

@@ -1,49 +1,55 @@
-# Migration log — inventory → SB-Emulators (Vaadin Boot)
+# Migration log — `inventory`
+
+Points where the guides left me guessing, contradicted themselves, or said something that did not
+work. Appended as the migration went.
 
 ```yaml
 - id: 1
-  doc: guide.md
-  section: "Phase 1 — S_triage_reports, row 'System.exit / Runtime.halt; cancelable tab close'"
-  confusion: "The triage table routes the H_cancelable_close hit (a windowClosing listener / .consume()) to lifecycle.md § How your app ends, but that section never mentions windowClosing, a vetoed close, or the scan's own hint 'browser owns unload — save proactively'. No document in the guide folder does (grep for cancelable/windowClosing/veto finds only the table row)."
-  what-i-did: "Read the app's listener: AppFrame's windowClosing body is empty and the frame is DO_NOTHING_ON_CLOSE, so there is no veto logic and no unsaved-state flush to port. Left it as-is."
-  evidence: "[missing]"
-  suggested-fix: "Add a short paragraph to lifecycle.md § How your app ends: a windowClosing veto (DO_NOTHING_ON_CLOSE + a confirm dialog) cannot stop a browser tab close, so save-on-close logic must move to save-on-change or to a WINDOW_CLOSING handler that does not ask; and an empty listener needs nothing."
+  doc: seed/vaadin-boot/example-pom.xml
+  section: "header comment, item 2, and the exec-maven-plugin <arguments>"
+  confusion: "The header tells you to change `<argument>com.example.app.Main</argument>`, and quotes that element verbatim — so the string occurs twice in the file, and a replace-exactly-once edit (or an agent asserting uniqueness) trips on the comment."
+  what-i-did: "Replaced only the indented occurrence inside <arguments>."
+  evidence: "[error]"
+  suggested-fix: "Quote it in the header without the element tags (e.g. 'the com.example.app.Main argument at the bottom'), so the literal element exists once."
+```
 
+```yaml
 - id: 2
-  doc: former-singletons.md
-  section: "Checking you finished — 'Each row comes back gone, made a constant, annotated … or still unvetted'"
-  confusion: "The --diff report opens by reprinting the stage-1 worklist verbatim (same 20 rows, same 'writers' columns, no fate column), so at first glance it looks as though --diff was ignored and nothing was settled. The fates are a separate table ~170 lines down under '## Completeness diff against …'."
-  what-i-did: "Grepped the report for 'fate' and found the section at the end: 20/20 rows settled, 0 new statics."
-  evidence: "[guess]"
-  suggested-fix: "Say in the doc (or in the report's header) that the fate table is the last section, or put it first in --diff mode; the reprinted stage-1 worklist is what a reader sees first."
+  doc: guide.md
+  section: "Phase 3 — S_wrap_executors ('SwingWorker needs nothing'); Phase 1 hazard table"
+  confusion: "The app runs its three save handlers — validation, JOptionPane confirms, JDialog construction, component updates — entirely inside SwingWorker.doInBackground(). Nothing in Phase 1 flags that: the hazard scan has no SwingWorker/doInBackground pattern and the guide says SwingWorker needs nothing. It surfaced only at runtime, as EHelper's once-per-JVM off-UI-thread diagnostic, which itself warns of possible IllegalStateException. It also matters for the static sweep: FormerSingletons.get() and a VaadinSession shim both throw from doInBackground, so every tab/session routing has to be checked against worker bodies by hand."
+  what-i-did: "Kept upstream's threading as is (it worked in the click-through). Grepped the three worker paths and confirmed none reaches AppFrame.getInstance(), getCurrentWindow() or isLoggedIn()."
+  evidence: "[missing]"
+  suggested-fix: "Add a hazard-scan row for `doInBackground` bodies (listing them for review), and in the Phase 1 triage table say: 'SwingWorker needs nothing for dates — but component work inside doInBackground is still off-thread, and anything you route to tab/session scope must not be read from there'."
 ```
 
 ## Not a doc gap
 
-- **(c) environment — jdtls rewrote `target/classes` under the running app.** Two minutes after the
-  first successful start, every class file in `target/classes` was rewritten (timestamps after boot;
-  `.project` / `.classpath` / `.settings` appeared in the app folder) by the IDE language server's
-  JDT build. JDT emits switch-map classes differently, so javac's `ItemEntryPanel$3` vanished and
-  opening Item Entry failed with `NoClassDefFoundError: com/ca/ui/panels/ItemEntryPanel$3`
-  (AppErrorHandler ref #1). The kit's CLAUDE.md warns about exactly this. Fix: an `ide-output`
-  profile in the pom (activated only by `m2e.version`, moves the IDE's output to `target/ide`),
-  then `clean` + restart. Cost ~5 minutes.
-- **(c) environment — port 8080 was taken** by an unrelated Java process on this machine. Ran on
-  `SERVER_PORT=8090`, which host-app-vaadin-boot.md documents; worked first time.
-- **(b) emulators — `JFileChooser.setApproveButtonText` is not shown.** runtime-contract.md's recipe
-  keeps the custom label via `setApproveButtonText("Select Save location")` before `showSaveDialog`;
-  the browser's save prompt still reads "Save". Cosmetic; the save and download work.
-- **(b) emulators — swapped `JLabel` icons break.** `ActionButton` swaps icons with `setIcon(on/off)`
-  on hover/press; after a swap the toolbar icon renders as a broken image and the browser logs a
-  403 on `/VAADIN/dynamic/resource/…`. Initial icons render fine. Cosmetic.
-- **(b) emulators — the `BrowserFileTransfer` download dialog outlives the app.** After Exit →
-  Yes, the "Download help.pdf" dialog (left open) was still shown on top of "The application has
-  ended". Cosmetic.
-- **(a) app bugs walked past, kept as-is:** `ItemEntryPanel` runs its save (which builds the
-  Validator's popup `JDialog`s) inside `SwingWorker.doInBackground()` — off-EDT on the desktop too,
-  now a once-per-JVM WARN; `GDialog.setAbstractFunctionPanel()` calls `setVisible(true)` and so do
-  its callers, so the modal Change Password / Support dialogs must be closed twice;
-  `ResourceManager.getImage` builds `new File(url.toString())` from a `file:`/`jar:` URL, so the
-  frame icon was always null ("Error:Can't read input file!"); both Save-to-Excel buttons NPE on
-  cancel (`getSelectedFile()` is null) — ported unguarded per runtime-contract.md; and the
-  README's known Validator quirk (status message never shown) is preserved.
+**(a) Kept as upstream had it, not fixed in the port:**
+
+- `ExitButton.handleExit` starts with `res = 0`, which equals `JOptionPane.YES_OPTION`, so on panels
+  with `isReadyToClose = true` (Login, Home, Change Password) Exit quits without asking.
+- `AbstractFunctionPanel.mainApp` is never assigned, so `validateFailed()` would NPE if reached. It
+  never is, because `Validator.parent` is never assigned either (the README's known quirk).
+- The three `SwingWorker`s run UI code in `doInBackground()` (see id 2).
+- The Excel export ignores `showSaveDialog`'s return value, so Cancel NPEs on `getSelectedFile()`.
+  The port keeps it, per runtime-contract.md.
+- `ResourceManager.readImage` does `new File(url.toString())` on a `file:`/`jar:` URL, so the frame
+  icon is always `null`.
+- `AppStarter.alreadyRunning` meant the opposite of its name (`true` = not running). The class is
+  deleted now, so this is moot.
+
+**(b) Emulators / add-ons came up short (cosmetic):**
+
+- A toolbar `ActionButton` swaps its icon on hover. When that swap happens while a modal dialog has
+  the frame inert, the new icon's `/VAADIN/dynamic/resource/...` URL returns 403 and a broken image
+  shows until the next hover. Seen on "Item Entry" when opening Tools → Change Username/Password.
+- The `GDialog` for Change Username/Password clips its content at the 480×340 size the app asks for:
+  the left-hand labels are cut off and the fields scroll.
+
+**(c) Environment:**
+
+- Port 8080 was held by an unrelated Java process on the machine. Ran on 8090 via `SERVER_PORT`, as
+  host-app-vaadin-boot.md says.
+- Vaadin's dev-mode "App is running in development mode" toast covers the toolbar's Logout/Exit
+  buttons until you close it. Browser automation clicking there hits the toast instead.
