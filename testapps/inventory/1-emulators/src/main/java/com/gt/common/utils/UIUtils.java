@@ -37,7 +37,9 @@ public class UIUtils {
             list = Arrays.asList(ignoreList);
         }
 
-        if (parent instanceof JTextField) {
+        if (parent instanceof JDateChooser) {
+            ((JDateChooser) parent).setDate(null);
+        } else if (parent instanceof JTextField) {
             ((JTextField) parent).setText("");
         } else if (parent instanceof JTextArea) {
             ((JTextArea) parent).setText("");
@@ -55,6 +57,9 @@ public class UIUtils {
     }
 
     public static void clearAllFields(Component parent) {
+        if (parent instanceof JDateChooser) {
+            ((JDateChooser) parent).setDate(null);
+        }
         if (parent instanceof JTextField) {
             ((JTextField) parent).setText("");
         }

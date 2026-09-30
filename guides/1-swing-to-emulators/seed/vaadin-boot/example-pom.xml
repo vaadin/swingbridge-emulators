@@ -292,6 +292,17 @@
     </build>
 
     <profiles>
+        <!-- Keep this one even if you use no IDE. It is active only inside Eclipse, VS Code Java or
+             the jdtls language server (their Maven support, m2e, sets m2e.version); a command-line
+             build never sees it. Without it the IDE compiles into target/classes, the folder Maven
+             and the running app use, with a compiler (JDT) that names some generated classes
+             differently from javac, and the app then fails with NoClassDefFoundError on a class
+             like MyPanel$3 in code nobody touched. -->
+        <profile>
+            <id>ide-output</id>
+            <activation><property><name>m2e.version</name></property></activation>
+            <build><directory>${project.basedir}/target/ide</directory></build>
+        </profile>
         <profile>
             <id>production</id>
             <properties>

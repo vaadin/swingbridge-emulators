@@ -261,7 +261,6 @@ public class ItemEntryPanel extends AbstractFunctionPanel {
                 btnReadAll.setEnabled(true);
                 btnNew.setEnabled(true);
                 table.setEnabled(true);
-                // was txtPurDate.getDateEditor().setEnabled(false): the JCalendar add-on has no separable editor, so the field stays typeable
                 break;
             case CREATE:
                 UIUtils.toggleAllChildren(buttonPanel, false);
@@ -271,7 +270,6 @@ public class ItemEntryPanel extends AbstractFunctionPanel {
                 table.setEnabled(false);
                 btnCancel.setEnabled(true);
                 btnSave.setEnabled(true);
-                // was txtPurDate.getDateEditor().setEnabled(false): the JCalendar add-on has no separable editor, so the field stays typeable
                 break;
             case MODIFY:
                 UIUtils.toggleAllChildren(formPanel, true);
@@ -282,7 +280,6 @@ public class ItemEntryPanel extends AbstractFunctionPanel {
                 btnCancel.setEnabled(true);
                 btnSave.setEnabled(true);
                 table.setEnabled(false);
-                // was txtPurDate.getDateEditor().setEnabled(false): the JCalendar add-on has no separable editor, so the field stays typeable
                 break;
 
             case READ:

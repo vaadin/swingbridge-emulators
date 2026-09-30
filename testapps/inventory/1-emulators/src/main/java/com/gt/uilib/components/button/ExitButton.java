@@ -27,8 +27,8 @@ public class ExitButton extends ActionButton {
 
     public static void handleExit() {
         int res = 0;
-        if (AppFrame.getInstance().currentWindow != null) {
-            if (!AppFrame.getInstance().currentWindow.isReadyToClose)
+        if (AppFrame.getCurrentWindow() != null) {
+            if (!AppFrame.getCurrentWindow().isReadyToClose)
                 res = JOptionPane.showConfirmDialog(AppFrame.getInstance(), AbstractFunctionPanel.getUnsavedExitMessage(), "Exit Confirmation",
                         JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         } else {

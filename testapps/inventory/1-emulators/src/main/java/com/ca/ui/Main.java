@@ -1,3 +1,22 @@
+/*
+ * Copyright 2000-2026 Vaadin Ltd.
+ * SPDX-License-Identifier: 0BSD
+ *
+ * A seed file: copy it into your app and license the result as you choose. This
+ * notice need not be kept.
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+ * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
 package com.ca.ui;
 
 import com.ca.db.model.ApplicationLog;
@@ -6,19 +25,20 @@ import com.ca.db.service.DBUtils;
 import com.ca.db.service.LoginUserServiceImpl;
 import com.github.mvysny.vaadinboot.VaadinBoot;
 import com.gt.uilib.components.AppFrame;
-import org.apache.commons.lang3.SystemUtils;
 import com.vaadin.swingbridge.fixture.Seed;
-
-import java.awt.Dimension;
+import org.apache.commons.lang3.SystemUtils;
 import vaadinx.awt.event.ComponentEvent;
 import vaadinx.swing.SwingUtilities;
 import vaadinx.swing.UIManager;
+
+import java.awt.Dimension;
 import java.io.File;
 import java.util.Date;
 
 /**
- * The two entry points of the migrated app: {@link #main} once per JVM, {@link #mainUI} once per
- * browser tab (from {@link AppRoute}).
+ * The two entry points of the migrated app — the guide's Phase 3 split. Move your old
+ * {@code main()}'s process-level work into {@link #main} and its frame construction into
+ * {@link #mainUI}.
  */
 public final class Main {
 
@@ -89,8 +109,5 @@ public final class Main {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
-
-    private Main() {
     }
 }

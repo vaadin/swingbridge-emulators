@@ -317,6 +317,8 @@ Each row comes back *gone* (routed, or its class is gone), *made a constant*, *a
 migration itself introduced, which owe the same verdict. **Still unvetted** is the only row type that
 is a finding; the rest are the work, recorded. A field whose class you *renamed* shows as *gone* and
 again among the new statics: same field, and nothing in the class files ties the two names together.
+**The fates are at the end of the report**, under `## Completeness diff against …`. Everything above
+that heading reprints the stage-1 worklist unchanged, so start reading from the heading.
 
 If you [split into several holders](#one-holder-or-several), enumerate them with
 `grep -rn "AppInstance.get("` first, so the diff is against all of them rather than the one you

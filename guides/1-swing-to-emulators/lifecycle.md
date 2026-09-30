@@ -206,6 +206,26 @@ Three consequences, and they are the whole rewrite:
   above. On a regular `JFrame` rendered as a Vaadin Dialog, a close-attempt with `EXIT_ON_CLOSE`
   throws `IllegalStateException`; use `DISPOSE_ON_CLOSE` or `HIDE_ON_CLOSE` there.
 
+### A `windowClosing` handler runs, but cannot stop the tab closing
+
+The scan's *cancelable tab close* hit is a `windowClosing` listener or an `event.consume()`. When the
+user closes the browser tab, your main window still receives `WINDOW_CLOSING`. It arrives from the
+server after the tab is already gone: usually within a minute, at the latest when the session times
+out. So the listener runs, but it cannot change the outcome:
+
+- **It cannot veto.** `DO_NOTHING_ON_CLOSE` and `event.consume()` keep nothing open, because the tab
+  is already closed.
+- **It cannot ask.** There is no browser left to show a dialog in. A `JOptionPane.show*` or a modal
+  `JDialog` inside the listener throws `IllegalStateException` ("Application is shutting down…"),
+  and the rest of that listener does not run.
+- **It can clean up.** Server-side work runs as it did on the desktop: saving, releasing a lock,
+  writing an audit row.
+
+So an empty listener, or one that only cleans up, needs no change. A "Save changes before closing?"
+prompt has nowhere to appear: keep the listener's dialog-free cleanup, drop the prompt, and save when
+the data changes instead. A confirm shown from your own Quit button or menu item still works, because
+it runs while the tab is open.
+
 ### Delete the single-instance guard
 
 Many desktop apps refuse to start twice, and the guard is always JVM-startup code — so it lands in

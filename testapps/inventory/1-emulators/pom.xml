@@ -13,7 +13,7 @@
          Then change three things and add your own dependencies:
 
            1. groupId / artifactId / name              — your app's coordinates
-           2. <argument>com.example.app.Main</argument> — your main()-hosting class, at the
+           2. <argument>com.ca.ui.Main</argument> — your main()-hosting class, at the
                                                          BOTTOM, once you have moved the seed's
                                                          classes into your own package
            3. swingbridge-emulators.version            — the version you are migrating against
@@ -35,7 +35,7 @@
     <artifactId>testapp-inventory-emulators</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Inventory Management System — on SwingBridge Emulators</name>
+    <name>Inventory Management System (Java, Swing, JGoodies, Hibernate, H2 Database) on SB-Emulators</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -180,7 +180,6 @@
         <!-- ADD YOUR APP'S OWN DEPENDENCIES HERE — whatever its pre-migration pom declared,
              minus the Look-and-Feel libraries (delete those outright) and minus any Swing
              library you replaced with an add-on above. -->
-        <!-- From the stage-1 pom, minus com.toedter:jcalendar and com.jgoodies:forms (add-ons above). -->
         <dependency>
             <groupId>org.hibernate</groupId>
             <artifactId>hibernate-core</artifactId>
@@ -290,18 +289,21 @@
                  argument. A misplaced flag is ignored without a word, and the app then refuses to
                  start with an InaccessibleObjectException naming java.lang — so do not tidy this list.
 
-                 The last argument is the one line you must change: your main()-hosting class. -->
+                 The last argument is the one line you must change: your main()-hosting class.
+                 Your own JVM flags go before -classpath. Other run settings from your old build
+                 (<workingDirectory>, <classpathScope>, <environmentVariables>) go in
+                 <configuration> beside <arguments>, not inside it. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>${exec-maven-plugin.version}</version>
                 <configuration>
                     <executable>${java.home}/bin/java</executable>
-                    <!-- Kept from the stage-1 pom: the app writes ./log/ (and, under -Pfile-db,
-                         ./inventoryApp.db) relative to its working directory, and the test scope
-                         lets -Pfile-db's test resource shadow the in-memory hibernate.cfg.xml. -->
-                    <classpathScope>test</classpathScope>
+                    <!-- The app writes ./log/ (and, under -Pfile-db, ./inventoryApp.db) relative to its
+                         working directory. Test scope so -Pfile-db's test resource can shadow the
+                         in-memory hibernate.cfg.xml; run with test-compile exec:exec. -->
                     <workingDirectory>${project.build.directory}/run</workingDirectory>
+                    <classpathScope>test</classpathScope>
                     <arguments>
                         <argument>--add-opens</argument>
                         <argument>java.base/java.lang=ALL-UNNAMED</argument>
@@ -315,8 +317,14 @@
     </build>
 
     <profiles>
-        <!-- From the stage-1 pom: file-backed H2 instead of the in-memory default. `clean` is not
-             optional when switching modes. -->
+        <profile>
+            <!-- Active only inside Eclipse / jdtls (m2e sets m2e.version); the command-line build never sees it. -->
+            <id>ide-output</id>
+            <activation><property><name>m2e.version</name></property></activation>
+            <build><directory>${project.basedir}/target/ide</directory></build>
+        </profile>
+        <!-- File-backed H2 instead of the in-memory default; `clean` when switching modes, since a
+             stale target/test-classes/hibernate.cfg.xml keeps shadowing. -->
         <profile>
             <id>file-db</id>
             <build>

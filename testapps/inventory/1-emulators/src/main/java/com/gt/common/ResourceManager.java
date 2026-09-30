@@ -9,8 +9,6 @@ import java.io.*;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
-
-import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.WORLD_GLOBAL_READ_MOSTLY;
 import java.awt.Image;
 import vaadinx.swing.ImageIcon;
 
@@ -26,8 +24,8 @@ public class ResourceManager {
 
     public static final String resourceMapFile = "string-resource.ini";
     private static final String a = "gt?Pass,e#. ";
-    @IntentionallyStatic(value = WORLD_GLOBAL_READ_MOSTLY,
-            note = "string-resource.ini or StrConstants, loaded once under getString's lock and never written again")
+    @IntentionallyStatic(value = IntentionallyStatic.Reason.WORLD_GLOBAL_READ_MOSTLY,
+            note = "loaded once, under the method lock, from string-resource.ini or StrConstants; never written after")
     private static Map<String, String> stringConstantsMap;
 
     public static synchronized String getString(String key) {

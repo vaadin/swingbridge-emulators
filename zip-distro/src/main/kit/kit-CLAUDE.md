@@ -56,10 +56,24 @@ over the wrong tree.
   locations in Claude Code — hover works, while *references*, *definition* and *workspace symbols*
   come back empty — so keep neither this kit nor the app in an ignored folder (`target/`, `build/`,
   `tmp/`), and run `git check-ignore` on a file before concluding anything from an empty answer.
-  **(2)** `jdtls` compiles with **JDT, not javac**, into whatever output directories it is given,
-  and JDT rejects some code javac accepts — so point it at a workspace data directory outside the
-  project, and if you find a `target/` (or `build/`) you did not create, delete it and use `clean`
-  from then on. A build failing on classes JDT wrote reads as a bug in the migration.
+  **(2)** `jdtls` compiles with **JDT, not javac**, and its Maven support compiles into the pom's
+  own `target/classes` — the folder `mvn` and the running app use — whatever workspace directory
+  you give it. JDT names some generated classes differently (`MyPanel$3`) and rejects some code
+  javac accepts, so a build or a running app fails on classes JDT wrote, which reads as a bug in the
+  migration. The seed poms carry the fix, an `ide-output` profile that moves the IDE's output to
+  `target/ide` and that a command-line build never activates; until the seed pom is in place (Phase
+  0 builds the app's own pom), add the same profile to the app's `<profiles>`, then `clean`:
+
+  ```xml
+  <profile>
+      <id>ide-output</id>
+      <activation><property><name>m2e.version</name></property></activation>
+      <build><directory>${project.basedir}/target/ide</directory></build>
+  </profile>
+  ```
+
+  A language server may not re-read a changed pom; if `target/classes` fills up again without a
+  `mvn` run, restart the session.
 - **Migrate into a work folder, never into `testapps/` or `your-app/swing/`.** `/migrate-testapp`
   copies the example's `swing/` stage to `work/<app>/` and migrates the copy, so this kit stays
   pristine and re-runnable; `/migrate-your-app` treats `your-app/swing/` the same way.

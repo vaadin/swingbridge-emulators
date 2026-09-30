@@ -54,19 +54,19 @@ import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.IMMUTA
 public final class Seed {
 
     /** Fixed so every run produces byte-identical rows — a rubric can name dates and ids. */
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_1 = date(2026, 1, 15);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_2 = date(2026, 2, 3);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date PURCHASE_3 = date(2026, 3, 21);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_1 = date(2026, 4, 10);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_2 = date(2026, 5, 5);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_3 = date(2026, 6, 1);
-    @IntentionallyStatic(value = IMMUTABLE_CONSTANT, note = "fixture date, only handed to entity setters from main(); never mutated")
+    @IntentionallyStatic(IMMUTABLE_CONSTANT)
     private static final Date TRANSFER_4 = date(2026, 6, 18);
 
     /**
@@ -336,9 +336,9 @@ public final class Seed {
         System.out.println("FIXTURE:   " + label + " = " + rows.size() + " (unseeded)");
     }
 
-    // Server zone intended: reached only from main() via seedIfEmpty(), where no browser zone exists.
-    // Midday rather than midnight, so the stored calendar day renders the same in any browser within ±11 h.
     private static Date date(int year, int month, int day) {
+        // Server zone on purpose: the seed runs from main(), before any browser exists. Midday, not
+        // midnight, so browsers a few zones west of the server still show the same calendar day.
         return Date.from(LocalDate.of(year, month, day).atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant());
     }
 

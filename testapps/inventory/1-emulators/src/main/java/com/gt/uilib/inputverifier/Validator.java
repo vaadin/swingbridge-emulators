@@ -11,7 +11,6 @@ import vaadinx.toedter.calendar.JDateChooser;
 import vaadinx.swing.text.JTextComponent;
 import vaadinx.awt.event.MouseAdapter;
 import vaadinx.awt.event.MouseEvent;
-import vaadinx.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -180,20 +179,8 @@ public class Validator {
                 return true;
             }
 
-            /*
-              Input date should be in Specified format
-             */
-            // was jdc.getDateFormatString(), which the JCalendar add-on does not provide; any pattern gives the same
-            // answer here, since format() only fails on a null date
-            String pattern = "MMM d, yyyy";
-            SimpleDateFormat format = new SimpleDateFormat(pattern);
-
-            try {
-                format.format(inputDate);
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
+            // The chooser's format string is gone; formatting with it only ever failed on a null date.
+            return inputDate != null;
 
         }
         if (jc instanceof SpecificationPanel) {

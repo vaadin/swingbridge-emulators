@@ -15,7 +15,7 @@ import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.JVM_IN
 public class SessionUtils {
     static final Logger logger = Logger.getLogger(SessionUtils.class);
     @IntentionallyStatic(JVM_INFRASTRUCTURE)
-    private static SessionFactory sessionFactory;
+    private static final SessionFactory sessionFactory;
 
     static {
         // A SessionFactory is set up once for an application!
