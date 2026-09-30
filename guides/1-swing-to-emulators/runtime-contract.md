@@ -60,14 +60,17 @@ jf.showDialog(this, "Select Save location");
 ExcelUtils.write(table, jf.getSelectedFile().getAbsolutePath() + ".xls");
 
 // AFTER — the next line writes, so it is a SAVE. Direction swapped, nothing else.
-jf.setApproveButtonText("Select Save location");   // keeps your custom button label
+jf.setDialogType(JFileChooser.SAVE_DIALOG);        // first: changing the type resets the label
+jf.setApproveButtonText("Select Save location");   // then your custom button label
 jf.showSaveDialog(this);
 ExcelUtils.write(table, jf.getSelectedFile().getAbsolutePath() + ".xls");
 ```
 
 - the code **reads** the file it gets back → `showOpenDialog(parent)`
 - the code **writes** it → `showSaveDialog(parent)`
-- `setApproveButtonText("…")` before the call keeps the custom label either way
+- to keep the custom label, call `setDialogType(...)` with the matching type, then
+  `setApproveButtonText("…")`, then the show call — changing the dialog type resets the label, on
+  the desktop too, and a new chooser starts as an open dialog
 - direction decided at runtime → branch, and call the matching variant in each branch
 - can't tell? Leave the `showDialog` call and mark it TODO. It won't compile clean and won't run,
   which is exactly what a TODO should be — no silent wrong behaviour is possible.

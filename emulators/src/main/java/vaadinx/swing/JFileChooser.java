@@ -225,8 +225,10 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
      * faithful and round-trips; only the show is refused.
      *
      * @deprecated triage the call site to {@link #showOpenDialog} (the app reads
-     *             the file) or {@link #showSaveDialog} (the app writes it) —
-     *             {@link #setApproveButtonText} keeps the custom label. The
+     *             the file) or {@link #showSaveDialog} (the app writes it). To
+     *             keep a custom label, call {@link #setDialogType} with the
+     *             matching type and only then {@link #setApproveButtonText}:
+     *             changing the type resets the label, as in the JDK. The
      *             deprecation is deliberate divergence from the JDK, and is what
      *             makes an untriaged call site visible at <em>compile</em> time
      *             rather than only when someone walks that path.
@@ -247,7 +249,9 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
             tell which this call site meant. \
             FIX at this call site, from what the surrounding code does with getSelectedFile(): \
             the app READS it -> showOpenDialog(parent); the app WRITES it -> showSaveDialog(parent). \
-            Either keeps a custom button label via setApproveButtonText(..) before the call. \
+            To keep a custom button label, call setDialogType(SAVE_DIALOG) or \
+            setDialogType(OPEN_DIALOG) first and setApproveButtonText(..) after it - changing \
+            the dialog type resets the label, on the desktop too - then the show call. \
             If the direction is decided at runtime, branch and call the matching variant per branch.\
             """;
 

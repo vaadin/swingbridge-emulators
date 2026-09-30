@@ -216,6 +216,24 @@ class JFileChooserTest extends AbstractKaribuTest {
         assertTrue(msg.contains("showOpenDialog(parent)"), "message must name the LOAD replacement: " + msg);
         assertTrue(msg.contains("showSaveDialog(parent)"), "message must name the SAVE replacement: " + msg);
         assertTrue(msg.contains("setApproveButtonText"), "message must say how to keep the label: " + msg);
+        assertTrue(msg.contains("setDialogType(SAVE_DIALOG)"), "message must say to set the type first: " + msg);
+    }
+
+    @Test
+    @DisplayName("a type change resets the approve label, so the triage recipe sets the type first")
+    void typeChangeResetsApproveLabel() {
+        // The JDK's setDialogType resets the label on a change to OPEN/SAVE; a fresh
+        // chooser is OPEN_DIALOG, so a label set before showSaveDialog is lost.
+        JFileChooser labelFirst = new JFileChooser();
+        labelFirst.setApproveButtonText("Select Save location");
+        labelFirst.setDialogType(JFileChooser.SAVE_DIALOG);
+        assertNull(labelFirst.getApproveButtonText());
+
+        JFileChooser typeFirst = new JFileChooser();
+        typeFirst.setDialogType(JFileChooser.SAVE_DIALOG);
+        typeFirst.setApproveButtonText("Select Save location");
+        typeFirst.setDialogType(JFileChooser.SAVE_DIALOG); // what showSaveDialog does: unchanged, no reset
+        assertEquals("Select Save location", typeFirst.getApproveButtonText());
     }
 
     @Test
