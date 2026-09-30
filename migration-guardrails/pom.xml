@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-migration-guardrails</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (migration guardrails)</name>
+    <description>MigrationGuardrails: the three post-migration build gates — every static field
+        provably immutable or explicitly allowlisted, no UI component in a static field, no JVM
+        exit — as one class a migrated application calls from its own test suite, reporting every
+        violation in a single failure.</description>
+
+    <!-- The three build-time gates of the stage-2 guide's Phase 6 step 6, as one class a MIGRATED
+         app calls from its own test suite: com.vaadin.swingbridge.migration.guardrails.MigrationGuardrails
+         (M1D_guardrails_artifact). Every static provably immutable or @IntentionallyStatic; no
+         component in a static field; no JVM exit.
+
+         THIS MODULE IS A FACADE; THE ENGINE LIVES IN :migration-tool, which owns the rules and the
+         ArchUnit dependency (M1D_static_sweep_tool § Q_one_rule_engine) so that StaticSweep's
+         worklist and this gate cannot answer the same immutability question two ways. ArchUnit
+         arrives transitively and stays TEST-SCOPE BY CONSUMPTION — the migrator adds this jar in
+         <scope>test</scope>, so nothing here reaches their runtime. The engine stays private in the
+         sense that matters: the migrator's source imports one SB-Emulators type and no com.tngtech.*, so our
+         ArchUnit version is not a compat surface on their build.
+
+         The facade is kept rather than folded away because it is what makes those promises true.
+         Pointing migrators at :migration-tool directly would work mechanically and would hand them a
+         jar of tool mains whose entry point contracts are the opposite of this one's: the tool's
+         mains print and exit 0, this throws.
+
+         NO COMPILE-SCOPE DEPENDENCY ON :emulators, ON :surrogates, OR ON ANYTHING VAADIN, EVER —
+         same reason :migration-annotations has zero dependencies rather than merely few. A migrated
+         app's UI-free service modules add these guardrails too, and Step 0 of the static sweep
+         (M1D_static_taxonomy) classifies a module UI-bearing if it depends on one that is. Hence
+         the component types are matched BY NAME ("vaadinx.awt.Component",
+         "com.vaadin.flow.component.Component"): in a UI-free module the names resolve to nothing
+         and the rule trivially passes, which is the right answer there. The dependency direction is
+         guardrails -> annotations and never back.
+
+         :emulators is a TEST dependency only, and only so the module's own fixtures can declare a
+         real static component field. -->
+
+
+    <dependencies>
+        <!-- The rule engine. Brings ArchUnit transitively; see the header. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-tool</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- @IntentionallyStatic, the static gate's allowlist — matched by type, so a rename of the
+             annotation is a compile error here rather than a gate that silently stops allowlisting. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-annotations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Test only: the LeakyEmulator fixture needs a real vaadinx.awt.Component subtype (and,
+             transitively, a Vaadin one) for the by-name match to have something to resolve. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

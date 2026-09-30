@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE hibernate-configuration PUBLIC
+"-//Hibernate/Hibernate Configuration DTD 3.0//EN"
+"http://www.hibernate.org/dtd/hibernate-configuration-3.0.dtd">
+<hibernate-configuration>
+	<session-factory>
+
+		<property name="hibernate.connection.driver_class">org.h2.Driver</property>
+		<!-- In-memory by default. The app seeds itself (com.vaadin.swingbridge.fixture.Seed), so a throwaway database
+		     comes up fully populated and every launch starts on identical rows; upstream needed the
+		     file to keep hand-typed reference data. DB_CLOSE_DELAY=-1 is load-bearing: without it
+		     H2 discards the database when the pool closes its last connection. Upstream's
+		     file-backed URL now lives in src/test/resources-filedb, behind -Pfile-db. SB-Emulators change,
+		     recorded in ../../../../PROVENANCE.md. -->
+		<property name="hibernate.connection.url">jdbc:h2:mem:inventory;DB_CLOSE_DELAY=-1</property>
+		<property name="hibernate.connection.username">user</property>
+		<property name="connection.password">pass</property>
+		<property name="connection.pool_size">2</property>
+		<property name="hibernate.dialect">org.hibernate.dialect.H2Dialect</property>
+		<property name="show_sql">false</property>
+		<property name="format_sql">true</property>
+		<property name="use_sql_comments">true</property>
+		<property name="hibernate.connection.autocommit">true</property>
+
+		<property name="hbm2ddl.auto">update</property>
+		<!-- Mapping for new tables -->
+		<!-- system internals -->
+		<mapping class="com.ca.db.model.LoginUser" />
+		<mapping class="com.ca.db.model.ApplicationLog" />
+		<!-- initial records -->
+		<mapping class="com.ca.db.model.BranchOffice" />
+		<mapping class="com.ca.db.model.Vendor" />
+		<mapping class="com.ca.db.model.Category" />
+		<mapping class="com.ca.db.model.UnitsString" />
+		<mapping class="com.ca.db.model.Specification" />
+
+		<mapping class="com.ca.db.model.Item" />
+		<mapping class="com.ca.db.model.Transfer" />
+		<mapping class="com.ca.db.model.ItemReturn" />
+
+	</session-factory>
+</hibernate-configuration>

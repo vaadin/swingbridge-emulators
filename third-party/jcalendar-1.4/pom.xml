@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>swingbridge-emulators-jcalendar-1.4</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. The starter-prototype status is
+         stated here too: M1D_addon_starter_status lists every migrator-facing place that says
+         it, and a Central listing is one of them. -->
+    <name>SwingBridge Emulators add-on: JCalendar 1.4</name>
+    <description>JCalendar 1.4's JDateChooser API on top of SwingBridge Emulators, so a migrated
+        application keeps compiling after rewriting its com.toedter imports to vaadinx.toedter.
+        A clean reimplementation over a Vaadin date picker, not a fork of the upstream sources,
+        licensed LGPL-2.1 like the library whose API it reproduces.
+        Starter prototype: shipped as-is at the coverage it has.</description>
+
+    <!-- Third-party add-on: provides JCalendar 1.4's JDateChooser API on top of SB-Emulators, so a
+         migrated app keeps compiling after `com.toedter.` -> `vaadinx.toedter.`.
+
+         The two version slots carry different facts, and neither can express the other's.
+         artifactId carries the UPSTREAM version: which API surface you get. A migrator on
+         JCalendar 1.4 cannot use a port of a different line. <version> is SB-Emulators', and is this
+         add-on's own release train — our fixes and improvements plus the emulator ABI it was
+         built against — so swingbridge-emulators-jcalendar-1.4:0.4 supersedes swingbridge-emulators-jcalendar-1.4:0.1 for the very
+         same JCalendar API. Ordinary Maven semantics on the half that evolves; the upstream
+         half never does.
+
+         This module is a clean REIMPLEMENTATION, not a fork: no upstream code is copied. It takes
+         upstream's licence anyway, and the <licenses> block below overrides the parent's Apache-2.0
+         (Maven replaces rather than merges). The rule is M1D_addon_upstream_licence and the reason
+         is not caution for its own sake: LGPL-2.1 s3 permits relicensing an LGPL work to the
+         ORDINARY GPLv2 and to nothing else — not to a permissive licence, and not to GPLv2 +
+         Classpath Exception either, because the CE grants a linking permission over code that
+         would not be ours. So an inherited licence is valid only in the future where this port
+         never becomes derivative; LGPL-2.1 is valid in both. See PROVENANCE.md and LICENSE.
+
+         Nothing in :emulators / :surrogates knows this module exists, and it must stay that
+         way — a core change made to accommodate an add-on is the experiment failing. -->
+
+    <licenses>
+        <license>
+            <name>GNU Lesser General Public License, Version 2.1</name>
+            <url>https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html</url>
+            <distribution>repo</distribution>
+            <comments>Reproduces the API of JCalendar 1.4 (com.toedter:jcalendar), which upstream
+                licenses under the LGPL, and takes that licence rather than SB-Emulators' own.
+                No upstream source or bytecode is copied. SPDX: LGPL-2.1-only. See LICENSE and
+                PROVENANCE.md.</comments>
+        </license>
+    </licenses>
+
+    <!-- PUBLISHED by a release build, like the library modules. The rule is D_kit_tool_zip: everything
+         a migrated pom can be told to reference must be resolvable by coordinate, and this
+         module's own MIGRATION.md tells an app to depend on it. The distribution kit does carry
+         this jar, but only in tools/lib/ as a swap-table source for the import-swap tool — the
+         migrated app resolves it by coordinate, so a coordinate that is not on Central has nothing
+         left to fall back on. The licence lane is UPSTREAM's — LGPL-2.1, per
+         M1D_addon_upstream_licence — which is also what closes the gate PROVENANCE.md used to
+         record against publishing: the clearance to proceed on the reimplementation-is-not-
+         derivative reading was given while this repository was private, and taking LGPL-2.1 makes
+         the artifact correct whether or not that reading holds. Read PROVENANCE.md before cutting a
+         release, and
+         M1D_addon_starter_status is what states the starter-prototype scope to a migrator; that is
+         a status to say out loud, not a reason to withhold the artifact. -->
+
+    <dependencies>
+        <!-- JDateChooser is an emulator-stage component: it extends vaadinx.swing.JComponent
+             through the protected (Component peer) ctor. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- ...peering over SJFormattedDatePicker, plus the SHelper Date<->LocalDate seam. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-surrogates</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <!-- VaadinSession's interface references jakarta.servlet.http.HttpSessionBindingListener;
+             needed to compile but provided by the container at runtime, as in :emulators. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.kaributesting</groupId>
+            <artifactId>karibu-testing-v24</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <!-- Maven's default resource directory, restored: naming <resources> at all replaces
+                 the default, and the swap table the import-swap tool reads lives here. Dropping it
+                 leaves the table in the source tree but out of the jar, where the tool cannot find
+                 it and silently rewrites nothing for this add-on's types. -->
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <!-- The migrator-facing addendum ships inside the jar, so an agent that resolved this
+                 artifact by coordinate can read the migration instructions without a repo checkout
+                 (and offline). Authored at the module root next to README/PROVENANCE; this block is
+                 the only copy step. MigrationDocTest guards both halves. -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>MIGRATION.md</include>
+                </includes>
+                <targetPath>META-INF/emul</targetPath>
+            </resource>
+            <!-- This module's OWN LICENSE, not the repo root's — the same shape as the jgoodies
+                 fork next door, and for a stronger reason than symmetry: shipping the parent's
+                 Apache-2.0 text inside an LGPL-2.1 jar would state the wrong terms to whoever opens
+                 it, and META-INF/LICENSE is the copy a jar travelling on its own carries. The root
+                 PROVENANCE.md does not ship either: it is the record of SB-Emulators' OpenJDK
+                 derivation, which is not this module's lane. This module's own PROVENANCE.md stays
+                 a maintainer record and does not ship, as with the sibling fork.
+
+                 NOTE this block replaces the parent's <resources> entirely, which is why the
+                 default src/main/resources entry above has to be re-listed by hand. -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
+            </resource>
+        </resources>
+    </build>
+</project>

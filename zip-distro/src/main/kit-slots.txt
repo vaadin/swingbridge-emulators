@@ -1,0 +1,13 @@
+# The kit's slots: kit-relative paths that must be present EITHER as the real artefact OR
+# as "<path>.placeholder", never both and never neither. KitLayoutIT enforces that, and
+# lists the placeholders it found so "still a placeholder in this release" ends up in the
+# release notes generated rather than remembered.
+#
+# A slot is a promise. Deleting a line here is how a promise is withdrawn; filling one is
+# how it graduates — and because the layout is final on day one, filling it moves nothing
+# else: the README, the guides and the agent prompt already name the path.
+#
+# One path per line; blank lines and #-comments ignored.
+
+tools/swing-mcp/swing-mcp-agent.jar
+testapps/inventory

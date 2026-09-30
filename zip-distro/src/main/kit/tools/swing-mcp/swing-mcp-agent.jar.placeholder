@@ -1,0 +1,30 @@
+swing-mcp-agent.jar — NOT IN THIS RELEASE
+=========================================
+
+What would be here
+------------------
+The SwingBridge MCP agent: a `-javaagent` you attach to your *unmigrated* Swing app,
+which exposes the running app's accessibility tree and its interactions over MCP. An
+agent can then drive the desktop app and write down what it does — the "before" side of
+behavioural verification, which you check the migrated browser app against afterwards.
+
+Why it is not here yet
+----------------------
+It has no release train of its own yet, so there is no versioned jar for this kit to
+carry. Bundling a build off a maintainer's machine would give you a binary nobody can
+reproduce, which is worse than an honest gap.
+
+What to do meanwhile
+--------------------
+Build it from source:
+
+    git clone https://github.com/vaadin/swing-mcp
+    cd swing-mcp && ./mvnw -C clean package
+
+Then attach the jar it produces to your Swing app's JVM. The example apps' READMEs under
+testapps/ show where the flag goes for each of them — note that it belongs on the *app's*
+JVM, not on Maven's, which is why they build a jar and launch it directly rather than
+using `exec:java`.
+
+Nothing else in this kit depends on this file. When it lands, it lands at exactly this
+path, minus the `.placeholder` suffix.

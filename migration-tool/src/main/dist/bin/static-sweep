@@ -1,0 +1,19 @@
+#!/bin/sh
+# The static sweep's worklist, read off the app's own compiled classes.
+#
+#   bin/static-sweep <app>/target/classes --lib <app>/target/dependency --report static-sweep.md
+#
+# Point it at the app you have NOT migrated yet: its classes exist before a single import is
+# rewritten, and that is what makes this readable on day zero.
+#
+# The wildcard classpath IS the launcher: every jar in ../lib is on it. This tool reads no
+# table — the app's class files are its input — but --lib / --cp are how the *app's* own
+# dependencies get on the resolution classpath, which is what lets a field's declared type be
+# followed up its hierarchy.
+set -e
+DIR=$(cd "$(dirname "$0")/.." && pwd)
+JAVA=java
+if [ -n "$JAVA_HOME" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+fi
+exec "$JAVA" -cp "$DIR/lib/*" com.vaadin.swingbridge.migration.tool.staticsweep.StaticSweep "$@"

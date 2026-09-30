@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-emulators-printing</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (printing)</name>
+    <description>Optional SwingBridge Emulators add-on: a virtual PDF printer implementing
+        vaadinx.awt.print.PrinterJob, rendering a hand-crafted Printable to a PDF the browser
+        downloads. A separate artifact so its PDFBox dependency stays off the classpath of
+        migrated apps that do not print.</description>
+
+    <!-- Optional add-on: the virtual PDF printer (vaadinx.awt.print.PrinterJob, D_printing).
+         Separate module so its PDFBox dependency stays off non-printing migrators'
+         classpaths (D_pure_java_artifact). Pure Java throughout. -->
+
+    <!-- GPLv2+CE, overriding the parent's Apache-2.0 default (Maven replaces rather than merges),
+         the same lane as :emulators and for the same reason: vaadinx.awt.print.PrinterJob is
+         derived from its OpenJDK counterpart and carries HDR_jdk_derived, and the jar is one
+         licence as a whole (D_gplv2_ce_relicense, D_licence_lanes). The <resources> override below moves with it. -->
+    <licenses>
+        <license>
+            <name>GPL2 w/ CPE</name>
+            <url>https://www.gnu.org/software/classpath/license.html</url>
+            <distribution>repo</distribution>
+            <comments>GNU General Public License version 2 only, with the "Classpath" exception — the
+                same licence as OpenJDK, of which this module is a derivative work. SPDX:
+                GPL-2.0-only WITH Classpath-exception-2.0. See LICENSE and PROVENANCE.md, both
+                inside this jar's META-INF/.</comments>
+        </license>
+    </licenses>
+
+    <dependencies>
+        <!-- PrinterJob rides on :emulators machinery (UI-context contract, callSwing,
+             the BrowserFileTransfer download that delivers the produced PDF). -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- Graphics2D->PDF bridge (D_printing). graphics2d declares no transitive deps by
+             design; pdfbox is pinned alongside it. Both Apache-2.0, pure Java. -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>de.rototor.pdfbox</groupId>
+            <artifactId>graphics2d</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.github.mvysny.kaributesting</groupId>
+            <artifactId>karibu-testing-v24</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Overrides the parent's <resources> ENTIRELY (Maven replaces, never merges): the parent
+             ships LICENSE-APACHE-2.0, and this jar is GPLv2+CE, whose Oracle headers name LICENSE
+             by reference. The default src/main/resources entry is restated so a resource added
+             later is not silently left out of the jar. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${maven.multiModuleProjectDirectory}</directory>
+                <includes>
+                    <include>LICENSE</include>
+                    <include>PROVENANCE.md</include>
+                </includes>
+                <targetPath>META-INF</targetPath>
+            </resource>
+        </resources>
+    </build>
+
+</project>

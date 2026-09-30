@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-emulators-spring</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (Spring Boot)</name>
+    <description>Optional SwingBridge Emulators add-on: the host-app wiring a migrated app needs
+        on Spring Boot — a SpringServlet with a virtual-thread-aware session lock, and an
+        auto-configuration that registers it and SwingBridgeEmulatorsBootstrap. A separate
+        artifact so its Spring dependency stays off the classpath of migrated apps that run on
+        Vaadin Boot or a plain servlet container.</description>
+
+    <!-- THE ONE MODULE IN THIS REACTOR THAT DEPENDS ON SPRING, and the only one permitted to
+         self-register, per R_no_spi_selfregister's framework-dedicated-module exception. Both
+         facts follow from the same property: this module exists only to make SB-Emulators work
+         on Spring Boot, so it reaches nobody who did not ask for it by coordinate. Everything
+         here would be a liability in :emulators — see D_library_servlet. -->
+
+    <dependencies>
+        <!-- The Vaadin Boot twin of this module's servlet lives here (SwingBridgeVaadinServlet),
+             along with SwingBridgeEmulatorsBootstrap, which the auto-configuration publishes. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- SpringServlet / SpringVaadinServletService / SpringBootAutoConfiguration /
+             RootMappedCondition. Version from vaadin-bom, which imports vaadin-spring-bom — so
+             the Spring generation we compile against is Vaadin's choice, not ours, which is what
+             SpringVersionDriftTest asserts is still true. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-spring</artifactId>
+        </dependency>
+        <!-- Spring Boot itself, which vaadin-spring does NOT bring — it depends on Spring
+             Framework only. @AutoConfiguration / @ConditionalOnMissingBean come from
+             -autoconfigure; ServletRegistrationBean from spring-boot proper (Boot 4 split many
+             modules out, but not that one).
+
+             OPTIONAL rather than compile-transitive, deliberately: the consumer is a Spring Boot
+             app and already has these, and imposing a version is exactly the version-delta
+             hazard the migration's consent fork warns about. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+            <version>${spring-boot.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+            <version>${spring-boot.version}</version>
+            <optional>true</optional>
+        </dependency>
+        <!-- MultipartConfigElement, in the servlet registration's signature. Provided: the
+             container supplies it. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+
+        <!-- ApplicationContextRunner, for asserting the auto-configuration's conditions without
+             starting a container. No BOM here manages it, so the version is the parent pom's
+             ${spring-boot.version} — see that property for how to re-derive it. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Vaadin's own auto-configuration runs alongside ours in every test here and creates a
+             ServerEndpointExporter, so it needs the websocket API — the same requirement a
+             migrated app meets as spring-boot-starter-websocket.
+
+             Tomcat's bundle rather than jakarta.websocket:jakarta.websocket-api, for a reason
+             worth not rediscovering: that artifact carries only the jakarta.websocket.server
+             half, and DeploymentException — the class ServerEndpointExporter fails on — is in the
+             *client* API jar. Tomcat's has both, and is what a real app gets anyway. -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-websocket</artifactId>
+            <version>11.0.24</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Required BY ApplicationContextRunner, not a style choice: AssertableApplicationContext
+             implements AssertJ's AssertProvider, so the class will not load without it, and
+             spring-boot-test leaves it optional. Version from spring-boot-dependencies. -->
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>3.27.7</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <testResources>
+            <!-- Filtered so SpringVersionDriftTest can compare the spring-boot.version this pom
+                 declares against the Spring Boot that vaadin-spring resolved at runtime. -->
+            <testResource>
+                <directory>src/test/resources</directory>
+                <filtering>true</filtering>
+            </testResource>
+        </testResources>
+    </build>
+
+</project>

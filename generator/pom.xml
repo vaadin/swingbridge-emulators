@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-generator</artifactId>
+    <packaging>jar</packaging>
+
+    <!-- Standalone stub generator. Reflects over a whitelisted JDK class and emits a
+         vaadinx.* skeleton forwarding to EHelper.onUnimplemented. Its own module so it
+         runs even when :emulators won't compile (the usual state while expanding scope).
+         No deps beyond the JDK; not published; no tests.
+
+         Run: mvn -pl generator compile exec:java -Dexec.arguments="javax.swing.JButton,emulators/src/main/java"
+         (exec:java, not exec:exec — the generator is pure JDK reflection with no loom, so
+         it needs neither a forked JVM nor the add-opens flag the loom apps require).
+
+         Apache-2.0 like the parent, yet it EMITS HDR_jdk_derived into new emulators, verbatim from
+         each class's own src.zip source: the emitted header is the emulator lane's, not this
+         module's, and must not be tidied to match (D_licence_lanes). -->
+
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Non-published module: also no-op the source/javadoc/gpg plugins the parent's profiles bind. -->
+        <maven.source.skip>true</maven.source.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <gpg.skip>true</gpg.skip>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>vaadinx.internal.Generator</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

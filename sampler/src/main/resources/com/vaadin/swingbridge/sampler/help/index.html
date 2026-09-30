@@ -1,0 +1,17 @@
+<html>
+<body>
+<h2>Help &mdash; Getting started</h2>
+<p>This page was loaded with <strong>setPage(URL)</strong> from the classpath. Clicking a
+link below does not navigate the browser: it fires a Swing <strong>HyperlinkEvent</strong>,
+and this demo's listener decides what it means &mdash; here, load the target page.</p>
+<ul>
+<li><a href="https://help.sampler.local/topics.html">Topics</a> &mdash; a second page</li>
+<li><a href="https://help.sampler.local/latin1.html">Accented text</a> &mdash; a page encoded in ISO-8859-1</li>
+</ul>
+<p>The link targets are <em>http</em> URLs on purpose. The editor's sanitizer keeps an
+href only for http, https and mailto, so a relative or <em>file:</em> href would be
+stripped and the link would render as plain text. A migrated help viewer therefore maps
+link URLs to its own resources in the listener, exactly as this demo does &mdash; nothing
+is fetched from the network.</p>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ===================================================================================
+         A COMPLETE, WORKING pom.xml FOR A MIGRATED SWING APP ON SPRING BOOT — part of the
+         seed beside it, which builds exactly as shipped. Copy it over your app's pom and edit:
+
+             cp swingbridge-migration/seed/spring-boot/example-pom.xml pom.xml
+
+         Then change three things and add your own dependencies:
+
+           1. groupId / artifactId / name                  — your app's coordinates
+           2. <mainClass>com.example.app.Main</mainClass> — your main()-hosting class, at the
+                                                             BOTTOM, once you have moved the
+                                                             seed's classes into your own package
+           3. swingbridge-emulators.version                — the version you are migrating
+                                                             against (the kit's README states it)
+
+         Everything else works as it stands. Run it with:
+
+             ./mvnw -C spring-boot:run
+
+         This file is a starting point, not a frozen template — add your app's dependencies,
+         plugins and profiles the way you normally would. The comments mark the few places
+         where a plausible-looking edit breaks the app at runtime rather than at build time.
+         =================================================================================== -->
+
+    <groupId>com.myapp</groupId>
+    <artifactId>myapp</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>My migrated app</name>
+
+    <!-- NO <parent>spring-boot-starter-parent</parent>, deliberately. An enterprise app being
+         migrated almost always has a corporate parent pom already, and Maven allows one parent.
+         So this file uses the BOM-import form of Spring Boot, which is the form such an app can
+         actually adopt. The cost is the spring-boot.version property below: without the starter
+         parent, nothing keeps the spring-boot-maven-plugin in step with the Spring Boot that
+         vaadin-spring-boot-starter drags in. -->
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Java 24 is the floor, and it is a RUNTIME requirement first: before JEP 491 a
+             virtual thread that parks inside a synchronized region pins its carrier, and the
+             carrier here is the Vaadin request thread holding the session lock — so every
+             blocking modal dialog deadlocks on 23 and below. Since the JVM must be 24+ anyway,
+             compiling to 24 costs nothing and keeps one number in the file instead of two.
+             (If you must emit older bytecode for another consumer, lower this and leave the
+             enforcer rule below alone — it is the one that matters.) -->
+        <maven.compiler.release>24</maven.compiler.release>
+
+        <swingbridge-emulators.version>0.1-SNAPSHOT</swingbridge-emulators.version>
+        <vaadin.version>25.3.0</vaadin.version>
+        <junit.version>6.1.3</junit.version>
+
+        <!-- Read by the spring-boot-maven-plugin and by the two starters below that no BOM
+             manages (websocket, test); everything else arrives already versioned from
+             vaadin-spring-boot-starter, which is where this number comes from. Re-derive it after
+             a Vaadin upgrade rather than guessing:
+
+                 ./mvnw -C dependency:tree -Dincludes=org.springframework.boot
+
+             Neither half of a mismatch is a build error: a stale plugin is a fat jar that fails at
+             java -jar time, and stale starters put two Spring Boot versions on one classpath. So
+             the seed's SpringWiringTest asserts this equals what the Vaadin starter actually
+             resolved, via the filtered build.properties. -->
+        <spring-boot.version>4.1.1</spring-boot.version>
+
+        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
+        <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>central</id>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+        <repository>
+            <id>Vaadin Directory</id>
+            <url>https://maven.vaadin.com/vaadin-addons</url>
+            <snapshots><enabled>false</enabled></snapshots>
+        </repository>
+    </repositories>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- junit-bom BEFORE vaadin-bom, deliberately: among competing import-scope BOMs the
+                 first declaration wins, and vaadin-bom manages junit-jupiter-api at an older
+                 6.0.x. Imported second, junit-bom loses that one artifact — enough for surefire
+                 to abort the forked JVM over conflicting jupiter versions. -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.vaadin</groupId>
+                <artifactId>vaadin-bom</artifactId>
+                <version>${vaadin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- No spring-boot-dependencies import. vaadin-spring-boot-starter declares its own
+                 Spring Boot version on every artifact it brings, so importing the Spring BOM as
+                 well would add a third voice to the junit-bom / vaadin-bom ordering above (it
+                 manages junit-bom, logback and jackson too) for nothing this app needs. Add it —
+                 AFTER both of the above — only when you start declaring Spring artifacts that
+                 the starter does not already bring. -->
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- The import-swap target. :surrogates and the blocking-dialog machinery arrive transitively — declare neither. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+
+        <!-- The Spring lane's host-app wiring, and the reason this app has no AppServlet, no
+             servlet registration and no SwingBridgeEmulatorsBootstrap bean: this artifact
+             auto-configures all three. Declaring it IS the wiring. Only a Spring Boot app needs
+             it — a Vaadin Boot app extends vaadinx.swing.app.SwingBridgeVaadinServlet from
+             :emulators instead, which is why this is a separate coordinate. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-spring</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+
+        <!-- Compile scope, not test: @IntentionallyStatic is carried by your src/main sources, so
+             inheriting the guardrails' test scope below would hide it from every field that needs it. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-annotations</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+
+        <!-- ADD-ONS: one per third-party Swing library you route through addons.md. Uncomment the
+             ones you need and DELETE the upstream coordinate they replace (com.toedter:jcalendar,
+             com.jgoodies:forms) — leaving both means the upstream classes are still on the
+             classpath and your imports may bind back to them.
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-jcalendar-1.4</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-jgoodies-forms-1.2.1</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+        -->
+
+        <!-- PRINTING, optional: only if your app hands a Printable to a PrinterJob. Pulls in PDFBox.
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-emulators-printing</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+        </dependency>
+        -->
+
+        <!-- Brings vaadin-core, vaadin-spring and spring-boot-starter-webmvc (hence Tomcat,
+             Logback and Jackson). It replaces the bare vaadin-core a Vaadin Boot app declares —
+             do not declare both. Note there is no jakarta.servlet-api declaration here, unlike
+             the Vaadin Boot pom: spring-boot-starter-tomcat brings tomcat-embed-core, which
+             carries the servlet API classes itself, at compile scope. -->
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-spring-boot-starter</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>javax.annotation</groupId>
+                    <artifactId>javax.annotation-api</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.vaadin</groupId>
+            <artifactId>vaadin-dev</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- @Push runs over Atmosphere, whose JSR-356 endpoint Vaadin's Spring auto-configuration
+             deploys through a ServerEndpointExporter — a spring-websocket type. Without this
+             starter the context fails at boot with NoClassDefFoundError on that class, naming
+             neither Push nor Vaadin. A Vaadin Boot app needs no equivalent: Jetty's websocket
+             support arrives with vaadin-boot. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+            <version>${spring-boot.version}</version>
+        </dependency>
+
+        <!-- ADD YOUR APP'S OWN DEPENDENCIES HERE — whatever its pre-migration pom declared,
+             minus the Look-and-Feel libraries (delete those outright) and minus any Swing
+             library you replaced with an add-on above. -->
+
+        <!-- The migration guardrails: a build-time gate, test-scope so neither it nor the ArchUnit
+             it runs on reaches your runtime. It checks that every static is provably immutable or
+             annotated, that no component sits in a static field, and that nothing exits the JVM —
+             which is what keeps the static sweep done once you have done it. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-guardrails</artifactId>
+            <version>${swingbridge-emulators.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- For the seed's SpringWiringTest, which boots the context and checks the
+             auto-configured wiring is in effect. The failures it guards are silent until the
+             first modal dialog, which is too late to find them. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring-boot.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- No version of its own: the junit-bom above supplies it. -->
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Carries spring-boot.version into the test classpath, so the seed's SpringWiringTest can compare
+             the number this pom declares against the Spring Boot the Vaadin starter resolved.
+             Filtered on its own rather than by switching the whole directory on: filtering every
+             test resource would also rewrite any ${...} a future fixture file contains. -->
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <filtering>true</filtering>
+                <includes><include>build.properties</include></includes>
+            </testResource>
+            <testResource>
+                <directory>src/test/resources</directory>
+                <excludes><exclude>build.properties</exclude></excludes>
+            </testResource>
+        </testResources>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+            </plugin>
+
+            <!-- Moves the JDK-24 failure from first page load to build time. Without it, a build
+                 on 24 deployed onto 21 passes every gate and then hangs on its first dialog. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>enforce-jdk-24-plus</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[24,)</version>
+                                    <message>A migrated app needs a JDK 24+ runtime (JEP 491 unpins the modal-dialog executor).</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Both goals in the DEFAULT build, which is what Vaadin's own Spring Boot starter
+                 does and what its docs prescribe for Spring Boot; the -Pproduction profile shape
+                 is documented for "Jakarta EE or plain Java, and for better backwards
+                 compatibility". Consequences worth knowing, because both are load-bearing:
+
+                   * `./mvnw -C package` produces a jar that RUNS. With build-frontend behind a
+                     profile, the default build's jar boots and dies on 'vaadin-dev-server' not
+                     found — an artifact that looks launchable and is not.
+                   * Dev mode is unaffected. build-frontend binds to prepare-package, and
+                     `spring-boot:run` forks after test-compile, so a dev run never triggers it.
+
+                 Fast by default: with no @NpmPackage / @CssImport / frontend add-on in the
+                 project, build-frontend reuses the platform's pre-compiled production bundle
+                 instead of running npm and vite. Add <forceProductionBuild>true</forceProductionBuild>
+                 if you want an optimized app-specific bundle every time.
+
+                 Must stay AFTER maven-compiler-plugin above — the plugin scans compiled classes,
+                 and Vaadin's docs call out the ordering explicitly. -->
+            <plugin>
+                <groupId>com.vaadin</groupId>
+                <artifactId>vaadin-maven-plugin</artifactId>
+                <version>${vaadin.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-frontend</goal>
+                            <goal>build-frontend</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
+                <configuration>
+                    <!-- The guardrail gate runs here, and anything of yours that drives a modal
+                         dialog runs its continuation on a virtual thread, so the test JVM needs
+                         the same flag as the app JVM. -->
+                    <argLine>--add-opens java.base/java.lang=ALL-UNNAMED</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- THE RECOMMENDED LAUNCH IS THE FAT JAR, `java -jar target/<app>.jar`, and this
+                 entry is what lets that line carry no flag: the java launcher honours an
+                 Add-Opens attribute in the jar manifest (JEP 261), and spring-boot:repackage
+                 keeps it. Two spelling traps: no =ALL-UNNAMED (the manifest form implies the
+                 unnamed module), and several packages are a space-separated list. It is IGNORED
+                 by `java -cp`, so a classpath launch passes the flag on the command line — see
+                 host-app-spring-boot.md, "Getting the flag to the launched JVM". -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven-jar-plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Add-Opens>java.base/java.lang</Add-Opens>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Runs the app (spring-boot:run) and builds the executable fat jar (repackage).
+                 THE add-opens FLAG IS LOAD-BEARING: the virtual-thread executor behind every
+                 blocking modal dialog reflects into java.base/java.lang, and without the flag the
+                 app refuses to start, throwing InaccessibleObjectException while invokeLater builds
+                 the main frame. Loud, not silent — but only if you read the log. Note the flag is
+                 written dash-less in this sentence on purpose: a literal double dash is illegal
+                 inside an XML comment (XML 1.0 section 2.5) and Maven rejects the whole POM over
+                 it, naming neither XML comments nor the flag.
+
+                 <jvmArguments> covers `spring-boot:run` only, because the plugin forks a JVM for
+                 that goal. The packaged jar gets it from the maven-jar-plugin manifest entry
+                 above instead.
+
+                 The <mainClass> below is the one line you must change: your main()-hosting class. -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <configuration>
+                    <mainClass>com.example.app.Main</mainClass>
+                    <jvmArguments>--add-opens java.base/java.lang=ALL-UNNAMED</jvmArguments>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals><goal>repackage</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

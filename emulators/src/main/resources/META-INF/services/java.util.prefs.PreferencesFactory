@@ -1,0 +1,5 @@
+# Selects vaadinx's localStorage-backed Preferences implementation JVM-wide.
+# The JDK checks the -Djava.util.prefs.PreferencesFactory system property
+# BEFORE this ServiceLoader entry, so a deployment can override us for free.
+# See D_preferences.
+vaadinx.util.prefs.VaadinPreferencesFactory

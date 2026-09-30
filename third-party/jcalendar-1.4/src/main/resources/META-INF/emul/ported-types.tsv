@@ -1,0 +1,10 @@
+# Swap table for the swingbridge-emulators-jcalendar add-on. Guarded by PortedTypesTableTest — a class added here
+# without a row (or without an entry on that test's SB-Emulators-invented list) fails the build.
+# <upstream type>\t<this add-on's type>.
+#
+# Declared, not derived: this add-on REPLACES its upstream, so com.toedter is on no classpath here
+# to reflect over the way :emulators reflects over the JDK (M1D_addon_packaging's one-way
+# direction). One row out of upstream's ~10 types is the whole add-on — JCalendar, JDayChooser,
+# JMonthChooser, JYearChooser and the editors have no mapping, so a migrator using them gets a
+# "no mapping" line from the import-swap tool rather than finding out at compile time.
+com.toedter.calendar.JDateChooser	vaadinx.toedter.calendar.JDateChooser

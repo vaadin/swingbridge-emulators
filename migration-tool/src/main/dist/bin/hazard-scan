@@ -1,0 +1,14 @@
+#!/bin/sh
+# Phase 1 of the Swing→emulators migration: find the known hazards in a source tree.
+#
+#   bin/hazard-scan <app>/src/main/java <app>/src/main/resources --report hazards.md
+#
+# The wildcard classpath IS the launcher: every jar in ../lib is on it, and the tools read
+# their tables off it. Drop a jar in there to add a table; nothing here needs regenerating.
+set -e
+DIR=$(cd "$(dirname "$0")/.." && pwd)
+JAVA=java
+if [ -n "$JAVA_HOME" ]; then
+    JAVA="$JAVA_HOME/bin/java"
+fi
+exec "$JAVA" -cp "$DIR/lib/*" com.vaadin.swingbridge.migration.tool.hazardscan.HazardScan "$@"

@@ -1,0 +1,16 @@
+# LF in the working tree on every platform, not just in the repository. Several tests
+# compare a COMMITTED text file byte-for-byte against text the build generates —
+# hazard-scan-inventory.golden, ported-types.tsv, kit-slots.txt — and a CRLF checkout
+# (Git for Windows defaults to core.autocrlf=true) fails all of them with a diff that
+# prints identically, since \r is invisible. Measured on windows-latest, 2026-09-08.
+* text=auto eol=lf
+
+# Upstream licence texts are bytes we redistribute, not source we own: the BSD fork's LICENSE
+# is CRLF as it came, and the retention clause is about that file rather than about a normalised
+# copy of it. Git's content detection happens to leave it alone today; this makes that a rule.
+third-party/**/LICENSE -text
+
+# The other exception, and it is why the rule above has to be explicit rather than assumed:
+# Windows batch scripts must keep CRLF line endings so they run when checked out on
+# Windows (a plain LF .cmd misbehaves under cmd.exe). Last rule wins, so this stays below.
+*.cmd text eol=crlf

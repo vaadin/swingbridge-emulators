@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-migration-annotations</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (migration annotations)</name>
+    <description>IntentionallyStatic, the allowlist marker a migrated application's own source
+        carries for the static-field gate. Zero dependencies by contract, so a UI-free service
+        module can annotate its statics without acquiring a Vaadin dependency.</description>
+
+    <!-- Annotations and dependency-free helpers a MIGRATED app carries in its own source
+         (M1D_static_sweep_allowlist). Today: com.vaadin.swingbridge.migration.IntentionallyStatic, the allowlist marker for the
+         static sweep's lint. The gate that enforces its javadoc is
+         com.vaadin.swingbridge.migration.guardrails.MigrationGuardrails in :migration-guardrails, which depends on
+         this module — never the other way round.
+
+         ZERO DEPENDENCIES, AND THAT IS THE POINT — not tidiness. A migrated app's
+         UI-free service modules annotate their allowlisted statics too, and Step 0 of the
+         static sweep classifies a module UI-bearing if it *depends on* one. Give this
+         module a dependency on :emulators (or on anything that reaches it) and a service
+         module that adds this jar to annotate one field trips Step 0's own dependency
+         closure — inverting the classification the sweep depends on. Anything landing
+         here must keep the module resolvable by a module that has never heard of Vaadin.
+         No Vaadin types, no emulator types, no third-party jars. -->
+
+
+    <dependencies/>
+</project>

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.vaadin.swingbridge.testapps</groupId>
+    <artifactId>testapp-inventory-swing</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>Inventory Management System (Java, Swing, JGoodies, Hibernate, H2 Database, Jasper)</name>
+
+    <!-- Adopted third-party stage-1 app. Its sources are upstream's apart from four deliberate,
+         recorded SB-Emulators changes (the com.vaadin.swingbridge.fixture.Seed class, Main's call into it, SessionUtils
+         re-throwing instead of swallowing a failed Hibernate start-up, and hibernate.cfg.xml's
+         in-memory database URL); this pom is not upstream's at all. Provenance, licence grant, trust findings and the fixture's contents:
+         ../PROVENANCE.md.
+         Dependencies and the copy-dependencies execution are upstream's, minus two dead entries
+         dropped and one plugin version pinned during adoption.
+
+         STANDALONE BY DESIGN, no <parent> — see testapps/crud/swing/pom.xml's header for why. -->
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.mainClass>com.ca.ui.Main</project.build.mainClass>
+
+        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
+        <maven-dependency-plugin.version>3.11.0</maven-dependency-plugin.version>
+        <exec-maven-plugin.version>3.6.3</exec-maven-plugin.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-core</artifactId>
+            <version>5.6.15.Final</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.toedter</groupId>
+            <artifactId>jcalendar</artifactId>
+            <version>1.4</version>
+        </dependency>
+        <dependency>
+            <groupId>com.jgoodies</groupId>
+            <artifactId>forms</artifactId>
+            <version>1.2.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.1.214</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>net.sourceforge.jexcelapi</groupId>
+            <artifactId>jxl</artifactId>
+            <version>2.6.12</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.12.0</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Restores only Maven's default resource directory, overriding the parent's block, which
+             also copies the repo-root LICENSE + PROVENANCE.md into META-INF. This app's sources are
+             upstream's and are not under SB-Emulators' licence (testapps/CLAUDE.md, PROVENANCE.md
+             § "Trees we do not touch"), so shipping our licence inside its jar would misstate what
+             governs them. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven-jar-plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>${project.build.mainClass}</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <!-- Pinned during adoption: this is not a default-lifecycle plugin, so the
+                     super-POM does not pin it and an unversioned declaration resolves from
+                     repository metadata at build time. -->
+                <version>${maven-dependency-plugin.version}</version>
+                <!-- Upstream's own execution, and load-bearing for the documented launch: the
+                     manifest carries a Main-Class but no Class-Path, so `java -jar` does not work
+                     and every run resolves through -cp 'target/classes:target/lib/*'. -->
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>target/lib</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Seeded GUI run (forked JVM, needs a display):
+                 ./mvnw -C test-compile exec:exec
+                 The app writes ./log/ (and, under -Pfile-db, ./inventoryApp.db) relative to its
+                 working directory, so point that at target/run — inside the one directory git
+                 already ignores.
+                 test-compile and classpathScope=test carry no config of their own now that the
+                 default database is in-memory in src/main/resources; both stay because -Pfile-db
+                 needs its test resource copied and target/test-classes ahead of target/classes to
+                 shadow the main copy — one launch command for either mode. -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin.version}</version>
+                <configuration>
+                    <executable>${java.home}/bin/java</executable>
+                    <classpathScope>test</classpathScope>
+                    <workingDirectory>${project.build.directory}/run</workingDirectory>
+                    <arguments>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>${project.build.mainClass}</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- File-backed H2 instead of the in-memory default: point testResources at the directory
+             holding upstream's own file-backed hibernate.cfg.xml, which then shadows
+             src/main/resources on the test-scope classpath and opens ./inventoryApp.db in the
+             working directory. This is the only way to exercise hbm2ddl.auto=update against a
+             PRE-EXISTING schema, which an always-fresh in-memory database never reaches. The seed
+             skips itself when it finds data.
+             `clean` is not optional when switching modes: target/test-classes/hibernate.cfg.xml
+             from an earlier -Pfile-db build keeps shadowing after the profile is gone. Hibernate
+             prints the URL it opened on every start — check it there. -->
+        <profile>
+            <id>file-db</id>
+            <build>
+                <testResources>
+                    <testResource><directory>src/test/resources-filedb</directory></testResource>
+                </testResources>
+            </build>
+        </profile>
+    </profiles>
+</project>

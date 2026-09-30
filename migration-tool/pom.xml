@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.vaadin.swingbridge</groupId>
+        <artifactId>swingbridge-emulators-parent</artifactId>
+        <version>0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>swingbridge-migration-tool</artifactId>
+    <packaging>jar</packaging>
+    <!-- name + description are NOT inherited from the parent POM, and Maven Central validates
+         each published artifact's metadata independently. -->
+    <name>SwingBridge Emulators (migration tool)</name>
+    <description>The tools run over a Swing application while following the Swing-to-emulators
+        migration guide: a hazard scan, an import rewriter, and a static-field sweep, one per
+        mechanical phase. Also published under the "dist" classifier as a self-contained
+        distribution zip carrying launchers for all three.</description>
+
+    <!-- The tools a migrator runs over their Swing app, one per mechanical phase of the stage-2
+         guide. The two source tools read a tab-separated table off their classpath; the third reads
+         the app's own class files:
+
+           com.vaadin.swingbridge.migration.tool.importswap.ImportSwap  Phase 2 — rewrites imports and in-code
+                                                     fully-qualified references from
+                                                     java.awt/javax.swing/java.util/java.text onto
+                                                     their vaadinx emulators, from every
+                                                     META-INF/emul/ported-types.tsv found.
+           com.vaadin.swingbridge.migration.tool.hazardscan.HazardScan  Phase 1 — finds spec.md §7's migration hazards
+                                                     (plus the §5 import sharp edges), from every
+                                                     META-INF/emul/hazards.tsv found. Core's copy is
+                                                     this module's own resource; it replaced ~100
+                                                     lines of bash. A finder, not a gate.
+           com.vaadin.swingbridge.migration.tool.staticsweep.StaticSweep  Phase 1 / static-fields.md Step 1 — the
+                                                     static sweep's worklist, read off the app's
+                                                     pre-swap class files with java.lang.classfile
+                                                     (hence this module's release 24, below). No
+                                                     table: the compiler already resolved, and the
+                                                     tool reads the result. A progress meter, not a
+                                                     gate — the gate is MigrationGuardrails, which
+                                                     throws.
+
+         One package per tool, and com.vaadin.swingbridge.migration.tool itself holds only what MORE THAN ONE
+         uses (today: Sources, the file walk, and Reports, the report write). A class only one tool
+         uses stays in that tool's package however generic it looks — Lexed is a Java-source lexer
+         and lives in importswap.
+
+         The manifest's Main-Class is ImportSwap; HazardScan is reached by class name, which is how
+         everything invokes both (-cp, never -jar, because -jar ignores -cp and would leave the
+         tables invisible).
+
+         PACKAGED AS A ZIP OF ITS OWN, beside the jar: bin/ + lib/, run with `java -cp "lib/*"`,
+         attached as this module's `dist` classifier so it installs and publishes with the module
+         (src/main/assembly/dist.xml, src/main/dist/, D_kit_tool_zip). That is what makes bin/ the
+         one documented invocation shape everywhere — the two shipped launchers ARE `-cp` and a
+         class name — and it gives "I came through Central rather than through the kit" a one-line
+         answer. The zip carries the ENGINE ONLY; whoever assembles a classpath drops the
+         table-carrying jars into lib/, which is how this module stays free of :emulators.
+
+         NO DEPENDENCY ON :emulators, :surrogates OR ANYTHING VAADIN, deliberately. The tools read the
+         *tables*, they do not reflect over :emulators — a dependency there would drag Vaadin onto the
+         classpath and hide the swap table behind a build, where a checked-in tsv is greppable by the
+         migration agent that drives these tools. It also keeps them runnable against any SB-Emulators version,
+         since the table travels with the emulators jar rather than being compiled in.
+
+         This was long written as "zero runtime dependencies", which was a proxy for the above and read
+         as a wider ban than the reason supports (M1D_static_sweep_tool § Q_one_rule_engine). An ordinary
+         third-party library hides no table and changes no module's Step-0 classification, since no
+         migrated app depends on this module. Keep the bar high anyway — every entry costs the -cp
+         invocation another jar to fetch — but weigh it against the reason, not against the proxy.
+
+         The tools assist; they never own the migration. Scope is what is decidable from a table plus
+         a file's own imports or text — never System.exit routing, the static sweep, or anything else
+         needing scope judgement. -->
+
+    <dependencies>
+        <!-- The guardrail engine's reader (M1D_static_sweep_tool § Q_one_rule_engine). ArchUnit is
+             here rather than in :migration-guardrails because StaticSweep and that gate ask the same
+             immutability question for opposite purposes, and answering it twice is what makes a rule
+             drift. Weighed against the contract above and not against the "zero" proxy: ArchUnit
+             hides no table and changes no module's Step-0 classification. -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit</artifactId>
+        </dependency>
+        <!-- @IntentionallyStatic, the static gate's allowlist — matched by type, so a rename of the
+             annotation is a compile error here rather than a gate that silently stops allowlisting. -->
+        <dependency>
+            <groupId>com.vaadin.swingbridge</groupId>
+            <artifactId>swingbridge-migration-annotations</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <properties>
+        <!-- The one module whose release differs from the reactor's 21, for one reason:
+             StaticSweep reads class files with java.lang.classfile (JEP 484, final in JDK 24) and
+             `javac -release 21` rejects the package outright. This jar is *run*, never compiled
+             against — no migrator's javac ever sees it, and JDK 24+ is already SB-Emulators' floor
+             for build and runtime (CLAUDE.md) — so the bump costs nothing downstream. The class
+             files being swept may be of any version; a Java 8 app's classes read fine.
+             M1D_static_sweep_tool. -->
+        <maven.compiler.release>24</maven.compiler.release>
+
+        <maven-assembly-plugin.version>3.8.0</maven-assembly-plugin.version>
+        <maven-failsafe-plugin.version>3.6.0</maven-failsafe-plugin.version>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>${maven-jar-plugin.version}</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.vaadin.swingbridge.migration.tool.importswap.ImportSwap</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- The tool's own distribution zip. Attached (the default), so `install` puts it in
+                 ~/.m2 where :zip-distro resolves it by coordinate, and a release build publishes it with
+                 the module — no extra release wiring. In the DEFAULT build always: it takes about a
+                 second, and the kit's tools/ is assembled out of it. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>${maven-assembly-plugin.version}</version>
+                <configuration>
+                    <descriptors>
+                        <descriptor>src/main/assembly/dist.xml</descriptor>
+                    </descriptors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>dist</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- DistZipIT runs the shipped launchers out of the assembled zip, which is the only
+                 place the scripts and the wildcard classpath exist to be tested. On Windows CI it
+                 is what exercises the .cmd twins. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>${maven-failsafe-plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <dist.zip>${project.build.directory}/${project.build.finalName}-dist.zip</dist.zip>
+                        <dist.unpack>${project.build.directory}/dist-it</dist.unpack>
+                        <dist.version>${project.version}</dist.version>
+                        <repo.root>${project.basedir}/..</repo.root>
+                    </systemPropertyVariables>
+                    <useFile>false</useFile>
+                    <trimStackTrace>false</trimStackTrace>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

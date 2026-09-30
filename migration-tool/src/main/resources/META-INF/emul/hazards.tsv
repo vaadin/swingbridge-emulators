@@ -1,0 +1,72 @@
+# hazards.tsv — the migration hazard table, read by com.vaadin.swingbridge.migration.tool.HazardScan.
+#
+# One row per detection rule. Tab-separated:
+#
+#     id 	 section 	 label [ 	 regex [ 	 file-glob ] ]
+#
+# `id`      the H_ slug this row shares with its bullet's <a id="H_..."></a> anchor in
+#           migration/1-swing-to-emulators/spec.md. HazardTableTest joins the two by slug in both
+#           directions, so a row naming a hazard the spec dropped — or a spec bullet with a
+#           `Detect:` grep that no row implements — reddens the build. Several rows may carry one
+#           id when a hazard has more than one signal (the timezone buckets; the HTML-pane pair).
+# `section` where that bullet lives: §7 (known migration hazards) or §5 (import-rewrite sharp edges
+#           no optimize-imports pass catches).
+# `regex`   java.util.regex, matched per line as `grep -n` does. Omit the column for a manual row;
+#           its label then renders as a checklist item instead of a scanned section.
+# `glob`    which files to read it over. Omitted means *.java.
+#
+# THIS FILE IS THE PATTERNS' ONLY HOME. It replaced hazard-scan.sh, whose ~100 lines of bash held a
+# second hand-synced copy of spec.md §7's `Detect:` lines — and had already drifted from them.
+#
+# RETIRED PATTERNS, so the next maintainer does not "add one back":
+#   - Toolkit, GraphicsEnvironment: both gained swap-table rows (D_graphics_environment), so the
+#     hazard cannot occur — the reference rewrites. What retires a "headless JDK class survives the
+#     swap" hazard is the row, not the import-swap tool deleting the java.awt.* import: deletion
+#     re-emits stay-JDK types verbatim. A scan for a hazard that cannot occur trains the migrator
+#     to ignore the scan.
+#   - A bare getInstance() pattern for the static-frame hazard: it matches Calendar.getInstance()
+#     and every other factory. A subclass-typed holder (`static MainFrame INSTANCE`) is caught by
+#     the ArchUnit gate, which resolves the type hierarchy; no name-based pattern can.
+#   - HTMLDocument *reads*: getElement / getDefaultRootElement resolve (D_htmldocument). Only the
+#     mutators are dead, so a bare HTMLDocument/getElement pattern is now all false positives.
+
+# --- spec.md §7 hazards ---------------------------------------------------------------------------
+H_system_exit	§7	System.exit / Runtime exit-halt  [ArchUnit-gated]	System\.exit|Runtime\.getRuntime\(\)\.(exit|halt)|\.(exit|halt)\([0-9]
+H_static_frame_singleton	§7	Static frame singletons  [ArchUnit-gated, ⚠silent]	static +[A-Za-z0-9_.<>]*(JFrame|JDialog|JWindow|Frame|Window)\b
+H_custom_layoutmanager	§7	Custom LayoutManager  [→ cloud-OK]	implements +LayoutManager2?|implements +([A-Za-z0-9_., ]*, *)?LayoutManager2?\b
+H_timezone_drift	§7	Timezone-sensitive date code — bucket 1 (import-swap, usually fine)	\b(SimpleDateFormat|Calendar|GregorianCalendar)\b
+H_timezone_drift	§7	Timezone — bucket 3 (java.time, pass BrowserTimeZone.get() by hand)	DateTimeFormatter\.ofPattern|\.(now)\(\)|ZoneId\.systemDefault|TimeZone\.getDefault
+H_background_thread_context	§7	Background threads the app starts itself carry no EmulatorContext (dates drift; component updates throw)	new +Thread|Executors\.|ExecutorService
+H_shared_calendar	§7	Shared mutable Calendar (unshare)	static +[A-Za-z0-9_.]*Calendar
+H_showdialog_direction	§7	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	\.showDialog\s*\(
+H_preferences_read	§7	Preferences read (must run under a live UI)	Preferences\.(userRoot|userNodeForPackage|systemRoot|systemNodeForPackage)
+H_unswapped_printing	§7	Unswapped printing — prints on the SERVER  [⚠silent, the scan is the only net]	java\.awt\.print|javax\.print|\.print(All)?\(
+H_htmldocument_mutators	§7	HTMLDocument mutators (WARN and change nothing)	insertBeforeEnd|insertAfterEnd|insertBeforeStart|insertAfterStart|setOuterHTML|setInnerHTML
+# The Java half points at the panes; the evidence is in the resources scanned by the row below it.
+H_html_pane_links	§7	HTML pane links — the panes  [⚠silent]	addHyperlinkListener|\.setPage\(
+# Flow's a[href] allowlist is http/https/mailto/ftp; everything else arrives with the attribute
+# stripped and stops being a link. This is the row bash left as a manual step — file-type dispatch
+# cost more than the grep — so it is the one detection gap the port closed rather than ported.
+H_html_pane_links	§7	HTML pane links — non-web href in an HTML resource  [⚠silent]	href\s*=\s*["'](?!https?:|mailto:|ftp:)	*.{html,htm}
+H_uncaught_handler	§7	JVM-wide uncaught-exception handler (split it: UI half → VaadinSession ErrorHandler)	setDefaultUncaughtExceptionHandler|Thread\.UncaughtExceptionHandler
+# Scoped to the receiver on purpose: a bare setUncaughtExceptionHandler would double-report
+# against H_uncaught_handler's second alternative whenever the handler is named by type
+# (Thread.UncaughtExceptionHandler h = ...) rather than written as a lambda.
+H_edt_thread_handler	§7	Per-EDT uncaught handler — compiles, runs, does nothing  [⚠silent]	currentThread\(\)\.setUncaughtExceptionHandler
+H_sun_awt_exception_handler	§7	sun.awt.exception.handler — removed from the JDK, already dead on the desktop	sun\.awt\.exception\.handler
+H_layout_numbers	§7	Reading layout numbers (dummy values, not rendered geometry)	getPreferredSize|getBounds|getWidth|getHeight
+H_cancelable_close	§7	Cancelable tab close (browser owns unload — save proactively)	windowClosing|\.consume\(\)
+H_plaintext_http	§7	Password fields — every component value now crosses the network; serve over HTTPS	JPasswordField
+H_modal_under_monitor	§7	synchronized regions: a modal dialog shown inside one freezes the session when another listener enters the same monitor	\bsynchronized\b
+
+# --- spec.md §5 import-rewrite sharp edges (no optimize-imports pass catches these) -----------------
+# The lookahead is definitional, not tuning: this hazard IS the non-import case ("no optimize-imports
+# pass will touch them"), and Phase 2's tool rewrites the import lines on its own. Without it, 3 of 5
+# hits on a real app were plain `import java.awt.Component;` — listed under a section named for the
+# hand-edit case, which is what misleads.
+H_fq_awt_component	§5	Fully-qualified java.awt.Component / Container in code	^(?!\s*import\s).*java\.awt\.(Component|Container)\b
+H_instanceof_ported_event	§5	instanceof on ported event types (returns false vs vaadinx.awt.event.*)	instanceof +([a-z0-9_.]*\.)?(ComponentEvent|KeyEvent|MouseEvent|MouseWheelEvent|FocusEvent|WindowEvent|ContainerEvent|HierarchyEvent|InputMethodEvent)\b
+
+# --- manual checks (no scan signal — listed here so they cannot fall out of the output) -------------
+H_modal_from_listener	§7	Modal dialogs from listeners: verify recipe step 4 (@Push + the servlet's VirtualThreadAwareLock) is wired.
+H_multi_tab	§7	Multi-tab / user-scoped singletons: run the static-field decision tree + the ArchUnit review-gate.
