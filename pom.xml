@@ -440,5 +440,15 @@
                 <module>zip-distro</module>
             </modules>
         </profile>
+        <!-- Active only inside Eclipse / jdtls / VS Code Java (m2e sets m2e.version); the
+             command-line build never sees it. Moves the IDE's output out of target/classes, where
+             JDT would otherwise mix its own class files (different synthetic-class naming, and code
+             javac accepts but JDT rejects — the "Unresolved compilation problem" stale mode in
+             CLAUDE.md § Building) into what Maven builds and tests against. -->
+        <profile>
+            <id>ide-output</id>
+            <activation><property><name>m2e.version</name></property></activation>
+            <build><directory>${project.basedir}/target/ide</directory></build>
+        </profile>
     </profiles>
 </project>
