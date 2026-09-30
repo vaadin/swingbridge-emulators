@@ -11,7 +11,6 @@ import com.ca.ui.FormerSingletons;
 import com.vaadin.flow.server.VaadinSession;
 import org.apache.log4j.Logger;
 import vaadinx.BrowserFileTransfer;
-import vaadinx.swing.MainWindow;
 import vaadinx.swing.border.EtchedBorder;
 import vaadinx.awt.event.WindowAdapter;
 import vaadinx.awt.event.WindowEvent;
@@ -32,6 +31,7 @@ import vaadinx.swing.JMenuItem;
 import vaadinx.swing.JOptionPane;
 import vaadinx.swing.JPanel;
 import vaadinx.swing.JSeparator;
+import vaadinx.swing.MainWindow;
 import vaadinx.swing.SwingUtilities;
 
 /**
@@ -87,13 +87,12 @@ public class AppFrame extends JFrame {
         return FormerSingletons.get().appFrame;
     }
 
-    /** Per user: a {@link VaadinSession} attribute rather than a static shared by every user. */
     public static boolean isLoggedIn() {
         return Boolean.TRUE.equals(session().getAttribute(LOGGED_IN));
     }
 
-    private static void setLoggedIn(boolean loggedIn) {
-        session().setAttribute(LOGGED_IN, loggedIn);
+    private static void setLoggedIn(boolean b) {
+        session().setAttribute(LOGGED_IN, b);
     }
 
     private static VaadinSession session() {
@@ -190,9 +189,13 @@ public class AppFrame extends JFrame {
             helpMenu.add(supportMnu);
 
             readmanualItem.addActionListener(e -> {
-                try (InputStream in = AppFrame.class.getResourceAsStream("/help.pdf")) {
-                    // The user is behind a browser, so the manual is offered as a download.
-                    BrowserFileTransfer.openDownloadDialog(in.readAllBytes(), "help.pdf");
+                try {
+                    // Was `cmd.exe /c start help.pdf`: the manual now travels to the browser as a download.
+                    String file = "help.pdf";
+                    try (InputStream in = AppFrame.class.getResourceAsStream("/" + file)) {
+                        if (in == null) throw new java.io.FileNotFoundException(file);
+                        BrowserFileTransfer.openDownloadDialog(in.readAllBytes(), file);
+                    }
                 } catch (Exception e2) {
                     JOptionPane.showMessageDialog(AppFrame.this, "Could not open help file " + e2.getMessage(), "Error opening file",
                             JOptionPane.ERROR_MESSAGE);

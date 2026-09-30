@@ -1,7 +1,6 @@
 package com.gt.db;
 
 import com.vaadin.swingbridge.migration.IntentionallyStatic;
-
 import org.apache.log4j.Logger;
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
@@ -16,7 +15,7 @@ import static com.vaadin.swingbridge.migration.IntentionallyStatic.Reason.JVM_IN
 public class SessionUtils {
     static final Logger logger = Logger.getLogger(SessionUtils.class);
     @IntentionallyStatic(JVM_INFRASTRUCTURE)
-    private static final SessionFactory sessionFactory;
+    private static SessionFactory sessionFactory;
 
     static {
         // A SessionFactory is set up once for an application!

@@ -35,7 +35,7 @@
     <artifactId>testapp-inventory-emulators</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Inventory Management System — on SwingBridge Emulators (Vaadin Boot)</name>
+    <name>Inventory Management System — on SwingBridge Emulators</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -113,7 +113,10 @@
             <version>${swingbridge-emulators.version}</version>
         </dependency>
 
-        <!-- ADD-ONS: they replace com.toedter:jcalendar:1.4 and com.jgoodies:forms:1.2.1. -->
+        <!-- ADD-ONS: one per third-party Swing library you route through addons.md. Uncomment the
+             ones you need and DELETE the upstream coordinate they replace (com.toedter:jcalendar,
+             com.jgoodies:forms) — leaving both means the upstream classes are still on the
+             classpath and your imports may bind back to them. -->
         <dependency>
             <groupId>com.vaadin.swingbridge</groupId>
             <artifactId>swingbridge-emulators-jcalendar-1.4</artifactId>
@@ -174,7 +177,10 @@
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- The app's own non-UI dependencies, as its pre-migration pom declared them. -->
+        <!-- ADD YOUR APP'S OWN DEPENDENCIES HERE — whatever its pre-migration pom declared,
+             minus the Look-and-Feel libraries (delete those outright) and minus any Swing
+             library you replaced with an add-on above. -->
+        <!-- From the stage-1 pom, minus com.toedter:jcalendar and com.jgoodies:forms (add-ons above). -->
         <dependency>
             <groupId>org.hibernate</groupId>
             <artifactId>hibernate-core</artifactId>
@@ -289,11 +295,11 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>${exec-maven-plugin.version}</version>
-                <!-- classpathScope=test and the target/run working directory are the stage-1 app's:
-                     -Pfile-db needs target/test-classes ahead of target/classes, and the app writes
-                     ./log/ (and under -Pfile-db ./inventoryApp.db) relative to its working directory. -->
                 <configuration>
                     <executable>${java.home}/bin/java</executable>
+                    <!-- Kept from the stage-1 pom: the app writes ./log/ (and, under -Pfile-db,
+                         ./inventoryApp.db) relative to its working directory, and the test scope
+                         lets -Pfile-db's test resource shadow the in-memory hibernate.cfg.xml. -->
                     <classpathScope>test</classpathScope>
                     <workingDirectory>${project.build.directory}/run</workingDirectory>
                     <arguments>
@@ -309,8 +315,7 @@
     </build>
 
     <profiles>
-        <!-- File-backed H2 instead of the in-memory default, as in the stage-1 app: its
-             hibernate.cfg.xml shadows src/main/resources on the test classpath. `clean` is not
+        <!-- From the stage-1 pom: file-backed H2 instead of the in-memory default. `clean` is not
              optional when switching modes. -->
         <profile>
             <id>file-db</id>

@@ -269,7 +269,10 @@
                  argument. A misplaced flag is ignored without a word, and the app then refuses to
                  start with an InaccessibleObjectException naming java.lang — so do not tidy this list.
 
-                 The last argument is the one line you must change: your main()-hosting class. -->
+                 The last argument is the one line you must change: your main()-hosting class.
+                 Your own JVM flags go before -classpath. Other run settings from your old build
+                 (<workingDirectory>, <classpathScope>, <environmentVariables>) go in
+                 <configuration> beside <arguments>, not inside it. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>

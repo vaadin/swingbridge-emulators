@@ -8,6 +8,8 @@ H_shared_calendar	Shared mutable Calendar (unshare)	0
 H_showdialog_direction	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	2
 H_preferences_read	Preferences read (must run under a live UI)	0
 H_unswapped_printing	Unswapped printing — prints on the SERVER  [⚠silent, the scan is the only net]	0
+H_platform_shellout	Shell-outs and Desktop calls — they run on the SERVER; triage by intent  [⚠silent]	1
+H_platform_shellout	Platform checks — they now describe the server; triage what they gate	14
 H_htmldocument_mutators	HTMLDocument mutators (WARN and change nothing)	0
 H_html_pane_links	HTML pane links — the panes  [⚠silent]	0
 H_html_pane_links	HTML pane links — non-web href in an HTML resource  [⚠silent]	0

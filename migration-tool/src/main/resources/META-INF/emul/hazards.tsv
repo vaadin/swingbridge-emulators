@@ -41,6 +41,8 @@ H_shared_calendar	§7	Shared mutable Calendar (unshare)	static +[A-Za-z0-9_.]*Ca
 H_showdialog_direction	§7	JFileChooser.showDialog — throws; pick a direction  [also a compile warning]	\.showDialog\s*\(
 H_preferences_read	§7	Preferences read (must run under a live UI)	Preferences\.(userRoot|userNodeForPackage|systemRoot|systemNodeForPackage)
 H_unswapped_printing	§7	Unswapped printing — prints on the SERVER  [⚠silent, the scan is the only net]	java\.awt\.print|javax\.print|\.print(All)?\(
+H_platform_shellout	§7	Shell-outs and Desktop calls — they run on the SERVER; triage by intent  [⚠silent]	Runtime\.getRuntime\(\)\.exec|\bProcessBuilder\b|Desktop\.getDesktop
+H_platform_shellout	§7	Platform checks — they now describe the server; triage what they gate	IS_OS_|os\.name|System\.loadLibrary
 H_htmldocument_mutators	§7	HTMLDocument mutators (WARN and change nothing)	insertBeforeEnd|insertAfterEnd|insertBeforeStart|insertAfterStart|setOuterHTML|setInnerHTML
 # The Java half points at the panes; the evidence is in the resources scanned by the row below it.
 H_html_pane_links	§7	HTML pane links — the panes  [⚠silent]	addHyperlinkListener|\.setPage\(

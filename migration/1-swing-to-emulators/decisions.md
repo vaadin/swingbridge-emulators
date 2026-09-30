@@ -858,7 +858,7 @@ deployment rather than next to an installed app. Grep the file name, not just th
 
 **Source:** M1D_import_swap (import-swap is the technique), M1D_static_taxonomy (the same one-machine→session scope shift,
 applied to state rather than to resources), M1D_single_instance_guards (the same shift applied to a single-instance guard),
-D_printing. Migrator-facing: guide step `S_triage_platform` + `platform.md`.
+D_printing. Migrator-facing: guide step `S_triage_platform` + `platform.md`; detection: hazard row `H_platform_shellout`.
 
 **Found by** `testapps/inventory`: 14 `SystemUtils.IS_OS_WINDOWS` sites that all gate the same
 look-and-feel line (13 of them in per-panel dev `main()` methods that nothing calls after Phase 3), and

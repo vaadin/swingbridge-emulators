@@ -6,22 +6,28 @@ import com.ca.db.service.DBUtils;
 import com.ca.db.service.LoginUserServiceImpl;
 import com.github.mvysny.vaadinboot.VaadinBoot;
 import com.gt.uilib.components.AppFrame;
+import org.apache.commons.lang3.SystemUtils;
 import com.vaadin.swingbridge.fixture.Seed;
-import vaadinx.awt.event.ComponentEvent;
-import vaadinx.swing.SwingUtilities;
 
 import java.awt.Dimension;
+import vaadinx.awt.event.ComponentEvent;
+import vaadinx.swing.SwingUtilities;
+import vaadinx.swing.UIManager;
 import java.io.File;
 import java.util.Date;
 
 /**
- * The app's two entry points: {@link #main} once per JVM (shared database and filesystem work),
- * {@link #mainUI} once per browser tab (the frame).
+ * The two entry points of the migrated app: {@link #main} once per JVM, {@link #mainUI} once per
+ * browser tab (from {@link AppRoute}).
  */
 public final class Main {
 
-    /** Everything here runs before the first request — {@code run()} blocks until shutdown. */
+    /** Once per JVM. Everything here runs before the first request — {@code run()} blocks until shutdown. */
     public static void main(String[] args) throws Exception {
+        if (SystemUtils.IS_OS_WINDOWS) {
+            UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
+        }
+
         File f = new File("log");
         f.mkdir();
 
@@ -83,5 +89,8 @@ public final class Main {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private Main() {
     }
 }

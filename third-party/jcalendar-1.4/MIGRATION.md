@@ -102,10 +102,22 @@ symbols. Rewrite the code that used it, or drop the feature.
 Two changes are needed in your own source. Neither is an import rewrite.
 
 **1. `JDateChooser` is no longer a `JPanel`.** Upstream JCalendar's `JDateChooser` extends
-`javax.swing.JPanel`. This one extends `vaadinx.swing.JComponent`. Any cast to `JPanel`, and any
-call to a `Container` method such as `add`, `remove`, `getComponents` or `setLayout` on a chooser,
-is a compile error. Fix it by deleting the cast or the call — a date chooser has no children to
-manage. Everything a `JComponent` provides still works: `setEnabled`, `setBackground`,
+`javax.swing.JPanel`. This one extends `vaadinx.swing.JComponent`. Upstream's chooser is built from
+children, a date text field and a calendar button; this one has none. A cast to `JPanel` is a
+compile error: delete it. **A `Container` call — `add`, `remove`, `getComponents`, `setLayout` —
+still compiles**, because every `JComponent` is a `Container`, so the compiler won't find these for
+you. Delete any made on a chooser directly. The one that hides is a **generic helper that walks a
+panel's children**, such as "clear all fields" or "enable all fields". On the desktop its recursion
+reached the chooser's inner text field. Now `getComponents()` returns an empty array and the walk
+quietly skips the chooser. Handle it explicitly, before the recursion:
+
+```java
+if (c instanceof JDateChooser) {
+    ((JDateChooser) c).setDate(null);
+}
+```
+
+Everything a `JComponent` provides still works: `setEnabled`, `setBackground`,
 `setToolTipText`, `addPropertyChangeListener`, adding the chooser to a container, and
 `instanceof JDateChooser`.
 
