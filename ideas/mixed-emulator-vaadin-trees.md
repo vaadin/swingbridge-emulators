@@ -28,6 +28,17 @@ Vaadin component in one live component tree.** Two directions, and they are not 
 So mixing is currently one-directional *by construction*, and nobody decided that — it fell out of
 `getPeer()` being public while `Container.add` is JDK-typed.
 
+**The working direction is about to break this shape** (agreed 2026-10-01,
+[vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "The mechanism"): calls on a detached
+emulator queue until the write that attaches its island, and `getPeer()` leaves the migrator's surface
+for a `void` `withPeer(Consumer)`. `vaadinLayout.add(panel.getPeer())` then has no expression, and
+its obvious translation `panel.withPeer(p -> vaadinLayout.add(p))` never runs — the body waits for an
+attach only it would cause. **Emulator into Vaadin therefore needs a seam of its own that is the
+attaching write** (take the lock, drain the island, add), e.g. `EHelper.addTo(HasComponents,
+Component)`. That turns this direction from an accident of `getPeer()` into a decided API — which is
+also the natural place to answer §9 question 7 for it. The test corpus's bare-peer attach keeps
+working either way, through the test accessor.
+
 ### It is already load-bearing, so "ban it" is not on the table
 
 Worth stating plainly before designing anything: **the entire `:emulators` test corpus is mixed

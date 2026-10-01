@@ -43,12 +43,22 @@ while detached?". The forks answered it by reading the body, and several were un
   detached menu with an `ImageIcon` rebuilt off-thread has no UI for the image.
 - `JFrame.setTitle` → `strategy.afterTitleSet`: does `InlineStrategy` read `UI.getCurrent()`?
 
-Options:
-- keep two seams and audit;
-- **one seam that falls back**: never attached + a context present → hop to the live UI anyway.
-  That costs a lock for off-thread construction, and it fixes icons, `Upload` and the browser-zone
-  read without anyone classifying a body;
-- make "needs a UI" a property the surrogate declares.
+**Direction agreed 2026-10-01: neither seam survives as it is.** The answer is
+[vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "The mechanism": one `withPeer` that runs a
+body locked with the peer's UI current or queues it on the component's detached island, drained at
+the write that attaches the island. How the brainstorm got there, since each step rules something
+out:
+- *One seam that falls back* (current UI, else captured session, else the context's live UI, else
+  inline unlocked with a one-time WARN) fails on the last leg: `new Image(bytes, …)` resolves its URL
+  against `UI.getCurrent()` in its constructor (D_sync_ui_hop's measurement), so an icon body there
+  still throws, three frames inside Vaadin. Today's `withPeerOnLiveUI` hides this only because case
+  (7) throws first. The same hole exists in `runOnSession`'s `UIDetachedException` branch.
+- *Deferring just `setSrc` to attach* (a `LazyImage` in `:emulators`) would fix icons with a
+  provable reorder — one exclusive writer of `src`, which nobody but the browser reads — but it is
+  per-case reasoning about what Vaadin does inside a body, which is the thing the agreed rule refuses
+  to depend on.
+- *Classifying "needs a UI" per body* was the problem statement. Every surrogate needs one in the
+  ideal state, so the answer is to always give it one.
 
 ## 3. The leak taxonomy — `Q_acceptable_leaks`
 
@@ -143,11 +153,12 @@ the entry.
 - **A configurable direct / sync / enqueue hop stays parked** (D_sync_ui_hop). What survives is a
   support escape hatch: one system-property `if` in the seam, for a customer hitting a hang. Build it
   when someone needs it.
-- **Deferral, if one is ever needed:** write it as a *flush of Swing state to the peer* (on attach, or
-  on the next UI touch), not as a queue of deferred calls — a queue has an execution order to invent.
+- **Deferral** is now the agreed direction, as a queue per detached island rather than a flush of
+  Swing state ([vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "The mechanism", which says
+  why that queue has no execution order to invent).
 - **A `data:` URI in `Icons.imageIconToVaadinImage`** instead of a `StreamResource` would take icons
-  off the live-UI seam entirely, which bears on `Q_one_seam`. The cost is inlining every icon's bytes,
-  uncached.
+  off the live-UI seam entirely. Moot under the queue, which gives every body a UI; it stays only as a
+  caching trade-off (every icon's bytes inlined, uncached).
 
 ## 8. Acceptance
 
