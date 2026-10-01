@@ -51,7 +51,7 @@ package vaadinx.swing;
 // fire JDK-shape PCE on change, never touching the peer.
 //
 // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JSplitPane is a leaf in the public
-// Swing hierarchy. Every ctor calls super(new SJSplitPane(orientation))
+// Swing hierarchy. Every ctor peers on SJSplitPane(orientation)
 // directly — no protected (Component peer) ctor. User-code subclasses
 // inherit the locked peer.
 
@@ -120,16 +120,22 @@ public class JSplitPane extends vaadinx.swing.JComponent
 
     public JSplitPane(int orientation, boolean continuousLayout,
                       vaadinx.awt.Component left, vaadinx.awt.Component right) {
-        // R_leaf_peer_lockdown funnel: SJSplitPane validates orientation per R_match_swing_errors (IAE on
-        // garbage int). Re-validating here would double-throw.
-        super(new SJSplitPane(orientation));
+        // R_leaf_peer_lockdown funnel; the orientation is checked while super(...)'s argument is
+        // evaluated, since the peer, whose ctor checks it too, is built only once a UI is current.
+        super(SJSplitPane.class, peerFactory(orientation));
         this.continuousLayout = continuousLayout;
+        // The JDK-shaped field and its write-detection baseline (D_field_write_reconcile; see JSlider).
+        this.orientation = pushedOrientation = orientation;
         if (left != null) setLeftComponent(left);
         if (right != null) setRightComponent(right);
-        // Seed the JDK-shaped field (and write-detection baseline) from the peer
-        // (D_field_write_reconcile; see JSlider).
-        this.orientation = pushedOrientation = surrogate().getOrientationAsInt();
         vaadinx.FieldReconciler.register(this);
+    }
+
+    private static java.util.function.Supplier<SJSplitPane> peerFactory(int orientation) {
+        if (orientation != HORIZONTAL_SPLIT && orientation != VERTICAL_SPLIT) {
+            throw new IllegalArgumentException("orientation must be one of: HORIZONTAL_SPLIT, VERTICAL_SPLIT");
+        }
+        return () -> new SJSplitPane(orientation);
     }
 
     // JDK protected field, Swing-side truth per D_field_write_reconcile (see JSlider for the
@@ -143,7 +149,8 @@ public class JSplitPane extends vaadinx.swing.JComponent
     @Override
     public final void reconcileFields() {
         if (orientation != pushedOrientation) {
-            surrogate().setOrientation(orientation);
+            int v = orientation;
+            withPeer(p -> surrogate().setOrientation(v));
             pushedOrientation = orientation;
             vaadinx.FieldReconciler.reportDirectWrite(this, "orientation", "setOrientation");
         }

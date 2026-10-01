@@ -99,7 +99,8 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
         // Pair with a fresh SJRootPane for standalone-emulator use.
         // JFrame.createRootPane uses the ctor below to share the
         // surrogate with its SJFrame peer.
-        this(new com.vaadin.swingbridge.surrogates.SJRootPane());
+        super(com.vaadin.swingbridge.surrogates.SJRootPane.class, com.vaadin.swingbridge.surrogates.SJRootPane::new);
+        initRootPane();
     }
 
     /**
@@ -111,6 +112,10 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      */
     protected JRootPane(com.vaadin.swingbridge.surrogates.SJRootPane peer) {
         super(peer);
+        initRootPane();
+    }
+
+    private void initRootPane() {
         // The JDK's own constructor body, hooks and order (JRootPane.java:328).
         // Each setter plants the pane as a child of this container, so the DOM
         // chain falls out of Container.addImpl nesting the peers.
@@ -120,7 +125,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
         // JDK sets its own layout to a RootLayout here; ours is CSS on the
         // surrogate chain (emul/swindow.css), installed by the surrogate.
         setDoubleBuffered(true);
-        peer.setLayerEnterClaims(JRootPane::claimsEnter);
+        withPeer(p -> surrogate().setLayerEnterClaims(JRootPane::claimsEnter));
     }
 
     /**
@@ -326,9 +331,8 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
         // Null → surrogate clears the previous shortcut (that's the
         // only bookkeeping we owe here); no local ShortcutRegistration
         // field to tear down.
-        com.vaadin.flow.component.button.Button vaadinBtn =
-                button == null ? null : (com.vaadin.flow.component.button.Button) button.getPeer();
-        withPeer(p -> surrogate().setDefaultButton(vaadinBtn));
+        withPeer(p -> surrogate().setDefaultButton(
+                button == null ? null : (com.vaadin.flow.component.button.Button) button.getPeer()));
         firePropertyChange("defaultButton", old, button);
     }
 

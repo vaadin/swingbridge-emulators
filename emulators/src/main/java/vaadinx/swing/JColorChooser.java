@@ -102,7 +102,7 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
     public JColorChooser(javax.swing.colorchooser.ColorSelectionModel model) {
         // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JColorChooser is a leaf, and
         // the surrogate keeps a private model of its own, which only this class writes.
-        super(new SJColorChooser());
+        super(SJColorChooser.class, SJColorChooser::new);
         selectionModel = model;
         chooserPanels = javax.swing.colorchooser.ColorChooserComponentFactory.getDefaultChooserPanels();
         model.addChangeListener(modelListener);
@@ -111,11 +111,11 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
         // A browser pick runs the model write a desktop chooser panel makes
         // (AbstractColorChooserPanel: getColorSelectionModel().setSelectedColor), inside a
         // UI fiber, so a model listener may open a modal dialog (R_callswing_envelope).
-        chooser().addValueChangeListener(e -> {
+        withPeer(p -> chooser().addValueChangeListener(e -> {
             if (preventPeerEvents) return;
             Color picked = chooser().getColor();
             vaadinx.EHelper.callSwing(() -> getSelectionModel().setSelectedColor(picked));
-        });
+        }));
     }
 
     /** Narrow the peer to its SJColorChooser type. Peer is always an SJColorChooser. */

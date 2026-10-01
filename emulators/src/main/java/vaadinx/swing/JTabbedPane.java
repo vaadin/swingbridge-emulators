@@ -56,7 +56,7 @@ package vaadinx.swing;
 // insertTab appends through addImpl); tab components never enter it.
 //
 // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JTabbedPane is a leaf in the public
-// Swing hierarchy. Every ctor calls super(new SJTabbedPane(...)) directly — no protected
+// Swing hierarchy. Every ctor peers on SJTabbedPane(...) directly — no protected
 // (Component peer) ctor. User-code subclasses inherit the locked peer.
 
 import com.vaadin.swingbridge.surrogates.SJTabbedPane;
@@ -106,7 +106,7 @@ public class JTabbedPane extends vaadinx.swing.JComponent
     }
 
     public JTabbedPane(int tabPlacement, int tabLayoutPolicy) {
-        super(newPeer(tabPlacement, tabLayoutPolicy));
+        super(SJTabbedPane.class, peerFactory(tabPlacement, tabLayoutPolicy));
         // The surrogate already holds both values, so the setters' pushes change nothing
         // there and construction stays WARN-free.
         pushedTabPlacement = tabPlacement;
@@ -114,22 +114,25 @@ public class JTabbedPane extends vaadinx.swing.JComponent
         setTabLayoutPolicy(tabLayoutPolicy);
         pages = new java.util.ArrayList<>(1);
         setModel(new javax.swing.DefaultSingleSelectionModel());
-        surrogate().addSelectedChangeListener(e -> {
+        withPeer(p -> surrogate().addSelectedChangeListener(e -> {
             if (preventPeerEvents) return;
             int index = surrogate().getSelectedIndex();
             // BasicTabbedPaneUI's mouse handler: selects only a different tab.
             vaadinx.EHelper.callSwing(() -> {
                 if (index >= 0 && index != getSelectedIndex()) setSelectedIndex(index);
             });
-        });
+        }));
         vaadinx.FieldReconciler.register(this);
     }
 
-    /** Validated in the JDK's order and with its messages, before the surrogate sees them. */
-    private static SJTabbedPane newPeer(int tabPlacement, int tabLayoutPolicy) {
+    /**
+     * Validated in the JDK's order and with its messages, now: the surrogate, which checks them
+     * too, is built only once a UI is current.
+     */
+    private static java.util.function.Supplier<SJTabbedPane> peerFactory(int tabPlacement, int tabLayoutPolicy) {
         checkTabPlacement(tabPlacement);
         checkTabLayoutPolicy(tabLayoutPolicy);
-        return new SJTabbedPane(tabPlacement, tabLayoutPolicy);
+        return () -> new SJTabbedPane(tabPlacement, tabLayoutPolicy);
     }
 
     private SJTabbedPane surrogate() {
@@ -148,7 +151,8 @@ public class JTabbedPane extends vaadinx.swing.JComponent
             vaadinx.FieldReconciler.reportDirectWrite(this, "model", "setModel");
         }
         if (tabPlacement != pushedTabPlacement) {
-            surrogate().setTabPlacement(tabPlacement);
+            int v = tabPlacement;
+            withPeer(p -> surrogate().setTabPlacement(v));
             pushedTabPlacement = tabPlacement;
             vaadinx.FieldReconciler.reportDirectWrite(this, "tabPlacement", "setTabPlacement");
         }

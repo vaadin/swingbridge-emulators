@@ -26,8 +26,12 @@ that file.
   `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`, `JCheckBoxMenuItem`,
   `JRadioButtonMenuItem`, and the shared-model components `JSlider`, `JProgressBar`, `JSpinner`,
   `JComboBox`, `JList`, `JTree`, and the text family — `JTextField`, `JPasswordField`,
-  `JTextArea`, `JFormattedTextField` (all five peers), `JEditorPane`, `JTextPane`. `vaadinx.LazyPeerTest` builds and configures each on a
+  `JTextArea`, `JFormattedTextField` (all five peers), `JEditorPane`, `JTextPane`, and `JScrollPane`,
+  `JSplitPane`, `JToolBar`, `JTabbedPane`, `JColorChooser`, `JMenuBar`, `JPopupMenu`,
+  `JDesktopPane`, `JOptionPane`, `JFileChooser`, a standalone `JRootPane`. `vaadinx.LazyPeerTest` builds and configures each on a
   bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
+- **A menu tree's snapshot is taken inside the write** (`JMenuBar` / `JPopupMenu.pushTree`), so the
+  peer shows the tree's state at the drain and the items' icons become Vaadin `Image`s with a UI current.
 - **`FieldReconciler.register` anchors on the UI**, not the peer, so an emulator whose peer is
   not built yet still gets its bootstrap check.
 - **The button family owns its `ButtonModel`** ([D_emulator_button_model](../emulators/decisions.md#D_emulator_button_model)):
@@ -67,15 +71,15 @@ that file.
 
 ## The worklist, in order
 
-1. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
-   `JColorChooser`, `JMenuBar`, `JPopupMenu`, `JDesktopPane`, `JFileChooser`, `JOptionPane` (a
-   `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–8.
-2. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
-   `EHelper.runInUIThread`, which finds a UI through the `EmulatorContext`; `JFrame` picks its peer by
-   `@MainWindow` (D_frame_strategy), so the declared type is a choice too.
-3. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
+1. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`, and `JInternalFrame`
+   (an overlay `Dialog`): shows go through `EHelper.runInUIThread`, which finds a UI through the
+   `EmulatorContext`; `JFrame` picks its peer by `@MainWindow` (D_frame_strategy), so the declared
+   type is a choice too. Two things ride on it: a window's `JRootPane` shares its surrogate's
+   `SJRootPane` (the eager protected ctor), and the blocking choosers (`JColorChooser.showDialog` /
+   `createDialog`, `JFileChooser`'s open/save) compose raw Vaadin buttons into the dialog's peer.
+2. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
    surrogate the public ctors built. It has to build them itself, as the JDK's ctor does.
-4. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
+3. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
    lazy overload for its subclasses; the eager one stays for a migrator's own subclass.
 
 ## After the sweep

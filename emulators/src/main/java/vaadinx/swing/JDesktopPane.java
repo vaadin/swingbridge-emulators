@@ -73,7 +73,7 @@ public class JDesktopPane extends vaadinx.swing.JLayeredPane
     public JDesktopPane() {
         super();
         // Mark the background so it's recognisable / styleable as a desktop.
-        getPeer().getElement().getClassList().add("emul-desktoppane");
+        withPeer(p -> p.getElement().getClassList().add("emul-desktoppane"));
     }
 
     // ---- Add-routing intercept (frames escape to overlays) --------------

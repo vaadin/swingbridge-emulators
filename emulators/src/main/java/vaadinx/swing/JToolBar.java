@@ -57,7 +57,7 @@ package vaadinx.swing;
 // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JToolBar is a leaf in the public
 // Swing hierarchy (JToolBar.Separator extends JSeparator, not JToolBar;
 // javax.swing.plaf.* drops per R_match_swing_errors sub-bucket b). Every ctor calls
-// super(new SJToolBar(orientation)) directly — no protected
+// SJToolBar(orientation) directly — no protected
 // (Component peer) ctor. User-code subclasses inherit the locked peer.
 
 /** Emulator for {@link javax.swing.JToolBar}. See D_jtoolbar. */
@@ -92,10 +92,14 @@ public class JToolBar extends vaadinx.swing.JComponent implements javax.swing.Sw
      *         {@code HORIZONTAL} nor {@code VERTICAL}, as in the JDK
      */
     public JToolBar(java.lang.String name, int orientation) {
-        super(new com.vaadin.swingbridge.surrogates.SJToolBar(checkOrientation(orientation)));
+        super(com.vaadin.swingbridge.surrogates.SJToolBar.class, peerFactory(checkOrientation(orientation)));
         setName(name);
         this.orientation = orientation;
         updateUI();
+    }
+
+    private static java.util.function.Supplier<com.vaadin.swingbridge.surrogates.SJToolBar> peerFactory(int orientation) {
+        return () -> new com.vaadin.swingbridge.surrogates.SJToolBar(orientation);
     }
 
     private com.vaadin.swingbridge.surrogates.SJToolBar surrogate() {

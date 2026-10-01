@@ -175,7 +175,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
     // real UI is the internal JDialog built at show* time) ---------------------
 
     public JFileChooser() {
-        super(new com.vaadin.flow.component.html.Div());
+        super(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
         // JDK's JFileChooser defaults the current directory to the platform
         // "home" via FileSystemView; we have no server FS to browse, but a
         // non-null getCurrentDirectory() keeps the common

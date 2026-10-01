@@ -159,7 +159,7 @@ public class JOptionPane extends vaadinx.swing.JComponent implements javax.acces
 
     public JOptionPane(Object message, int messageType, int optionType, vaadinx.swing.Icon icon,
                        Object[] options, Object initialValue) {
-        super(new com.vaadin.flow.component.html.Div());
+        super(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
         this.message = message;
         this.messageType = checkMessageType(messageType);
         this.optionType = checkOptionType(optionType);
@@ -168,12 +168,12 @@ public class JOptionPane extends vaadinx.swing.JComponent implements javax.acces
         this.initialValue = initialValue;
         // Default flex-column layout for the option-pane content. The
         // populated structure is icon-row → optional-input → button-row.
-        getPeer().getElement().getStyle()
+        withPeer(p -> p.getElement().getStyle()
                 .set("display", "flex")
                 .set("flex-direction", "column")
                 .set("gap", "var(--vaadin-gap-m, 1em)")
                 .set("padding", "var(--vaadin-padding-s, 0.5em)")
-                .set("min-width", "20em");
+                .set("min-width", "20em"));
     }
 
     private static int checkMessageType(int t) {
@@ -426,11 +426,11 @@ public class JOptionPane extends vaadinx.swing.JComponent implements javax.acces
                 : (btnLabels.length > 0 ? btnLabels[0] : null);
 
         vaadinx.swing.JPanel buttonRow = new vaadinx.swing.JPanel();
-        buttonRow.getPeer().getElement().getStyle()
+        buttonRow.withPeer(p -> p.getElement().getStyle()
                 .set("display", "flex")
                 .set("flex-direction", "row")
                 .set("justify-content", "flex-end")
-                .set("gap", "var(--vaadin-gap-s, 0.5em)");
+                .set("gap", "var(--vaadin-gap-s, 0.5em)"));
 
         for (Object opt : btnLabels) {
             vaadinx.swing.JButton btn = makeOptionButton(opt, dialog);
@@ -442,7 +442,7 @@ public class JOptionPane extends vaadinx.swing.JComponent implements javax.acces
                 // primary attribute is the load-bearing piece for
                 // keyboard Enter activation under the JRootPane
                 // default-button wiring (D_rootpane_holder).
-                btn.getPeer().getElement().setAttribute("theme", "primary");
+                btn.withPeer(p -> p.getElement().setAttribute("theme", "primary"));
             }
         }
         add(buttonRow);

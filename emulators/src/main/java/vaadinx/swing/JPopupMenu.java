@@ -43,7 +43,7 @@ package vaadinx.swing;
 // lock-down: javax.swing.JPopupMenu is a leaf in the public Swing
 // hierarchy (its only subclass, javax.swing.plaf.basic.BasicComboPopup,
 // is L&F — dropped per R_match_swing_errors sub-bucket (b)), so the protected (Component
-// peer) ctor is omitted and the no-arg ctor calls super(new SJPopupMenu())
+// peer) ctor is omitted and the no-arg ctor peers on SJPopupMenu
 // directly.
 //
 // Structurally a sibling of JMenuBar: holds the JDK menu-item tree
@@ -83,8 +83,8 @@ public class JPopupMenu extends vaadinx.swing.JComponent implements javax.access
     private boolean preventPeerEvents;
 
     public JPopupMenu() {
-        super(new com.vaadin.swingbridge.surrogates.SJPopupMenu());
-        installOpenedSync();
+        super(com.vaadin.swingbridge.surrogates.SJPopupMenu.class, com.vaadin.swingbridge.surrogates.SJPopupMenu::new);
+        withPeer(p -> installOpenedSync());
     }
 
     /**
@@ -221,17 +221,20 @@ public class JPopupMenu extends vaadinx.swing.JComponent implements javax.access
      * via {@link #notifyTreeMutated()}.
      */
     void pushTree() {
-        if (!(getPeer() instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu)) return;
-        boolean enabled = isEnabled();
-        java.util.List<com.vaadin.swingbridge.surrogates.MenuNode> snapshot = new java.util.ArrayList<>(children.size());
-        for (Object child : children) {
-            if (child instanceof JSeparator) {
-                snapshot.add(com.vaadin.swingbridge.surrogates.MenuNode.ofSeparator());
-            } else if (child instanceof JMenuItem item) {
-                snapshot.add(item.toMenuNode(enabled));
+        // The snapshot is taken inside the write, as JMenuBar.pushTree's is.
+        withPeer(p -> {
+            if (!(p instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu)) return;
+            boolean enabled = isEnabled();
+            java.util.List<com.vaadin.swingbridge.surrogates.MenuNode> snapshot = new java.util.ArrayList<>(children.size());
+            for (Object child : children) {
+                if (child instanceof JSeparator) {
+                    snapshot.add(com.vaadin.swingbridge.surrogates.MenuNode.ofSeparator());
+                } else if (child instanceof JMenuItem item) {
+                    snapshot.add(item.toMenuNode(enabled));
+                }
             }
-        }
-        withPeer(p -> menu.rebuildFromTree(snapshot));
+            menu.rebuildFromTree(snapshot);
+        });
     }
 
     /** A descendant mutated — re-push. {@link JPopupMenu} is a tree root, like {@link JMenuBar}. */
@@ -263,8 +266,10 @@ public class JPopupMenu extends vaadinx.swing.JComponent implements javax.access
      * {@code willBecomeVisible} reaches the migrator either way.
      */
     public void show(vaadinx.awt.Component invoker, int x, int y) {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu && invoker != null) {
-            withPeer(p -> menu.setTarget(invoker.getPeer()));
+        if (invoker != null) {
+            withPeer(p -> {
+                if (p instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu) menu.setTarget(invoker.getPeer());
+            });
         }
         vaadinx.EHelper.onUnimplemented("JPopupMenu", "show/open-at-coordinates", x, y);
         setVisible(true);
@@ -343,8 +348,10 @@ public class JPopupMenu extends vaadinx.swing.JComponent implements javax.access
     }
 
     public void setInvoker(vaadinx.awt.Component invoker) {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu && invoker != null) {
-            withPeer(p -> menu.setTarget(invoker.getPeer()));
+        if (invoker != null) {
+            withPeer(p -> {
+                if (p instanceof com.vaadin.swingbridge.surrogates.SJPopupMenu menu) menu.setTarget(invoker.getPeer());
+            });
         }
     }
 

@@ -113,7 +113,7 @@ public class JScrollPane extends vaadinx.swing.JComponent
     public JScrollPane(vaadinx.awt.Component view, int vsbPolicy, int hsbPolicy) {
         // R_leaf_peer_lockdown funnel: locked SJScrollPane peer chosen by the framework;
         // user-code subclasses inherit it without an escape hatch.
-        super(new SJScrollPane());
+        super(SJScrollPane.class, SJScrollPane::new);
         validatePolicy(vsbPolicy, /*vertical*/ true);
         validatePolicy(hsbPolicy, /*vertical*/ false);
         this.verticalScrollBarPolicy = vsbPolicy;
@@ -325,13 +325,17 @@ public class JScrollPane extends vaadinx.swing.JComponent
      * {@code AS_NEEDED}.
      */
     private void pushPolicyToSurrogate() {
-        com.vaadin.flow.component.Component content = surrogate().getContent();
-        if (content != null && isAutoScrollingType(content)) {
-            // Auto-scroll guard already forced NONE; skip the policy push.
-            return;
-        }
-        Scroller.ScrollDirection dir = translatePolicy(verticalScrollBarPolicy, horizontalScrollBarPolicy);
-        withPeer(p -> surrogate().setScrollDirection(dir));
+        int vsb = verticalScrollBarPolicy;
+        int hsb = horizontalScrollBarPolicy;
+        // The content check is the peer's to answer, so the whole push is a write.
+        withPeer(p -> {
+            com.vaadin.flow.component.Component content = surrogate().getContent();
+            if (content != null && isAutoScrollingType(content)) {
+                // Auto-scroll guard already forced NONE; skip the policy push.
+                return;
+            }
+            surrogate().setScrollDirection(translatePolicy(vsb, hsb));
+        });
     }
 
     private static boolean isAutoScrollingType(com.vaadin.flow.component.Component content) {

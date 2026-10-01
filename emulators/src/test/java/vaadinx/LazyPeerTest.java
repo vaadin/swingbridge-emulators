@@ -247,6 +247,46 @@ class LazyPeerTest extends AbstractKaribuTest {
             tp.setText("styled");
             return tp;
         });
+        m.put("JScrollPane", () -> new vaadinx.swing.JScrollPane(new JLabel("view"),
+                vaadinx.swing.JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, vaadinx.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
+        m.put("JSplitPane", () -> {
+            vaadinx.swing.JSplitPane sp = new vaadinx.swing.JSplitPane(vaadinx.swing.JSplitPane.VERTICAL_SPLIT,
+                    new JLabel("top"), new JLabel("bottom"));
+            sp.setDividerLocation(40);
+            return sp;
+        });
+        m.put("JToolBar", () -> {
+            vaadinx.swing.JToolBar tb = new vaadinx.swing.JToolBar("tools", vaadinx.swing.JToolBar.VERTICAL);
+            tb.add(new vaadinx.swing.JButton("go"));
+            tb.addSeparator();
+            return tb;
+        });
+        m.put("JTabbedPane", () -> {
+            vaadinx.swing.JTabbedPane tp = new vaadinx.swing.JTabbedPane();
+            tp.addTab("one", new JLabel("1"));
+            tp.addTab("two", new JLabel("2"));
+            tp.setSelectedIndex(1);
+            return tp;
+        });
+        m.put("JColorChooser", () -> new vaadinx.swing.JColorChooser(Color.RED));
+        m.put("JMenuBar", () -> {
+            vaadinx.swing.JMenuBar bar = new vaadinx.swing.JMenuBar();
+            vaadinx.swing.JMenu menu = new vaadinx.swing.JMenu("File");
+            menu.add(new vaadinx.swing.JMenuItem("Open"));
+            menu.add(new vaadinx.swing.JCheckBoxMenuItem("Wrap", true));
+            bar.add(menu);
+            return bar;
+        });
+        m.put("JPopupMenu", () -> {
+            vaadinx.swing.JPopupMenu popup = new vaadinx.swing.JPopupMenu();
+            popup.add(new vaadinx.swing.JMenuItem("Cut"));
+            popup.setInvoker(new JLabel("target"));
+            return popup;
+        });
+        m.put("JDesktopPane", vaadinx.swing.JDesktopPane::new);
+        m.put("JOptionPane", () -> new vaadinx.swing.JOptionPane("message"));
+        m.put("JFileChooser", vaadinx.swing.JFileChooser::new);
+        m.put("JRootPane", vaadinx.swing.JRootPane::new);
         m.put("AWT ScrollPane", () -> {
             vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
             sp.add(new vaadinx.awt.Label("first"));

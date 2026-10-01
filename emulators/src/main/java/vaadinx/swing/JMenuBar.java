@@ -42,7 +42,7 @@ package vaadinx.swing;
 // Hand-finished emulator for javax.swing.JMenuBar per D_menu_tree / SD_sjmenubar. R_leaf_peer_lockdown
 // lock-down: javax.swing.JMenuBar is a leaf in the public Swing
 // hierarchy, so the protected (Component peer) ctor is omitted; the
-// root no-arg ctor calls super(new SJMenuBar()) directly. Holds the
+// root no-arg ctor peers on SJMenuBar directly. Holds the
 // JDK menu tree (List<JMenu>); every mutation walks the tree, builds a
 // MenuNode snapshot, and pushes it through SJMenuBar.rebuildFromTree.
 
@@ -58,7 +58,7 @@ public class JMenuBar extends vaadinx.swing.JComponent
     private final java.util.List<JMenu> menus = new java.util.ArrayList<>();
 
     public JMenuBar() {
-        super(new com.vaadin.swingbridge.surrogates.SJMenuBar());
+        super(com.vaadin.swingbridge.surrogates.SJMenuBar.class, com.vaadin.swingbridge.surrogates.SJMenuBar::new);
         // No bridge wiring at construction time — every JMenuItem the
         // user adds owns its own ActionListener fan-out (MenuNode.onClick
         // funnels through fireActionPerformed on the emulator side per
@@ -167,13 +167,17 @@ public class JMenuBar extends vaadinx.swing.JComponent
      * bubble up via {@link #notifyTreeMutated()}.
      */
     void pushTree() {
-        if (!(getPeer() instanceof com.vaadin.swingbridge.surrogates.SJMenuBar bar)) return;
-        java.util.List<com.vaadin.swingbridge.surrogates.MenuNode> snapshot = new java.util.ArrayList<>(menus.size());
-        boolean barEnabled = isEnabled();
-        for (JMenu m : menus) {
-            snapshot.add(m.toMenuNode(barEnabled));
-        }
-        withPeer(p -> bar.rebuildFromTree(snapshot));
+        // The snapshot is taken inside the write, so it is the tree's state when the peer
+        // shows it (a flush, not a replay), and its icons become Vaadin Images with a UI current.
+        withPeer(p -> {
+            if (!(p instanceof com.vaadin.swingbridge.surrogates.SJMenuBar bar)) return;
+            java.util.List<com.vaadin.swingbridge.surrogates.MenuNode> snapshot = new java.util.ArrayList<>(menus.size());
+            boolean barEnabled = isEnabled();
+            for (JMenu m : menus) {
+                snapshot.add(m.toMenuNode(barEnabled));
+            }
+            bar.rebuildFromTree(snapshot);
+        });
     }
 
     /**
