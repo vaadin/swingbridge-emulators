@@ -612,7 +612,8 @@ public class SJTable extends Grid<Integer> implements JComponentMixin,
      * it: {@code TableRowSorter} does not listen to its model, it is the table's job to
      * forward every event. Until told, it keeps answering {@code getViewRowCount()} and the
      * index conversions from the rows it last saw, and {@link #count} and {@link #fetch} read
-     * through it.
+     * through it. An owner that tells the sorter itself, and only then forwards the event
+     * here, says so through {@link #setSorterNotifiedByOwner}.
      *
      * <p>The selection needs no re-mapping across the change: it holds model rows
      * (D_jtable_cell_editing), so a re-sort leaves it valid, and inserts and deletes shift it
@@ -634,7 +635,7 @@ public class SJTable extends Grid<Integer> implements JComponentMixin,
             // Structure change: selection goes, the sorter re-reads the model, then the
             // columns rebuild — whose data-provider refresh already sees the new sorter state.
             clearSelectionAndLeadAnchor();
-            if (sorter != null) sorter.modelStructureChanged();
+            if (sorter != null && !store.sorterNotifiedByOwner) sorter.modelStructureChanged();
             if (store.autoCreateColumnsFromModel) {
                 createDefaultColumnsFromModel();
             } else {
@@ -642,7 +643,7 @@ public class SJTable extends Grid<Integer> implements JComponentMixin,
             }
             return;
         }
-        if (sorter != null) notifySorter(sorter, e);
+        if (sorter != null && !store.sorterNotifiedByOwner) notifySorter(sorter, e);
         switch (e.getType()) {
             case TableModelEvent.INSERT -> {
                 int first = e.getFirstRow();
@@ -1007,6 +1008,17 @@ public class SJTable extends Grid<Integer> implements JComponentMixin,
         return store().autoCreateRowSorter;
     }
 
+    /**
+     * Whether the code forwarding model events to {@link #tableChanged} has already told the
+     * installed {@link RowSorter} about each one, so this table does not tell it again.
+     * {@code false} by default: a table listening to its own model tells its sorter itself. An
+     * owner that tells the sorter on the thread the model fired on, as a JDK {@code JTable}
+     * does, and forwards the event afterwards, sets it.
+     */
+    public void setSorterNotifiedByOwner(boolean sorterNotifiedByOwner) {
+        store().sorterNotifiedByOwner = sorterNotifiedByOwner;
+    }
+
     public void setAutoCreateRowSorter(boolean autoCreateRowSorter) {
         TableStateStore store = store();
         boolean old = store.autoCreateRowSorter;
@@ -1076,7 +1088,8 @@ public class SJTable extends Grid<Integer> implements JComponentMixin,
             store.rowSorterEventListener = null;
             return;
         }
-        store.rowSorterEventListener = e -> onRowSorterEvent(e);
+        // Allowed by R_tolerate_off_ui_thread because callback from model: RowSorterListener.sorterChanged
+        store.rowSorterEventListener = e -> SHelper.runOnOwnerUI(this, () -> onRowSorterEvent(e));
         newRowSorter.addRowSorterListener(store.rowSorterEventListener);
     }
 

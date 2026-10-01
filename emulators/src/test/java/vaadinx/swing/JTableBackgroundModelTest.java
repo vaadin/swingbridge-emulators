@@ -135,6 +135,49 @@ class JTableBackgroundModelTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("sorted and never attached, loaded on a worker: the sorter follows the model before the row is read")
+    void detachedSortedTableBuiltOnWorker() {
+        AtomicReference<JTable> built = new AtomicReference<>();
+        AtomicReference<Integer> viewRows = new AtomicReference<>();
+        AtomicReference<Object> firstRow = new AtomicReference<>();
+
+        runOnWorker(() -> {
+            DefaultTableModel model = abc();
+            JTable table = new JTable(model);
+            table.setAutoCreateRowSorter(true);
+            table.getRowSorter().toggleSortOrder(0);
+            table.getRowSorter().toggleSortOrder(0);   // descending: c, b, a
+            model.addRow(new Object[]{"d"});
+            // The JDK tells the sorter before tableChanged returns, so this thread already sees
+            // the new row — first, in descending order.
+            viewRows.set(table.getRowCount());
+            firstRow.set(table.getValueAt(0, 0));
+            built.set(table);
+        });
+
+        assertEquals(4, viewRows.get());
+        assertEquals("d", firstRow.get());
+        assertEquals(4, GridKt._size(peerOf(built.get())), "and the Grid shows the rows once attached");
+    }
+
+    @Test
+    @DisplayName("a model swapped on a worker, never attached: the new columns exist before attach")
+    void detachedModelSwapOnWorker() {
+        AtomicReference<JTable> built = new AtomicReference<>();
+        AtomicReference<String> header = new AtomicReference<>();
+
+        runOnWorker(() -> {
+            JTable table = new JTable(abc());
+            table.setModel(new DefaultTableModel(new Object[][]{{"x", "y"}}, new Object[]{"left", "right"}));
+            header.set(table.getColumnCount() + ":" + table.getColumnModel().getColumn(1).getHeaderValue());
+            built.set(table);
+        });
+
+        assertEquals("2:right", header.get(), "the table creates its columns itself, as the JDK's does");
+        assertEquals(2, peerOf(built.get()).getColumns().size(), "and the Grid has them once drained");
+    }
+
+    @Test
     @DisplayName("attached, loaded on a worker through the model: fires on the worker, the Grid still follows")
     void attachedTableLoadedThroughModel() {
         DefaultTableModel model = abc();

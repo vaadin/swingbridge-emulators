@@ -113,6 +113,13 @@ public final class TableStateStore {
     public boolean autoCreateRowSorter = false;
 
     /**
+     * Whoever forwards model events to {@code tableChanged} has already told {@link #rowSorter}
+     * about each one, so the table must not tell it again. Gates real behaviour: a sorter told
+     * twice re-sorts on stale indices.
+     */
+    public boolean sorterNotifiedByOwner;
+
+    /**
      * Currently installed JDK row sorter, or {@code null} when no sort is
      * active. Single source of truth for sort permutation —
      * {@code convertRowIndexToView/Model} reads through it; the Vaadin
