@@ -78,24 +78,24 @@ public class JSpinner extends vaadinx.swing.JComponent implements javax.accessib
             e -> vaadinx.EHelper.relayModelEvent(this::fireStateChanged);
 
     public JSpinner() {
-        this(new SJSpinner());
+        this(new javax.swing.SpinnerNumberModel());
     }
 
+    /** @throws NullPointerException if {@code model} is null, as in the JDK */
     public JSpinner(javax.swing.SpinnerModel model) {
-        this(new SJSpinner(model));
+        // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JSpinner is a leaf in the
+        // public Swing hierarchy, and only this ctor names the peer.
+        super(SJSpinner.class, peerFactory(model));
+        this.model = model;
+        model.addChangeListener(modelListener);
     }
 
-    private JSpinner(SJSpinner peer) {
-        // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JSpinner is a leaf in the
-        // public Swing hierarchy. The seam through which the public
-        // ctors pass their chosen SJSpinner variant up is private +
-        // typed-narrow, so user-code subclasses can't reach it to swap
-        // the peer type.
-        super(peer);
-        // The peer ctor took the JDK ctor's model (and threw its NPE for null); read back
-        // while the peer has never been attached, so the read needs no lock.
-        model = peer.getModel();
-        model.addChangeListener(modelListener);
+    /** Checks the model now, as the JDK's ctor does, since the peer is built only once a UI is current. */
+    private static java.util.function.Supplier<SJSpinner> peerFactory(javax.swing.SpinnerModel model) {
+        if (model == null) {
+            throw new NullPointerException("model cannot be null");
+        }
+        return () -> new SJSpinner(model);
     }
 
     /** Narrow the peer to its SJSpinner type. */

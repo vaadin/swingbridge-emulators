@@ -129,7 +129,7 @@ public class JSplitPane extends vaadinx.swing.JComponent
         // Seed the JDK-shaped field (and write-detection baseline) from the peer
         // (D_field_write_reconcile; see JSlider).
         this.orientation = pushedOrientation = surrogate().getOrientationAsInt();
-        vaadinx.FieldReconciler.register(this, surrogate());
+        vaadinx.FieldReconciler.register(this);
     }
 
     // JDK protected field, Swing-side truth per D_field_write_reconcile (see JSlider for the

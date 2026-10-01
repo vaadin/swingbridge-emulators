@@ -178,7 +178,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         this.iconable = iconifiable;
         this.desktopIcon = new JDesktopIcon(this);
         frameInit();
-        vaadinx.FieldReconciler.register(this, getPeer());
+        vaadinx.FieldReconciler.register(this);
         if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
             // Drive the peer's native resize affordance + title-bar controls
             // from the ctor flags, and wire the header minimize / maximize

@@ -62,7 +62,7 @@ import java.util.WeakHashMap;
  *       (R_callswing_envelope), so the write is repaired inside the very roundtrip that made
  *       it, before the response flushes.</li>
  *   <li><b>Bootstrap:</b> {@link #register} arms a <em>one-shot</em>
- *       {@code beforeClientResponse} on the emulator's peer, catching field writes made while
+ *       {@code beforeClientResponse} on the current UI, catching field writes made while
  *       the app builds its UI during navigation attach, before any callSwing has run.
  *       <b>Never re-armed from inside the callback:</b> Flow runs registrations made during
  *       the flush in the same pass (StateTree loops to a fixpoint), so a self-rearming
@@ -101,10 +101,12 @@ public final class FieldReconciler {
 
     /**
      * Adds the emulator to its session's reconcile set and arms the one-shot bootstrap check
-     * on its peer. Call once, from the emulator's root constructor. No-ops without a current
-     * session (bare unit construction) — in production and under Karibu one is always current.
+     * for the current UI's next flush. Call once, from the emulator's root constructor. No-ops
+     * without a current session (bare unit construction) — in production and under Karibu one
+     * is always current. Anchored on the UI, not the peer, so a peer not built yet still gets
+     * its check.
      */
-    public static void register(Reconcilable emulator, com.vaadin.flow.component.Component peer) {
+    public static void register(Reconcilable emulator) {
         VaadinSession session = VaadinSession.getCurrent();
         if (session == null) {
             return;
@@ -114,7 +116,7 @@ public final class FieldReconciler {
         if (ui != null) {
             // One-shot: consumed at the first flush after construction, never re-armed
             // (see the class doc's livelock note). Steady state belongs to callSwing.
-            ui.beforeClientResponse(peer, ctx -> emulator.reconcileFields());
+            ui.beforeClientResponse(ui, ctx -> emulator.reconcileFields());
         }
     }
 

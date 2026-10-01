@@ -102,40 +102,38 @@ public class JComboBox<E> extends vaadinx.swing.JComponent
     // ---- Constructors ----
 
     public JComboBox() {
-        this(new SJComboBox<E>());
+        this(new javax.swing.DefaultComboBoxModel<E>());
     }
 
+    /** @throws NullPointerException if {@code aModel} is null, as the JDK's {@code setModel} throws */
     public JComboBox(ComboBoxModel<E> aModel) {
-        this(new SJComboBox<E>(aModel));
+        // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JComboBox is a leaf in
+        // the public Swing hierarchy, and only this ctor names the peer.
+        super(SJComboBox.class, peerFactory(aModel));
+        withPeer(p -> installOpenedSync(surrogate()));
+        // The JDK ctor's setModel subscription, and its defaults, which are also the peer's:
+        // the write-detection baselines start equal (D_field_write_reconcile; see JSlider).
+        listenTo(aModel);
+        dataModel = aModel;
+        selectedItemReminder = aModel.getSelectedItem();
+        isEditable = pushedIsEditable = false;
+        maximumRowCount = pushedMaximumRowCount = 8;
+        vaadinx.FieldReconciler.register(this);
     }
 
     public JComboBox(E[] items) {
-        this(new SJComboBox<E>(items));
+        this(new javax.swing.DefaultComboBoxModel<E>(items));
     }
 
     public JComboBox(Vector<E> items) {
-        this(new SJComboBox<E>(items));
+        this(new javax.swing.DefaultComboBoxModel<E>(items));
     }
 
-    private JComboBox(SJComboBox<E> peer) {
-        // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JComboBox is a leaf in
-        // the public Swing hierarchy. This ctor is private so
-        // user-code subclasses can't reach it to swap the peer type;
-        // they all funnel through the public ctors above which
-        // hard-code the surrogate.
-        super(peer);
-        installOpenedSync(peer);
-        // Seed the JDK-shaped fields (and write-detection baselines) from the peer the
-        // public ctors configured (D_field_write_reconcile; see JSlider), read while it has
-        // never been attached. The model subscription is the JDK ctor's setModel.
-        ComboBoxModel<E> model = peer.getModel();
-        listenTo(model);
-        dataModel = model;
-        selectedItemReminder = model.getSelectedItem();
-        isEditable = pushedIsEditable = peer.isEditable();
-        maximumRowCount = pushedMaximumRowCount = peer.getMaximumRowCount();
-        popupVisible = peer.isOpened();
-        vaadinx.FieldReconciler.register(this, peer);
+    /** Checks the model now, since the peer is built only once a UI is current. */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <E> java.util.function.Supplier<SJComboBox> peerFactory(ComboBoxModel<E> model) {
+        java.util.Objects.requireNonNull(model);
+        return () -> new SJComboBox<E>(model);
     }
 
     // JDK protected fields, Swing-side truth per D_field_write_reconcile (see JSlider for
@@ -167,16 +165,18 @@ public class JComboBox<E> extends vaadinx.swing.JComponent
         if (dataModel != listenedModel) {
             ComboBoxModel<E> m = dataModel;
             listenTo(m);
-            surrogate().setModel(m);
+            withPeer(p -> surrogate().setModel(m));
             vaadinx.FieldReconciler.reportDirectWrite(this, "dataModel", "setModel");
         }
         if (isEditable != pushedIsEditable) {
-            surrogate().setEditable(isEditable);
+            boolean v = isEditable;
+            withPeer(p -> surrogate().setEditable(v));
             pushedIsEditable = isEditable;
             vaadinx.FieldReconciler.reportDirectWrite(this, "isEditable", "setEditable");
         }
         if (maximumRowCount != pushedMaximumRowCount) {
-            surrogate().setMaximumRowCount(maximumRowCount);
+            int v = maximumRowCount;
+            withPeer(p -> surrogate().setMaximumRowCount(v));
             pushedMaximumRowCount = maximumRowCount;
             vaadinx.FieldReconciler.reportDirectWrite(this, "maximumRowCount", "setMaximumRowCount");
         }

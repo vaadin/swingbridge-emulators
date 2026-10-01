@@ -52,15 +52,14 @@ import javax.swing.DefaultListModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A {@code JList} filled from a {@code doInBackground()}-shaped worker
- * (SD_background_model_hop). Unlike {@code JTable}, the list is not its model's listener:
- * shifting the selection across an insert is {@code BasicListUI}'s job, so the surrogate does
- * it inside its hop, and the list's {@code ListSelectionListener}s hear the shift on the UI
- * thread when there is one.
+ * (SD_background_model_hop). Shifting the selection across an insert is {@code BasicListUI}'s
+ * job, which the emulator does on the thread the model fired on, as the JDK's UI does: the
+ * list's {@code ListSelectionListener}s hear the shift on the worker, and the surrogate only
+ * renders it, inside its hop.
  */
 class JListBackgroundModelTest extends AbstractKaribuTest {
 
@@ -156,7 +155,7 @@ class JListBackgroundModelTest extends AbstractKaribuTest {
         });
 
         assertEquals(List.of(2), seen);
-        assertSame(ui, uis.get(0), "the shift is the surrogate's, inside its hop");
+        assertNull(uis.get(0), "the shift is the emulator's, on the worker, as the JDK's UI does");
         assertEquals("b", list.getSelectedValue());
         assertEquals(5, GridKt._size(peerOf(list)));
         assertEquals(Set.of(2), peerOf(list).getSelectedItems(), "the Grid follows the shifted selection");

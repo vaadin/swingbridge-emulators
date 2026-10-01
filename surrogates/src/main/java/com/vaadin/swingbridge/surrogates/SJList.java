@@ -300,6 +300,16 @@ public class SJList<E> extends Grid<Integer> implements JComponentMixin,
         if (dp != null) dp.refreshAll();
     }
 
+    /**
+     * Whether the code that owns this list's models shifts the selection across the model's
+     * inserts and removals itself, so this list only refreshes. {@code false} by default: a
+     * list listening to its own model shifts its selection itself. An owner that does it on
+     * the thread the model fired on, as a JDK {@code JList}'s UI does, sets it.
+     */
+    public void setSelectionAdjustedByOwner(boolean selectionAdjustedByOwner) {
+        store().selectionAdjustedByOwner = selectionAdjustedByOwner;
+    }
+
     // --- ListDataListener — model events drive Grid refresh ---
 
     @Override
@@ -308,7 +318,9 @@ public class SJList<E> extends Grid<Integer> implements JComponentMixin,
         SHelper.runOnOwnerUI(this, () -> {
             // Shift selection indices to track the insert (mirrors the effective
             // L&F behaviour the dropped BasicListUI provided).
-            store().selectionModel.insertIndexInterval(e.getIndex0(), e.getIndex1() - e.getIndex0() + 1, true);
+            if (!store().selectionAdjustedByOwner) {
+                store().selectionModel.insertIndexInterval(e.getIndex0(), e.getIndex1() - e.getIndex0() + 1, true);
+            }
             refreshDataProvider();
         });
     }
@@ -317,7 +329,9 @@ public class SJList<E> extends Grid<Integer> implements JComponentMixin,
     public void intervalRemoved(ListDataEvent e) {
         // Allowed by R_tolerate_off_ui_thread because callback from model: ListDataListener.intervalRemoved
         SHelper.runOnOwnerUI(this, () -> {
-            store().selectionModel.removeIndexInterval(e.getIndex0(), e.getIndex1());
+            if (!store().selectionAdjustedByOwner) {
+                store().selectionModel.removeIndexInterval(e.getIndex0(), e.getIndex1());
+            }
             refreshDataProvider();
         });
     }
@@ -373,6 +387,13 @@ public class SJList<E> extends Grid<Integer> implements JComponentMixin,
         store.selectionModel = selectionModel;
         selectionModel.addListSelectionListener(this);
         firePropertyChange("selectionModel", old, selectionModel);
+        // The Grid shows the new model's selection.
+        store.preventPeerEvents = true;
+        try {
+            pushSelectionToPeer();
+        } finally {
+            store.preventPeerEvents = false;
+        }
     }
 
     /**

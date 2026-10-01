@@ -96,32 +96,37 @@ public class JProgressBar extends vaadinx.swing.JComponent
     private boolean pushedPaintString;
 
     public JProgressBar() {
-        this(new SJProgressBar());
+        this(HORIZONTAL, 0, 100);
     }
 
     public JProgressBar(int orientation) {
-        this(new SJProgressBar(orientation));
+        this(orientation, 0, 100);
     }
 
     public JProgressBar(int min, int max) {
-        this(new SJProgressBar(min, max));
+        this(HORIZONTAL, min, max);
     }
 
+    /**
+     * @throws IllegalArgumentException if {@code min > max} — the model's own check, made first,
+     *         as in the JDK — or if {@code orientation} is neither {@code HORIZONTAL} nor {@code VERTICAL}
+     */
     public JProgressBar(int orientation, int min, int max) {
-        this(new SJProgressBar(orientation, min, max));
+        this(new javax.swing.DefaultBoundedRangeModel(min, 0, min, max), checkOrientation(orientation));
     }
 
     public JProgressBar(javax.swing.BoundedRangeModel brm) {
-        this(new SJProgressBar(brm));
+        this(brm, HORIZONTAL);
     }
 
-    private JProgressBar(SJProgressBar peer) {
+    private JProgressBar(javax.swing.BoundedRangeModel brm, int orientation) {
         // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JProgressBar is a leaf in
-        // the public Swing hierarchy. The seam through which the public
-        // ctors pass their chosen SJProgressBar variant up is private +
-        // typed-narrow, so user-code subclasses can't reach it to swap
-        // the peer type.
-        super(peer);
+        // the public Swing hierarchy, and this private ctor is the only one naming the peer.
+        super(SJProgressBar.class, () -> {
+            SJProgressBar peer = new SJProgressBar(brm);
+            peer.setOrientation(orientation);
+            return peer;
+        });
         // Obtained from createChangeListener() rather than inlined, because the JDK's ctor
         // subscribes that hook's return value and a migrator's override has to reach the
         // same seam (R_no_vaadin_in_api limb 2, D_dead_hook_lint).
@@ -135,16 +140,21 @@ public class JProgressBar extends vaadinx.swing.JComponent
         if (hook != null) {
             modelRelay = e -> vaadinx.EHelper.relayModelEvent(() -> hook.stateChanged(e));
         }
-        // Seed the JDK-shaped fields (and write-detection baselines) from the peer the
-        // public ctors configured, read while it has never been attached. progressString
-        // stays null, the JDK default.
-        model = peer.getModel();
+        model = brm;
         subscribe(model);
-        indeterminate = peer.isIndeterminate();
-        orientation = pushedOrientation = peer.getOrientation();
-        paintBorder = pushedPaintBorder = peer.isBorderPainted();
-        paintString = pushedPaintString = peer.isStringPainted();
-        vaadinx.FieldReconciler.register(this, peer);
+        // The JDK's defaults, which are also the peer's: the write-detection baselines start
+        // equal. progressString stays null, the JDK default.
+        this.orientation = pushedOrientation = orientation;
+        paintBorder = pushedPaintBorder = true;
+        paintString = pushedPaintString = false;
+        vaadinx.FieldReconciler.register(this);
+    }
+
+    private static int checkOrientation(int orientation) {
+        if (orientation != HORIZONTAL && orientation != VERTICAL) {
+            throw new IllegalArgumentException(orientation + " is not a legal orientation");
+        }
+        return orientation;
     }
 
     /** D_field_write_reconcile repair hook — see {@link JSlider#reconcileFields()}. */
@@ -153,26 +163,30 @@ public class JProgressBar extends vaadinx.swing.JComponent
         if (model != relayedModel) {
             javax.swing.BoundedRangeModel m = model;
             subscribe(m);
-            bar().setModel(m);
+            withPeer(p -> bar().setModel(m));
             vaadinx.FieldReconciler.reportDirectWrite(this, "model", "setModel");
         }
         if (orientation != pushedOrientation) {
-            bar().setOrientation(orientation);
+            int v = orientation;
+            withPeer(p -> bar().setOrientation(v));
             pushedOrientation = orientation;
             vaadinx.FieldReconciler.reportDirectWrite(this, "orientation", "setOrientation");
         }
         if (paintBorder != pushedPaintBorder) {
-            bar().setBorderPainted(paintBorder);
+            boolean v = paintBorder;
+            withPeer(p -> bar().setBorderPainted(v));
             pushedPaintBorder = paintBorder;
             vaadinx.FieldReconciler.reportDirectWrite(this, "paintBorder", "setBorderPainted");
         }
         if (paintString != pushedPaintString) {
-            bar().setStringPainted(paintString);
+            boolean v = paintString;
+            withPeer(p -> bar().setStringPainted(v));
             pushedPaintString = paintString;
             vaadinx.FieldReconciler.reportDirectWrite(this, "paintString", "setStringPainted");
         }
         if (!java.util.Objects.equals(progressString, pushedProgressString)) {
-            bar().setString(progressString);
+            java.lang.String v = progressString;
+            withPeer(p -> bar().setString(v));
             pushedProgressString = progressString;
             vaadinx.FieldReconciler.reportDirectWrite(this, "progressString", "setString");
         }
@@ -269,11 +283,9 @@ public class JProgressBar extends vaadinx.swing.JComponent
     }
 
     public void setOrientation(int orientation) {
-        // JDK validates before any state change (IAE); replicated here so the field is
-        // never left holding a value the peer rejected.
-        if (orientation != HORIZONTAL && orientation != VERTICAL) {
-            throw new IllegalArgumentException(orientation + " is not a legal orientation");
-        }
+        // JDK validates before any state change (IAE), so the field is never left holding
+        // a value the peer rejected.
+        checkOrientation(orientation);
         int old = this.orientation;
         this.orientation = orientation;
         withPeer(p -> bar().setOrientation(orientation));

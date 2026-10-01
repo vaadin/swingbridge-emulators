@@ -247,29 +247,46 @@ public class JTree extends vaadinx.swing.JComponent
         this(new DefaultTreeModel(root, asksAllowsChildren));
     }
 
+    /**
+     * The root ctor, and the only one naming the peer: R_leaf_peer_lockdown lock-down (JDK
+     * leaf — no protected (Component) ctor).
+     *
+     * @throws NullPointerException if {@code newModel} is null, which the JDK accepts — the
+     *         surrogate needs a model
+     */
     public JTree(TreeModel newModel) {
-        this(new SJTree(newModel));
-    }
-
-    /** Private ctor: R_leaf_peer_lockdown lock-down (JDK leaf — no protected (Component) ctor). */
-    private JTree(SJTree peer) {
-        super(peer);
+        super(SJTree.class, peerFactory(newModel));
         this.cellRenderer = new vaadinx.swing.tree.DefaultTreeCellRenderer();
-        installEmulatorVaadinRenderer();
-        installSurrogateBridges();
-        installEditorBridge();
-        // Seed the JDK-shaped fields (and write-detection baselines) from the peer the
-        // public ctors configured (D_field_write_reconcile; see JSlider), read while it has
-        // never been attached.
-        treeModel = peer.getModel();
-        selectionModel = peer.getTreeSelectionModel();
-        rootVisible = pushedRootVisible = peer.isRootVisible();
+        // This class sources its own MOUSE_* off the surrogate's Grid item-click wire, which
+        // also stashes the row for getRowForLocation. Keep Component's generic DOM bridge
+        // out, or every click arrives twice.
+        suppressMouseBridge();
+        // The JDK ctor's: a DefaultTreeSelectionModel, rootVisible true (also the peer's
+        // default, so the write-detection baseline starts equal), then setModel.
+        selectionModel = installedSelectionModel = new javax.swing.tree.DefaultTreeSelectionModel();
+        selectionModel.addTreeSelectionListener(selectionHandler);
+        selectionModel.setRowMapper(rowMapper);
+        rootVisible = pushedRootVisible = true;
+        treeModel = installedTreeModel = newModel;
+        TreeSelectionModel sm = selectionModel;
+        withPeer(p -> {
+            surrogate().setSelectionModel(sm);
+            installEmulatorVaadinRenderer();
+            installSurrogateBridges();
+            installEditorBridge();
+        });
         // The JDK ctor's setModel: subscribe the model handler, mark a non-leaf root expanded.
         treeModelListener = createTreeModelListener();
         if (treeModelListener != null) treeModel.addTreeModelListener(treeModelListener);
         expandRootIfNotLeaf();
         syncPeerExpansion();
-        vaadinx.FieldReconciler.register(this, peer);
+        vaadinx.FieldReconciler.register(this);
+    }
+
+    /** The surrogate's null check, run now: it is built only once a UI is current. */
+    private static java.util.function.Supplier<SJTree> peerFactory(TreeModel newModel) {
+        java.util.Objects.requireNonNull(newModel, "model must be non null");
+        return () -> new SJTree(newModel);
     }
 
     // JDK protected fields, Swing-side truth per D_field_write_reconcile (see JSlider for
@@ -279,30 +296,34 @@ public class JTree extends vaadinx.swing.JComponent
     protected transient TreeSelectionModel selectionModel;
     protected boolean rootVisible;
 
-    // Last value pushed to the peer — reconcileFields()'s write-detection baseline.
+    // Last values pushed to the peer — reconcileFields()'s write-detection baseline. The two
+    // models are the ones this tree's own listeners are on, which is also what the peer renders.
     private boolean pushedRootVisible;
+    private TreeModel installedTreeModel;
+    private TreeSelectionModel installedSelectionModel;
 
     /** D_field_write_reconcile repair hook — see {@link JSlider#reconcileFields()}. */
     @Override
     public final void reconcileFields() {
-        if (treeModel != surrogate().getModel()) {
+        if (treeModel != installedTreeModel) {
             TreeModel written = treeModel;
-            treeModel = surrogate().getModel();
+            treeModel = installedTreeModel;
             setModel(written);
             vaadinx.FieldReconciler.reportDirectWrite(this, "treeModel", "setModel");
         }
-        if (selectionModel != surrogate().getTreeSelectionModel()) {
+        if (selectionModel != installedSelectionModel) {
             // Route through the emulator's own setter — it rewires selectionHandler +
             // rowMapper, which a raw surrogate push would leave on the old model. The field
             // is first pointed back at the still-installed model so the setter unhooks the
             // right instance (the direct write left the field ahead of the wiring).
             TreeSelectionModel written = selectionModel;
-            selectionModel = surrogate().getTreeSelectionModel();
+            selectionModel = installedSelectionModel;
             setSelectionModel(written);
             vaadinx.FieldReconciler.reportDirectWrite(this, "selectionModel", "setSelectionModel");
         }
         if (rootVisible != pushedRootVisible) {
-            surrogate().setRootVisible(rootVisible);
+            boolean v = rootVisible;
+            withPeer(p -> surrogate().setRootVisible(v));
             pushedRootVisible = rootVisible;
             syncPeerExpansion();
             vaadinx.FieldReconciler.reportDirectWrite(this, "rootVisible", "setRootVisible");
@@ -405,14 +426,7 @@ public class JTree extends vaadinx.swing.JComponent
     }
 
     private void installSurrogateBridges() {
-        // (0) This class sources its own MOUSE_* below, off the surrogate's Grid
-        //     item-click wire, which also stashes the row for getRowForLocation.
-        //     Keep Component's generic DOM bridge out, or every click arrives twice.
-        suppressMouseBridge();
-        // (1) Selection re-source — source rebound to this JTree.
-        surrogate().getTreeSelectionModel().addTreeSelectionListener(selectionHandler);
-        surrogate().getTreeSelectionModel().setRowMapper(rowMapper);
-        // (2) Browser toggles. The peer has already expanded or collapsed the node; the JDK's
+        // (1) Browser toggles. The peer has already expanded or collapsed the node; the JDK's
         //     path runs here as for a click on a desktop toggle, veto included, and the flush
         //     undoes a vetoed one. Server-side expand / collapse are this class's own pushes.
         surrogate().addExpandListener(e -> {
@@ -423,7 +437,7 @@ public class JTree extends vaadinx.swing.JComponent
             if (!e.isFromClient()) return;
             vaadinx.EHelper.callSwing(() -> onPeerToggle(e.getItems(), false));
         });
-        // (3) Mouse re-source — press/release/click carrying the browser
+        // (2) Mouse re-source — press/release/click carrying the browser
         //     button, so isPopupTrigger() + getRowForLocation serve the
         //     selectOnRightClick idiom.
         surrogate().addMouseListener(new SMouseListener() {
@@ -509,7 +523,7 @@ public class JTree extends vaadinx.swing.JComponent
         clearSelection();
         TreeModel old = treeModel;
         if (old != null && treeModelListener != null) old.removeTreeModelListener(treeModelListener);
-        treeModel = newModel;
+        treeModel = installedTreeModel = newModel;
         clearToggledPaths();
         if (newModel != null) {
             if (treeModelListener == null) treeModelListener = createTreeModelListener();
@@ -588,11 +602,12 @@ public class JTree extends vaadinx.swing.JComponent
         if (old == selectionModel) return;
         old.removeTreeSelectionListener(selectionHandler);
         old.setRowMapper(null);
-        withPeer(p -> surrogate().setSelectionModel(selectionModel));
-        // The surrogate substitutes a default for null (as the JDK's EmptySelectionModel
-        // does), so the field tracks what actually got installed, not the argument.
-        TreeSelectionModel installed = surrogate().getTreeSelectionModel();
-        this.selectionModel = installed;
+        // A fresh default for null, where the JDK installs its EmptySelectionModel
+        // (R_best_effort_behaviour); the surrogate renders the same instance.
+        TreeSelectionModel installed = selectionModel != null
+                ? selectionModel : new javax.swing.tree.DefaultTreeSelectionModel();
+        withPeer(p -> surrogate().setSelectionModel(installed));
+        this.selectionModel = installedSelectionModel = installed;
         installed.addTreeSelectionListener(selectionHandler);
         installed.setRowMapper(rowMapper);
         firePropertyChange(SELECTION_MODEL_PROPERTY, old, installed);

@@ -187,6 +187,42 @@ class LazyPeerTest extends AbstractKaribuTest {
         m.put("JMenuItem", () -> new vaadinx.swing.JMenuItem("item"));
         m.put("JCheckBoxMenuItem", () -> new vaadinx.swing.JCheckBoxMenuItem("check", true));
         m.put("JRadioButtonMenuItem", () -> new vaadinx.swing.JRadioButtonMenuItem("radio", true));
+        m.put("JSlider", () -> {
+            vaadinx.swing.JSlider sl = new vaadinx.swing.JSlider(vaadinx.swing.JSlider.VERTICAL, 0, 10, 3);
+            sl.setMajorTickSpacing(5);
+            sl.setValue(7);
+            return sl;
+        });
+        m.put("JProgressBar", () -> {
+            vaadinx.swing.JProgressBar pb = new vaadinx.swing.JProgressBar(0, 10);
+            pb.setValue(4);
+            pb.setStringPainted(true);
+            return pb;
+        });
+        m.put("JSpinner", () -> {
+            vaadinx.swing.JSpinner sp = new vaadinx.swing.JSpinner(new javax.swing.SpinnerNumberModel(1, 0, 9, 1));
+            sp.setValue(2);
+            return sp;
+        });
+        m.put("JComboBox", () -> {
+            vaadinx.swing.JComboBox<String> cb = new vaadinx.swing.JComboBox<>(new String[] {"a", "b"});
+            cb.setSelectedIndex(1);
+            cb.setMaximumRowCount(4);
+            return cb;
+        });
+        m.put("JList", () -> {
+            vaadinx.swing.JList<String> l = new vaadinx.swing.JList<>(new String[] {"a", "b", "c"});
+            l.setSelectedIndex(2);
+            return l;
+        });
+        m.put("JTree", () -> {
+            javax.swing.tree.DefaultMutableTreeNode root = new javax.swing.tree.DefaultMutableTreeNode("root");
+            root.add(new javax.swing.tree.DefaultMutableTreeNode("child"));
+            vaadinx.swing.JTree t = new vaadinx.swing.JTree(root);
+            t.setSelectionRow(1);
+            t.setRootVisible(false);
+            return t;
+        });
         m.put("AWT ScrollPane", () -> {
             vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
             sp.add(new vaadinx.awt.Label("first"));

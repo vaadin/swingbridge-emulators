@@ -122,7 +122,7 @@ public class JTabbedPane extends vaadinx.swing.JComponent
                 if (index >= 0 && index != getSelectedIndex()) setSelectedIndex(index);
             });
         });
-        vaadinx.FieldReconciler.register(this, surrogate());
+        vaadinx.FieldReconciler.register(this);
     }
 
     /** Validated in the JDK's order and with its messages, before the surrogate sees them. */

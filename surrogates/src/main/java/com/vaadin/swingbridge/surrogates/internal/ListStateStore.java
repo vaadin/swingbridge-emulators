@@ -81,6 +81,9 @@ public final class ListStateStore {
      */
     public int clickIndexStash = -1;
 
+    /** Whether an owner shifts {@link #selectionModel} across the model's inserts and removals itself. */
+    public boolean selectionAdjustedByOwner;
+
     private ListStateStore() {}
 
     public static ListStateStore of(Component target) {

@@ -24,8 +24,11 @@ that file.
   `JTableHeader`, `Box`, `Box.Filler`, `Container()` (so AWT `Panel`), AWT `Label`, `Button`,
   `Checkbox`, `Choice`, `List`, `Scrollbar`, `ScrollPane`, and the button family — `JButton`,
   `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`, `JCheckBoxMenuItem`,
-  `JRadioButtonMenuItem`. `vaadinx.LazyPeerTest` builds and configures each on a
+  `JRadioButtonMenuItem`, and the shared-model components `JSlider`, `JProgressBar`, `JSpinner`,
+  `JComboBox`, `JList`, `JTree`. `vaadinx.LazyPeerTest` builds and configures each on a
   bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
+- **`FieldReconciler.register` anchors on the UI**, not the peer, so an emulator whose peer is
+  not built yet still gets its bootstrap check.
 - **The button family owns its `ButtonModel`** ([D_emulator_button_model](../emulators/decisions.md#D_emulator_button_model)):
   the surrogate is handed the emulator's model and renders it, `doClick` / `setSelected` never
   reach the peer, and `ButtonGroup` coordinates models as the JDK's does.
@@ -54,28 +57,28 @@ that file.
    passed to `super(...)`, so nothing is half-built; `Scrollbar` checks after it.
 7. **A lambda in `super(type, () -> new SX(arg))` captures constructor parameters only**, so
    argument-derived peer config is computed inside the lambda.
+8. **Build the model the JDK's constructor builds, and hand it to the surrogate** — never read
+   a model or a default back out of a peer the constructor configured. The JDK's defaults seed
+   the fields and the reconcile baselines; a model change the JDK's *UI* reacts to (a list's
+   selection shift) is the emulator's to do, with an `…ByOwner` flag telling the surrogate to
+   stand down (`SJTable.setSorterNotifiedByOwner`, `SJList.setSelectionAdjustedByOwner`).
 
 ## The worklist, in order
 
-1. **Shared-model components** — `JSlider`, `JSpinner`, `JList`, `JComboBox`, `JTree`: the surrogate
-   is built over a JDK model and writes browser changes into it
-   ([withpeer-shape.md](./withpeer-shape.md) §3 (h)). Where the emulator reads its model *from* the
-   peer at construction, it must build the model itself and hand it over — the button family is
-   the worked case (D_emulator_button_model).
-2. **Text components** — `JTextComponent`, `JTextField`, `JPasswordField`, `JTextArea`: the
+1. **Text components** — `JTextComponent`, `JTextField`, `JPasswordField`, `JTextArea`: the
    emulator-owned `Document` pushes to the peer (a sink), but the ctor installs the peer-side sync;
    apply rule 5. `JFormattedTextField` echoes into its `Document` inside a write (§3 (a)) — a pure-sink
    violator to move Swing-side first; it also picks one of five peers at construction, which the
    declared type must name. `JEditorPane` / `JTextPane` last.
-3. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
+2. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
    `JProgressBar`, `JColorChooser`, `JMenuBar`, `JPopupMenu`, `JDesktopPane`, `JFileChooser`,
-   `JOptionPane` (a `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–7.
-4. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
+   `JOptionPane` (a `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–8.
+3. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
    `EHelper.runInUIThread`, which finds a UI through the `EmulatorContext`; `JFrame` picks its peer by
    `@MainWindow` (D_frame_strategy), so the declared type is a choice too.
-5. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
+4. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
    surrogate the public ctors built. It has to build them itself, as the JDK's ctor does.
-6. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
+5. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
    lazy overload for its subclasses; the eager one stays for a migrator's own subclass.
 
 ## After the sweep

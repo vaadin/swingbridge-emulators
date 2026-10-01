@@ -1526,7 +1526,7 @@ Emulator-side decision: [D_jlist](../emulators/decisions.md#D_jlist). The drivin
 
 **Peer choice — Grid, not VirtualList / ListBox.** The brainstorm fork. JList's three runtime-switchable selection modes (`SINGLE` / `SINGLE_INTERVAL` / `MULTIPLE_INTERVAL`, default the last) only map onto a *single* Vaadin component via `Grid.setSelectionMode` (`NONE`/`SINGLE`/`MULTI`). `VirtualList` carries **no native selection** (it's a pure virtualised renderer — picking it means hand-rolling click/range/keyboard selection, the weakest R_vaadin_first fit); `ListBox` / `MultiSelectListBox` are *two* classes (one per mode) a surrogate is-a can't swap between at runtime, and `MultiSelectListBox` renders checkboxes. Grid also (a) reuses SJTable's proven `ListSelectionModel`↔Grid two-way bridge verbatim, (b) rides the existing SJScrollPane auto-scroll guard (which already detects `Grid` content) so the universal `new JScrollPane(jlist)` idiom needs zero new work, and (c) keys rows by `Integer` index — which is why the items are indices, not `E`: JList permits duplicate `.equals()` elements, and Vaadin Grid keys items by identity (equal `E` values would collide). The accepted cost is a **checkbox column in MULTI mode** (R_best_effort_behaviour/R_layouts_close_enough — JList shows highlight-only; suppressing it is exactly what would have justified VirtualList, so we keep Grid's native selection chrome).
 
-**Source of truth = `ListModel` + `ListSelectionModel`** (both JDK-reused per D_event_port_policy — `ListDataEvent` / `ListSelectionEvent` are `Object`-sourced). SJList IS-A both listeners and subscribes itself on install/swap (JDK JList's UI-delegate pattern). In-memory `setItems(fetch, count)` reads `model.getElementAt` live (no `TableRowSorter` — JList has none, so the fetch is trivial `0..size-1`); `intervalAdded`/`intervalRemoved` shift the selection model (the effective behaviour the dropped `BasicListUI` provided) + `refreshAll`; `contentsChanged` does per-index `refreshItem`.
+**Source of truth = `ListModel` + `ListSelectionModel`** (both JDK-reused per D_event_port_policy — `ListDataEvent` / `ListSelectionEvent` are `Object`-sourced). SJList IS-A both listeners and subscribes itself on install/swap (JDK JList's UI-delegate pattern). In-memory `setItems(fetch, count)` reads `model.getElementAt` live (no `TableRowSorter` — JList has none, so the fetch is trivial `0..size-1`); `intervalAdded`/`intervalRemoved` shift the selection model (the effective behaviour the dropped `BasicListUI` provided) + `refreshAll` — unless `setSelectionAdjustedByOwner(true)` says an owner shifts it itself, as the `JList` emulator does on the model's own thread (D_jlist); `contentsChanged` does per-index `refreshItem`. `setSelectionModel` shows the new model's selection on the Grid.
 
 **Selection bridge** — copied from SJTable: `valueChanged` → `pushSelectionToPeer` (deselectAll + select per index); browser → us via `addSelectionListener` wrapped in `SHelper.callSwing` (R_callswing_envelope) under `preventPeerEvents`; the Vaadin selection listener re-installs on every `setSelectionMode` (Grid re-creates its selection backing). Mode mapping: `SINGLE`→`SINGLE`; both interval modes→`MULTI` with the `ListSelectionModel` enforcing the JDK contract (the SJTable divergence: browser ctrl-click past a single-interval silently reverts). `getSelectionModel()` clash with Grid's same-named getter resolved exactly as SD_sjtable: the JDK `ListSelectionModel` rides `getListSelectionModel()`, the emulator reaches it there.
 
@@ -2565,12 +2565,13 @@ modal ("import finished" at 100%) takes `Dialog`'s UI-thread park path and throw
 `JProgressBar` bridged through its surrogate with the relay removed. The relay puts that listener on
 `callSwing`'s virtual thread instead.
 
-**`JList` is the exception to "the emulator's listeners run on the mutating thread".** `JTable` and
+**The selection shift that follows a model change runs on the mutating thread.** `JTable` and
 `JTree` are their model's listeners, as the JDK's are, so the selection shift that follows a row
-insert or a node removal runs on the worker. `JList` is not: in the JDK, `BasicListUI` shifts the
-selection, so here `SJList` does it inside its hop. A `JList` `ListSelectionListener` therefore
-hears an insert's shift on the UI thread, in a `callSwing` fiber, when the list is attached. This is
-recorded in D_jlist and pinned by `JListBackgroundModelTest`.
+insert or a node removal runs on the worker. `JList` is not, since in the JDK `BasicListUI` shifts
+the selection; the emulator does that UI's job from its own `ListDataListener`, on the worker too,
+and `SJList.setSelectionAdjustedByOwner` keeps the surrogate from shifting it again — a stage-3
+`SJList` with no owner still shifts its own, inside its hop. Recorded in D_jlist and pinned by
+`JListBackgroundModelTest`.
 
 Tests: `SJComboBoxBackgroundModelTest`, `JComboBoxBackgroundModelTest`,
 `SJProgressBarBackgroundModelTest`, `JProgressBarBackgroundModelTest`, `SJTableBackgroundModelTest`,

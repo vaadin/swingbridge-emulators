@@ -401,7 +401,7 @@ public class JTable extends vaadinx.swing.JComponent
         peer.getListSelectionModel().addListSelectionListener(peerSelectionBridge);
         setSelectionModel(sm != null ? sm : createDefaultSelectionModel());
 
-        vaadinx.FieldReconciler.register(this, peer);
+        vaadinx.FieldReconciler.register(this);
     }
 
     /**

@@ -49,6 +49,8 @@ import javax.swing.AbstractListModel;
 import javax.swing.DefaultListSelectionModel;
 import javax.swing.ListModel;
 import javax.swing.ListSelectionModel;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import java.awt.Color;
@@ -118,8 +120,30 @@ public class JList<E> extends vaadinx.swing.JComponent
             });
     }
 
+    /**
+     * The root ctor, and the only one naming the peer: R_leaf_peer_lockdown lock-down (JDK
+     * leaf — no protected (Component) ctor).
+     *
+     * @throws IllegalArgumentException if {@code dataModel} is null, as in the JDK
+     */
     public JList(ListModel<E> dataModel) {
-        this(new SJList<E>(requireDataModel(dataModel)), dataModel);
+        super(SJList.class, peerFactory(dataModel));
+        this.dataModel = dataModel;
+        // The JDK's hook, so a subclass's override is reached.
+        selectionModel = createSelectionModel();
+        this.cellRenderer = new DefaultListCellRenderer();
+        // This class sources its own MOUSE_CLICKED, off the surrogate's Grid item-click
+        // wire, which also reports the clicked index for locationToIndex. Keep
+        // Component's generic DOM bridge out, or every click arrives twice.
+        suppressMouseBridge();
+        dataModel.addListDataListener(selectionAdjuster);
+        ListSelectionModel installed = selectionModel;
+        withPeer(p -> {
+            surrogate().setSelectionAdjustedByOwner(true);
+            surrogate().setSelectionModel(installed);
+            installEmulatorVaadinRenderer();
+            installSurrogateBridges();
+        });
     }
 
     public JList(E[] listData) {
@@ -136,25 +160,38 @@ public class JList<E> extends vaadinx.swing.JComponent
             });
     }
 
-    /** Private ctor: R_leaf_peer_lockdown lock-down (JDK leaf — no protected (Component) ctor). */
-    private JList(SJList<E> peer, ListModel<E> dataModel) {
-        super(peer);
-        this.dataModel = dataModel;
-        // The JDK's hook, so a subclass's override is reached. The peer has never been
-        // attached, so it takes the model directly.
-        selectionModel = createSelectionModel();
-        peer.setSelectionModel(selectionModel);
-        this.cellRenderer = new DefaultListCellRenderer();
-        installEmulatorVaadinRenderer();
-        installSurrogateBridges();
-    }
+    /**
+     * The JDK UI's list-data handler, which shifts the selection across the model's inserts and
+     * removals: here, on the thread the model fired on, so the selection is right before the
+     * peer exists and the moment a worker's {@code remove} returns.
+     */
+    private final ListDataListener selectionAdjuster = new ListDataListener() {
+        @Override
+        public void intervalAdded(ListDataEvent e) {
+            int minIndex = Math.min(e.getIndex0(), e.getIndex1());
+            int maxIndex = Math.max(e.getIndex0(), e.getIndex1());
+            ListSelectionModel sm = getSelectionModel();
+            if (sm != null) sm.insertIndexInterval(minIndex, maxIndex - minIndex + 1, true);
+        }
 
-    /** The JDK's null check, run before the surrogate sees the model (whose own check throws NPE). */
-    private static <E> ListModel<E> requireDataModel(ListModel<E> dataModel) {
+        @Override
+        public void intervalRemoved(ListDataEvent e) {
+            ListSelectionModel sm = getSelectionModel();
+            if (sm != null) sm.removeIndexInterval(e.getIndex0(), e.getIndex1());
+        }
+
+        @Override
+        public void contentsChanged(ListDataEvent e) {
+        }
+    };
+
+    /** The JDK's null check, run now: the surrogate, whose own check throws NPE, is built only once a UI is current. */
+    @SuppressWarnings("rawtypes")
+    private static <E> java.util.function.Supplier<SJList> peerFactory(ListModel<E> dataModel) {
         if (dataModel == null) {
             throw new IllegalArgumentException("dataModel must be non null");
         }
-        return dataModel;
+        return () -> new SJList<E>(dataModel);
     }
 
     @SuppressWarnings("unchecked")
@@ -174,25 +211,20 @@ public class JList<E> extends vaadinx.swing.JComponent
     private com.vaadin.flow.component.Component renderCellViaEmulator(Integer rowKey) {
         if (rowKey == null) return new Span("");
         int idx = rowKey;
-        ListModel<E> m = surrogate().getModel();
+        ListModel<E> m = getModel();
         if (m == null || idx < 0 || idx >= m.getSize()) return new Span("");
         E value = m.getElementAt(idx);
         if (cellRenderer == null) {
             return new Span(value == null ? "" : String.valueOf(value));
         }
-        boolean isSelected = surrogate().isSelectedIndex(idx);
+        boolean isSelected = isSelectedIndex(idx);
         vaadinx.awt.Component out = cellRenderer.getListCellRendererComponent(
                 this, value, idx, isSelected, false);
         return JComboBox.snapshotRendererOutput(out, value);
     }
 
     private void installSurrogateBridges() {
-        // (0) This class sources its own MOUSE_CLICKED below, off the surrogate's
-        //     Grid item-click wire, which also reports the clicked index for
-        //     locationToIndex. Keep Component's generic DOM bridge out, or every
-        //     click arrives twice.
-        suppressMouseBridge();
-        // (1) Mouse re-source — surrogate MOUSE_CLICKED → vaadinx MouseEvent
+        // Mouse re-source — surrogate MOUSE_CLICKED → vaadinx MouseEvent
         //     dispatched via processMouseEvent, with the clicked index held for
         //     locationToIndex.
         surrogate().addMouseListener(new SMouseAdapter() {
@@ -235,7 +267,9 @@ public class JList<E> extends vaadinx.swing.JComponent
             throw new IllegalArgumentException("model must be non null");
         }
         ListModel<E> oldValue = dataModel;
+        oldValue.removeListDataListener(selectionAdjuster);
         dataModel = model;
+        model.addListDataListener(selectionAdjuster);
         firePropertyChange("model", oldValue, dataModel);
         clearSelection();
         withPeer(p -> surrogate().setModel(model));

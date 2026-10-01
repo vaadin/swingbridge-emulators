@@ -105,36 +105,41 @@ public class JSlider extends vaadinx.swing.JComponent
     private int pushedOrientation;
 
     public JSlider() {
-        this(new SJSlider());
+        this(HORIZONTAL, 0, 100, 50);
     }
 
     public JSlider(int orientation) {
-        this(new SJSlider(orientation));
+        this(orientation, 0, 100, 50);
     }
 
     public JSlider(int min, int max) {
-        this(new SJSlider(min, max));
+        this(HORIZONTAL, min, max, (min + max) / 2);
     }
 
     public JSlider(int min, int max, int value) {
-        this(new SJSlider(min, max, value));
+        this(HORIZONTAL, min, max, value);
     }
 
+    /**
+     * @throws IllegalArgumentException if {@code orientation} is neither {@code HORIZONTAL} nor
+     *         {@code VERTICAL}, or if {@code min <= value <= max} does not hold — the model's own check
+     */
     public JSlider(int orientation, int min, int max, int value) {
-        this(new SJSlider(orientation, min, max, value));
+        this(checkOrientation(orientation), new javax.swing.DefaultBoundedRangeModel(value, 0, min, max));
     }
 
     public JSlider(javax.swing.BoundedRangeModel brm) {
-        this(new SJSlider(brm));
+        this(HORIZONTAL, brm);
     }
 
-    private JSlider(SJSlider peer) {
+    private JSlider(int orientation, javax.swing.BoundedRangeModel brm) {
         // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JSlider is a leaf in the
-        // public Swing hierarchy. The seam through which the public
-        // ctors pass their chosen SJSlider variant up is private +
-        // typed-narrow, so user-code subclasses can't reach it to swap
-        // the peer type.
-        super(peer);
+        // public Swing hierarchy, and this private ctor is the only one naming the peer.
+        super(SJSlider.class, () -> {
+            SJSlider peer = new SJSlider(brm);
+            peer.setOrientation(orientation);
+            return peer;
+        });
         // Obtained from createChangeListener() rather than inlined, because the JDK's ctor
         // subscribes that hook's return value and a migrator's override has to reach the
         // same seam (R_no_vaadin_in_api limb 2, D_dead_hook_lint).
@@ -146,16 +151,21 @@ public class JSlider extends vaadinx.swing.JComponent
         if (hook != null) {
             modelRelay = e -> vaadinx.EHelper.relayModelEvent(() -> hook.stateChanged(e));
         }
-        // Seed the JDK-shaped fields (and the write-detection baselines) from the peer the
-        // public ctors configured — the peer ctor args are the JDK ctor args. Read while the
-        // peer has never been attached, so the read needs no lock.
-        sliderModel = peer.getModel();
+        sliderModel = brm;
         subscribe(sliderModel);
-        orientation = pushedOrientation = peer.getOrientation();
-        majorTickSpacing = pushedMajorTickSpacing = peer.getMajorTickSpacing();
-        minorTickSpacing = pushedMinorTickSpacing = peer.getMinorTickSpacing();
-        snapToTicks = pushedSnapToTicks = peer.getSnapToTicks();
-        vaadinx.FieldReconciler.register(this, peer);
+        // The JDK's defaults, which are also the peer's: the write-detection baselines start equal.
+        this.orientation = pushedOrientation = orientation;
+        majorTickSpacing = pushedMajorTickSpacing = 0;
+        minorTickSpacing = pushedMinorTickSpacing = 0;
+        snapToTicks = pushedSnapToTicks = false;
+        vaadinx.FieldReconciler.register(this);
+    }
+
+    private static int checkOrientation(int orientation) {
+        if (orientation != HORIZONTAL && orientation != VERTICAL) {
+            throw new IllegalArgumentException("orientation must be one of: VERTICAL, HORIZONTAL");
+        }
+        return orientation;
     }
 
     /**
@@ -168,26 +178,30 @@ public class JSlider extends vaadinx.swing.JComponent
         if (sliderModel != relayedModel) {
             javax.swing.BoundedRangeModel m = sliderModel;
             subscribe(m);
-            slider().setModel(m);
+            withPeer(p -> slider().setModel(m));
             vaadinx.FieldReconciler.reportDirectWrite(this, "sliderModel", "setModel");
         }
         if (orientation != pushedOrientation) {
-            slider().setOrientation(orientation);
+            int v = orientation;
+            withPeer(p -> slider().setOrientation(v));
             pushedOrientation = orientation;
             vaadinx.FieldReconciler.reportDirectWrite(this, "orientation", "setOrientation");
         }
         if (majorTickSpacing != pushedMajorTickSpacing) {
-            slider().setMajorTickSpacing(majorTickSpacing);
+            int v = majorTickSpacing;
+            withPeer(p -> slider().setMajorTickSpacing(v));
             pushedMajorTickSpacing = majorTickSpacing;
             vaadinx.FieldReconciler.reportDirectWrite(this, "majorTickSpacing", "setMajorTickSpacing");
         }
         if (minorTickSpacing != pushedMinorTickSpacing) {
-            slider().setMinorTickSpacing(minorTickSpacing);
+            int v = minorTickSpacing;
+            withPeer(p -> slider().setMinorTickSpacing(v));
             pushedMinorTickSpacing = minorTickSpacing;
             vaadinx.FieldReconciler.reportDirectWrite(this, "minorTickSpacing", "setMinorTickSpacing");
         }
         if (snapToTicks != pushedSnapToTicks) {
-            slider().setSnapToTicks(snapToTicks);
+            boolean v = snapToTicks;
+            withPeer(p -> slider().setSnapToTicks(v));
             pushedSnapToTicks = snapToTicks;
             vaadinx.FieldReconciler.reportDirectWrite(this, "snapToTicks", "setSnapToTicks");
         }
@@ -277,11 +291,9 @@ public class JSlider extends vaadinx.swing.JComponent
     }
 
     public void setOrientation(int orientation) {
-        // JDK validates before any state change (checkOrientation → IAE); replicated here so
-        // the field is never left holding a value the peer rejected.
-        if (orientation != HORIZONTAL && orientation != VERTICAL) {
-            throw new IllegalArgumentException("orientation must be one of: VERTICAL, HORIZONTAL");
-        }
+        // JDK validates before any state change (checkOrientation → IAE), so the field is
+        // never left holding a value the peer rejected.
+        checkOrientation(orientation);
         int old = this.orientation;
         this.orientation = orientation;
         withPeer(p -> slider().setOrientation(orientation));
