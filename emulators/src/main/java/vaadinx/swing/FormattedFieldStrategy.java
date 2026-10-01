@@ -64,13 +64,14 @@ import java.util.function.Function;
 interface FormattedFieldStrategy {
 
     /**
-     * Vaadin peer to host the JFormattedTextField instance. Called once
-     * from the private {@code (FormattedFieldStrategy)} ctor; result is
-     * passed up the {@code super(peer)} chain through JTextField's
-     * widened protected ctor (D_jtextfield_ctor_widening — non-TextField/PasswordField peers
-     * skip the Enter-as-submit wiring).
+     * Vaadin peer to host the JFormattedTextField instance, built once a UI is current; its
+     * type is {@link #peerType}. Non-TextField/PasswordField peers skip JTextField's
+     * Enter-as-submit wiring (D_jtextfield_ctor_widening).
      */
     Component createPeer();
+
+    /** {@link #createPeer}'s type, which answers peer type checks before the peer is built. */
+    Class<? extends Component> peerType();
 
     /**
      * Wire peer-side commit listeners — typically {@link #relayBrowserEdits}, and any
@@ -105,10 +106,20 @@ interface FormattedFieldStrategy {
     }
 
     /**
-     * Push the JFormattedTextField's value into the peer + Document. Called
-     * from {@link JFormattedTextField#setValue(Object)} after the field
-     * shadow updates and the emulator-side
-     * {@link java.beans.PropertyChangeEvent}{@code ("value")} fires.
+     * The text the field's {@code Document} shows for {@code value}, which the field sets
+     * Swing-side as the JDK formatter's {@code install} does, before {@link #afterSetValue};
+     * {@code null} when the peer renders the value itself and the Document does not reach it.
+     */
+    default String documentText(JFormattedTextField field, Object value) {
+        return null;
+    }
+
+    /**
+     * Push the JFormattedTextField's value into the peer. Called inside a write, after
+     * {@link #documentText}'s text reached the Document, from {@link JFormattedTextField#setValue(Object)}
+     * once the field shadow updates and the emulator-side
+     * {@link java.beans.PropertyChangeEvent}{@code ("value")} fires. A pure sink: it must not
+     * echo into the field, since a write may run long after the setter returned.
      */
     void afterSetValue(JFormattedTextField field, Component peer, Object value);
 

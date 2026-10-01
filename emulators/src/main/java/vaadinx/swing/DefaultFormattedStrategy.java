@@ -90,6 +90,11 @@ final class DefaultFormattedStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedTextField.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         // No peer-side value bridge — see class javadoc. The R_swing_is_truth
         // Document↔peer text sync is inherited from JTextComponentMixin
@@ -97,10 +102,13 @@ final class DefaultFormattedStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public String documentText(JFormattedTextField field, Object value) {
+        return stringifyViaFormatter(field, value);
+    }
+
+    /** Nothing beyond the text, which reaches the peer through the Document sync. */
+    @Override
     public void afterSetValue(JFormattedTextField field, Component peer, Object value) {
-        SJFormattedTextField tf = (SJFormattedTextField) peer;
-        String text = stringifyViaFormatter(field, value);
-        tf.setValue(text);
     }
 
     /**

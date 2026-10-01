@@ -52,7 +52,7 @@ package vaadinx.swing;
 // Peer lock-down: nothing in this codebase or in the JDK extends JTextArea
 // (it is a leaf class in javax.swing's hierarchy). With no subclass needing
 // the D_peer_ctor_injection custom-peer escape hatch, the protected JTextArea(Component peer)
-// ctor is gone and the root public ctor calls super(new SJTextArea())
+// ctor is gone and the root public ctor peers on SJTextArea
 // directly via JTextComponent's (Component peer) ctor. Result: every
 // JTextArea instance — through any public ctor or any future subclass —
 // is guaranteed to peer over an SJTextArea. The class itself stays
@@ -104,7 +104,7 @@ public class JTextArea extends vaadinx.swing.text.JTextComponent {
         // ctor installs the emulator-side R_swing_is_truth sync, and SJTextArea's own
         // ctor installs the surrogate-side sync — see SD_sjtextfield §"Two-layer
         // R_swing_is_truth sync" for the convergence argument.
-        super(new com.vaadin.swingbridge.surrogates.SJTextArea());
+        super(com.vaadin.swingbridge.surrogates.SJTextArea.class, com.vaadin.swingbridge.surrogates.SJTextArea::new);
         if (rows < 0) {
             // JDK throws IAE on negative rows/columns.
             throw new IllegalArgumentException("rows: " + rows);
@@ -116,16 +116,13 @@ public class JTextArea extends vaadinx.swing.text.JTextComponent {
             setDocument(doc);
         }
         // Assigned, not set: the JDK's ctor writes the fields, so a subclass's
-        // setRows override is not called from here. The peer has never been
-        // attached, so it is written directly.
+        // setRows override is not called from here.
         this.rows = rows;
         this.columns = columns;
-        if (rows > 0) {
-            surrogate().setRows(rows);
-        }
-        if (columns > 0) {
-            surrogate().setColumns(columns);
-        }
+        withPeer(p -> {
+            if (rows > 0) surrogate().setRows(rows);
+            if (columns > 0) surrogate().setColumns(columns);
+        });
         if (text != null) {
             setText(text);
         }

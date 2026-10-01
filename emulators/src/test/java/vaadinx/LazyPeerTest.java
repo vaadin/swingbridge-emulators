@@ -223,6 +223,30 @@ class LazyPeerTest extends AbstractKaribuTest {
             t.setRootVisible(false);
             return t;
         });
+        m.put("JTextField", () -> {
+            vaadinx.swing.JTextField tf = new vaadinx.swing.JTextField("abc", 10);
+            tf.setEditable(false);
+            tf.setCaretPosition(1);
+            return tf;
+        });
+        m.put("JPasswordField", () -> new vaadinx.swing.JPasswordField("secret", 8));
+        m.put("JTextArea", () -> {
+            vaadinx.swing.JTextArea ta = new vaadinx.swing.JTextArea("one\ntwo", 3, 20);
+            ta.append("\nthree");
+            return ta;
+        });
+        m.put("JFormattedTextField", () -> {
+            vaadinx.swing.JFormattedTextField f = new vaadinx.swing.JFormattedTextField("text");
+            f.setValue("other");
+            return f;
+        });
+        m.put("JFormattedTextField(Integer)", () -> new vaadinx.swing.JFormattedTextField(42));
+        m.put("JEditorPane", () -> new vaadinx.swing.JEditorPane("text/html", "<b>bold</b>"));
+        m.put("JTextPane", () -> {
+            vaadinx.swing.JTextPane tp = new vaadinx.swing.JTextPane();
+            tp.setText("styled");
+            return tp;
+        });
         m.put("AWT ScrollPane", () -> {
             vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
             sp.add(new vaadinx.awt.Label("first"));
@@ -282,6 +306,31 @@ class LazyPeerTest extends AbstractKaribuTest {
         com.github.mvysny.kaributesting.v10.LocatorJ._setValue(peer, false);
         assertEquals(false, box.isSelected());
         assertEquals(java.util.List.of("item " + java.awt.event.ItemEvent.DESELECTED, "action c"), events);
+    }
+
+    @Test
+    @DisplayName("a JFormattedTextField given a value on a worker shows its text once attached")
+    void jFormattedTextFieldValueOnWorker() {
+        AtomicReference<vaadinx.swing.JFormattedTextField> built = new AtomicReference<>();
+        java.util.List<String> documentEvents = new java.util.concurrent.CopyOnWriteArrayList<>();
+        onBareThread(() -> {
+            vaadinx.swing.JFormattedTextField f = new vaadinx.swing.JFormattedTextField("first");
+            f.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                public void insertUpdate(javax.swing.event.DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
+                public void removeUpdate(javax.swing.event.DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
+                public void changedUpdate(javax.swing.event.DocumentEvent e) { }
+            });
+            f.setValue("second");
+            built.set(f);
+        });
+
+        assertEquals("second", built.get().getText(), "the Document took the text on the worker, as the JDK's formatter sets it");
+        assertEquals(java.util.List.of("lazy-peer", "lazy-peer"), documentEvents, "remove then insert, both on the worker");
+        UI.getCurrent().add(built.get().getPeer());
+        com.vaadin.flow.component.textfield.TextField peer =
+                assertInstanceOf(com.vaadin.flow.component.textfield.TextField.class, built.get().getPeer());
+        assertEquals("second", peer.getValue());
+        assertEquals(2, documentEvents.size(), "the drained writes did not echo into the Document");
     }
 
     @Test

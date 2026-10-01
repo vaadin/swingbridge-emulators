@@ -60,6 +60,11 @@ final class LongStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedLongField.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         FormattedFieldStrategy.relayBrowserEdits(field, (SJFormattedLongField) peer, v -> v);
     }

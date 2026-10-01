@@ -1434,13 +1434,16 @@ Six sub-decisions land together because the strategy interface, the peer family,
 
 ```
 interface FormattedFieldStrategy {
-    Component createPeer();                                  // called from private ctor
+    Component createPeer();                                  // built once a UI is current
+    Class<? extends Component> peerType();                   // createPeer's type, known before it runs
     void install(JFormattedTextField, Component peer);       // peer-side commit listeners (focus-loss / value-change / Enter)
-    void afterSetValue(JFormattedTextField, Object value);   // push value into peer + Document via formatter.valueToString
-    void afterCommitFromPeer(JFormattedTextField);           // pull peer value, publish as JFormattedTextField.value
+    String documentText(JFormattedTextField, Object value);  // the Document's text for value, set Swing-side; null for non-text peers
+    void afterSetValue(JFormattedTextField, Component peer, Object value);   // peer-only push, a pure sink
     boolean accepts(AbstractFormatter f);                    // family check for D_formatter_swap_rules swap rule
 }
 ```
+
+**The Document's text is set Swing-side, as the JDK formatter's `install` sets it** (`ftf.setText(valueToString(value))`): the `DocumentEvent`s fire on the caller's thread, and the ordinary Document→peer sync renders the text. `afterSetValue` carries only what the Document cannot — a number or date peer's typed value, a mask's browser pattern — and must not echo into the field, because a write can run at attach, long after the setter returned. An earlier shape had the text strategies push the text into the peer instead, which echoed back through the peer's value listener into the Document from inside the write.
 
 Implementations: `DateStrategy` (peer = `SJFormattedDatePicker`), `IntegerStrategy` (`SJFormattedIntegerField`), `LongStrategy` (`SJFormattedLongField`), `NumberStrategy` (`SJFormattedNumberField`), `MaskStrategy` (`SJFormattedTextField` + browser-side `pattern` attr), `DefaultStrategy` (`SJFormattedTextField`). All strategies are stateless singletons; per-instance state lives on `JFormattedTextField`.
 

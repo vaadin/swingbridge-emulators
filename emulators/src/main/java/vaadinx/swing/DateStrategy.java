@@ -79,6 +79,11 @@ final class DateStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedDatePicker.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         FormattedFieldStrategy.relayBrowserEdits(field, (SJFormattedDatePicker) peer, BrowserDateUtils::toDate);
     }

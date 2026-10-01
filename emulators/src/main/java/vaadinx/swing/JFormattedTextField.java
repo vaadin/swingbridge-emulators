@@ -78,13 +78,13 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
 
     // Object value source-of-truth on the emulator side. Per R_swing_is_truth the
     // field shadow drives the JDK contract (getValue returns this);
-    // strategy.afterSetValue propagates to the peer. Peer-originated
+    // showValue propagates it to the Document and the peer. Peer-originated
     // value changes route through the strategy's install bridge back to
     // setValue, which equality-short-circuits to close the round-trip.
     private java.lang.Object value;
 
     // Currently installed formatter, or null. Fired in PCE("textFormatter")
-    // on swap. The strategy's afterSetValue routes formatter.valueToString,
+    // on swap. The strategy's documentText routes formatter.valueToString,
     // falling back to Object.toString when no formatter is installed.
     private javax.swing.JFormattedTextField.AbstractFormatter formatter;
 
@@ -159,10 +159,18 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
      * handling) inherit the strategy-dispatched peer and work fine.
      */
     JFormattedTextField(FormattedFieldStrategy strategy) {
-        super(strategy.createPeer());
+        super(peerTypeOf(strategy), strategy::createPeer);
         this.strategy = strategy;
-        strategy.install(this, getPeer());
-        installFocusLostCommit();
+        withPeer(p -> {
+            strategy.install(this, p);
+            installFocusLostCommit(p);
+        });
+    }
+
+    /** The strategy's peer type, widened to what its {@code createPeer} is declared to return. */
+    @SuppressWarnings("unchecked")
+    private static Class<com.vaadin.flow.component.Component> peerTypeOf(FormattedFieldStrategy strategy) {
+        return (Class<com.vaadin.flow.component.Component>) strategy.peerType();
     }
 
     /**
@@ -181,8 +189,8 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
      * trigger for the same policy {@link #processFocusEvent} applies when an
      * AWT {@code FOCUS_LOST} is dispatched programmatically.
      */
-    private void installFocusLostCommit() {
-        if (getPeer() instanceof com.vaadin.flow.component.BlurNotifier<?> bn) {
+    private void installFocusLostCommit(com.vaadin.flow.component.Component peer) {
+        if (peer instanceof com.vaadin.flow.component.BlurNotifier<?> bn) {
             bn.addBlurListener(e -> vaadinx.EHelper.callSwing(this::applyFocusLostBehavior));
         }
     }
@@ -219,7 +227,21 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
      * while the displayed text still holds a rejected edit that must revert.
      */
     private void reformatToValue() {
-        withPeer(p -> strategy.afterSetValue(this, p, value));
+        showValue(value);
+    }
+
+    /**
+     * Shows {@code v}: the strategy's text reaches the Document Swing-side, as the JDK
+     * formatter's {@code install} sets it, and the Document sync renders it; then the
+     * strategy's peer-only push. Skipped when the Document already holds the text, which
+     * fires no {@code DocumentEvent}.
+     */
+    private void showValue(java.lang.Object v) {
+        java.lang.String text = strategy.documentText(this, v);
+        if (text != null && !text.equals(getText())) {
+            setText(text);
+        }
+        withPeer(p -> strategy.afterSetValue(this, p, v));
     }
 
     // --- Strategy resolution (D_formatted_strategy_interface) --------------------------------------
@@ -294,10 +316,7 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
         if (old == null ? value == null : old.equals(value)) return;
         this.value = value;
         firePropertyChange("value", old, value);
-        // Push to peer via strategy. afterSetValue may itself fire a
-        // surrogate-side PCE that the strategy's install bridge re-routes
-        // back here — setValue's equality-short-circuit closes that loop.
-        withPeer(p -> strategy.afterSetValue(this, p, value));
+        showValue(value);
     }
 
     // --- Formatter / formatterFactory -----------------------------------
@@ -328,11 +347,10 @@ public class JFormattedTextField extends vaadinx.swing.JTextField {
                             + strategy.getClass().getSimpleName(), formatter);
         }
         firePropertyChange("textFormatter", old, formatter);
-        // Same-family swap: re-run by pushing the current value through
-        // strategy.afterSetValue, which refreshes the displayed text via
-        // formatter.valueToString.
+        // Same-family swap: re-run by showing the current value again, which
+        // refreshes the displayed text via formatter.valueToString.
         if (formatter != null && strategy.accepts(formatter) && value != null) {
-            withPeer(p -> strategy.afterSetValue(this, p, value));
+            showValue(value);
         }
     }
 

@@ -287,8 +287,11 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
     /** Guards {@link #peerFactory}, so the peer is built once. Never held while a write runs. */
     private final Object peerBuildLock = new Object();
 
-    /** Whether the peer is, or will be, a {@code type}: answers without building it. */
-    final boolean peerIs(Class<?> type) {
+    /**
+     * Whether the peer is, or will be, a {@code type}: answers without building it, so an
+     * emulator can branch on its peer's kind outside a write.
+     */
+    protected final boolean peerIs(Class<?> type) {
         return type.isAssignableFrom(peerType);
     }
 

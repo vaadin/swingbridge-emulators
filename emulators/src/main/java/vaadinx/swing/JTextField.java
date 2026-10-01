@@ -103,7 +103,7 @@ public class JTextField extends vaadinx.swing.text.JTextComponent implements jav
         // emulator setText writes peer; Vaadin's idempotent setValue
         // short-circuits when the surrogate's docToPeer push echoes the
         // same value back, so no infinite loop. See SD_sjtextfield.
-        this(new com.vaadin.swingbridge.surrogates.SJTextField());
+        this(com.vaadin.swingbridge.surrogates.SJTextField.class, com.vaadin.swingbridge.surrogates.SJTextField::new);
         if (columns < 0) {
             // Swing throws IAE; D_never_fail_on_gaps preserves programming-error failures.
             throw new IllegalArgumentException("columns less than zero.");
@@ -120,6 +120,17 @@ public class JTextField extends vaadinx.swing.text.JTextComponent implements jav
 
     protected JTextField(com.vaadin.flow.component.Component peer) {
         super(peer);
+        withPeer(this::installEnterBridge);
+    }
+
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> JTextField(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        withPeer(this::installEnterBridge);
+    }
+
+    private void installEnterBridge(com.vaadin.flow.component.Component peer) {
         // Enter key fires ActionEvent — Swing JTextField's "submit the
         // form" idiom. fireActionPerformed reads actionCommand (or
         // falls back to text), constructs an ActionEvent with
@@ -182,13 +193,13 @@ public class JTextField extends vaadinx.swing.text.JTextComponent implements jav
         // TextFieldBase is the lowest common type covering both —
         // SJPasswordField (extends PasswordField)
         // keeps the bound here.
-        if (getPeer() instanceof com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf) {
-            // Behind the D_layout_owns_child_sizing variable: columns is a preferred
-            // width, so a parent layout that sizes the axis itself overrides it.
-            String width = com.vaadin.swingbridge.surrogates.util.LayoutCss.prefWidth(
-                    com.vaadin.swingbridge.surrogates.util.CssConvert.columnsToCssWidth(columns));
-            withPeer(p -> tf.setWidth(width));
-        }
+        // Behind the D_layout_owns_child_sizing variable: columns is a preferred
+        // width, so a parent layout that sizes the axis itself overrides it.
+        String width = com.vaadin.swingbridge.surrogates.util.LayoutCss.prefWidth(
+                com.vaadin.swingbridge.surrogates.util.CssConvert.columnsToCssWidth(columns));
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf) tf.setWidth(width);
+        });
     }
 
     public int getHorizontalAlignment() {

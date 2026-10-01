@@ -137,6 +137,17 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
 
     protected JTextComponent(com.vaadin.flow.component.Component peer) {
         super(peer);
+        initTextComponent();
+    }
+
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> JTextComponent(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        initTextComponent();
+    }
+
+    private void initTextComponent() {
         // Install the default Document immediately so getText/setText
         // have something to read from / write to in every subclass that
         // doesn't replace it. Subclasses override createDefaultDocument
@@ -144,18 +155,28 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
         // a future JEditorPane would pick an EditorKit-driven doc).
         this.document = createDefaultDocument();
         this.document.addDocumentListener(docToPeer);
+        withPeer(this::installPeerSync);
+        setCaret(new DefaultCaret());
+        // The Basic text UI's blink rate, which the JDK installs with the caret.
+        caret.setBlinkRate(500);
+    }
 
-        // Install the peer-side half of the R_swing_is_truth sync for the three
-        // String-valued TextFieldBase descendants (TextField,
-        // PasswordField, TextArea). D_jformattedtextfield's number-family peers
-        // (IntegerField / LongField / NumberField) and DatePicker also
-        // descend from TextFieldBase but parameterise V to a non-String
-        // type — wiring docToPeer through them would `(String) e.getValue()`
-        // ClassCastException on every value change. Each non-String peer
-        // installs its own value-change bridge in the surrogate.
-        if (peer instanceof com.vaadin.flow.component.textfield.TextField
+    /**
+     * Whether {@code peer} holds the Document's text as its String value. D_jformattedtextfield's
+     * number-family peers (IntegerField / LongField / NumberField) and DatePicker also descend
+     * from TextFieldBase but parameterise V to a non-String type — wiring the Document through
+     * them would {@code (String) e.getValue()} ClassCastException on every value change; each
+     * installs its own value-change bridge in the surrogate.
+     */
+    private static boolean holdsDocumentText(com.vaadin.flow.component.Component peer) {
+        return peer instanceof com.vaadin.flow.component.textfield.TextField
                 || peer instanceof com.vaadin.flow.component.textfield.PasswordField
-                || peer instanceof com.vaadin.flow.component.textfield.TextArea) {
+                || peer instanceof com.vaadin.flow.component.textfield.TextArea;
+    }
+
+    /** The peer-side half of the R_swing_is_truth sync: a write, since it needs the peer. */
+    private void installPeerSync(com.vaadin.flow.component.Component peer) {
+        if (holdsDocumentText(peer)) {
             com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf =
                     (com.vaadin.flow.component.textfield.TextFieldBase<?, ?>) peer;
             // EAGER fires ValueChange on every keystroke — closer to
@@ -183,7 +204,8 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
         }
 
         if (peer instanceof com.vaadin.swingbridge.surrogates.swing.text.JTextComponentMixin m) {
-            selectionReports = m.addSelectionReportListener(this::onBrowserSelection, SELECTION_REPORT_DEBOUNCE_MS);
+            selectionReports = m.addSelectionReportListener(this::onBrowserSelection,
+                    selectionReportsEager ? 0 : SELECTION_REPORT_DEBOUNCE_MS);
             // A render scheduled while detached has no UI to wait on; attach flushes it.
             // A detach drops a scheduled one, and the input a re-attach brings shows
             // nothing we rendered.
@@ -199,9 +221,6 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
                 renderedStart = UNKNOWN;
             });
         }
-        setCaret(new DefaultCaret());
-        // The Basic text UI's blink rate, which the JDK installs with the caret.
-        caret.setBlinkRate(500);
     }
 
     /**
@@ -214,35 +233,29 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
     @SuppressWarnings("unchecked")
     private void onDocumentMutated() {
         if (preventPeerEvents) return;
-        // Same narrowing as the listener installed above — non-String-valued
-        // TextFieldBase peers (number family, DatePicker) cannot accept
-        // String via setValue, so docToPeer is a no-op there.
-        if (getPeer() instanceof com.vaadin.flow.component.textfield.TextField
-                || getPeer() instanceof com.vaadin.flow.component.textfield.PasswordField
-                || getPeer() instanceof com.vaadin.flow.component.textfield.TextArea) {
-            com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf =
-                    (com.vaadin.flow.component.textfield.TextFieldBase<?, ?>) getPeer();
-            // Read the Document directly, not via getText() — JPasswordField
-            // overrides getText() to mask with echoChar, and masked stars
-            // should never reach the peer value. The Document always holds
-            // the raw cleartext.
-            String text = readDocument();
-            // Only this push hops: the Document mutation, and the user's
-            // DocumentListeners it fired, stay on the caller's thread.
-            withPeer(p -> {
-                preventPeerEvents = true;
-                try {
-                    ((com.vaadin.flow.component.HasValue<?, String>) tf).setValue(text);
-                } finally {
-                    preventPeerEvents = false;
-                }
-                // Setting an input's value puts its caret at the end (HTML's value setter).
-                renderedStart = text.length();
-                renderedEnd = text.length();
-                renderedBackward = false;
-            });
-            scheduleCaretRender();
-        }
+        // Read the Document directly, not via getText() — JPasswordField
+        // overrides getText() to mask with echoChar, and masked stars
+        // should never reach the peer value. The Document always holds
+        // the raw cleartext.
+        String text = readDocument();
+        // Only this push hops: the Document mutation, and the user's
+        // DocumentListeners it fired, stay on the caller's thread.
+        withPeer(p -> {
+            // Non-String-valued TextFieldBase peers (number family, DatePicker) cannot
+            // accept String via setValue, so the Document does not reach them here.
+            if (!holdsDocumentText(p)) return;
+            preventPeerEvents = true;
+            try {
+                ((com.vaadin.flow.component.HasValue<?, String>) p).setValue(text);
+            } finally {
+                preventPeerEvents = false;
+            }
+            // Setting an input's value puts its caret at the end (HTML's value setter).
+            renderedStart = text.length();
+            renderedEnd = text.length();
+            renderedBackward = false;
+            scheduleCaretRender(p);
+        });
     }
 
     /**
@@ -421,9 +434,9 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
         boolean old = this.editable;
         if (old == b) return;
         this.editable = b;
-        if (getPeer() instanceof com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf) {
-            withPeer(p -> tf.setReadOnly(!b));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.textfield.TextFieldBase<?, ?> tf) tf.setReadOnly(!b);
+        });
         firePropertyChange("editable", old, b);
     }
 
@@ -600,19 +613,22 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
     private final CaretRelay caretEvent = new CaretRelay();
 
     private void scheduleCaretRender() {
-        withPeer(p -> {
-            if (!(p instanceof com.vaadin.swingbridge.surrogates.swing.text.JTextComponentMixin)) return;
-            if (caretRenderScheduled) return;
-            java.util.Optional<com.vaadin.flow.component.UI> ui = p.getUI();
-            if (ui.isEmpty()) {
-                caretRenderPending = true;
-                return;
-            }
-            caretRenderScheduled = true;
-            ui.get().beforeClientResponse(p, ctx -> {
-                caretRenderScheduled = false;
-                flushCaretRender();
-            });
+        withPeer(this::scheduleCaretRender);
+    }
+
+    /** {@link #scheduleCaretRender()}'s body, for a write that already holds the peer. */
+    private void scheduleCaretRender(com.vaadin.flow.component.Component p) {
+        if (!(p instanceof com.vaadin.swingbridge.surrogates.swing.text.JTextComponentMixin)) return;
+        if (caretRenderScheduled) return;
+        java.util.Optional<com.vaadin.flow.component.UI> ui = p.getUI();
+        if (ui.isEmpty()) {
+            caretRenderPending = true;
+            return;
+        }
+        caretRenderScheduled = true;
+        ui.get().beforeClientResponse(p, ctx -> {
+            caretRenderScheduled = false;
+            flushCaretRender();
         });
     }
 
@@ -687,15 +703,16 @@ public abstract class JTextComponent extends vaadinx.swing.JComponent implements
      * since a listener expects each move as it happens; until then they are held.
      */
     void caretListenersChanged() {
-        if (selectionReportsEager || selectionReports == null) return;
+        if (selectionReportsEager) return;
         boolean listened = listenerList.getListenerCount(javax.swing.event.CaretListener.class) > 0
                 || (caret instanceof DefaultCaret dc && dc.getChangeListeners().length > 1);
         if (!listened) return;
         selectionReportsEager = true;
+        // After installPeerSync's write, which made the debounced subscription this replaces.
         withPeer(p -> {
-            selectionReports.remove();
-            selectionReports = ((com.vaadin.swingbridge.surrogates.swing.text.JTextComponentMixin) p)
-                    .addSelectionReportListener(this::onBrowserSelection, 0);
+            if (!(p instanceof com.vaadin.swingbridge.surrogates.swing.text.JTextComponentMixin m)) return;
+            if (selectionReports != null) selectionReports.remove();
+            selectionReports = m.addSelectionReportListener(this::onBrowserSelection, 0);
         });
     }
 

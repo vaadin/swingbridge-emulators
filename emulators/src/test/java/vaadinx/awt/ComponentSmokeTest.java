@@ -89,7 +89,7 @@ class ComponentSmokeTest extends AbstractKaribuTest {
      * null callback would hide a bug in SB-Emulators' own code rather than a migrator's.
      * Matched by name, since an overload of an invented name is invented too.
      */
-    private static final java.util.Set<String> INVENTED_SEAMS = java.util.Set.of("withPeer", "withPeerOnLiveUI");
+    private static final java.util.Set<String> INVENTED_SEAMS = java.util.Set.of("withPeer", "withPeerOnLiveUI", "peerIs");
 
     @Test
     @DisplayName("every public and protected method survives invocation")

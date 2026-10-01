@@ -67,7 +67,6 @@ What the sweep let through or introduced, and which of it we accept:
 - **(a) User code under the lock.** A wrapped push makes a surrogate or Vaadin fire listeners
   inside the hop, on the worker, with the lock held and a UI current but outside a UI fiber. A modal
   opened there takes `Dialog`'s UI-thread park path and throws. Sites found:
-  - `JFormattedTextField`'s peer echo into its `Document` (user `DocumentListener`s);
   - `JInternalFrame`: `setSelected` → ACTIVATED, `dispose` → CLOSED, `setVisible` → OPENED;
   - the `JTable` sorter events inside `tableChanged`;
   - `JTree`'s `startEditingAtPath` → `setSelectionPath`;

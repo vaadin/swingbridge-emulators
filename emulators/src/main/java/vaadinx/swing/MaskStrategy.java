@@ -87,6 +87,11 @@ final class MaskStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedTextField.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         // No peer-side bridge — MaskFormatter's value type is String, so
         // the inherited Document↔peer-text sync covers the typing path.
@@ -94,31 +99,26 @@ final class MaskStrategy implements FormattedFieldStrategy {
     }
 
     @Override
-    public void afterSetValue(JFormattedTextField field, Component peer, Object value) {
-        SJFormattedTextField tf = (SJFormattedTextField) peer;
-        // Stringify via formatter.valueToString when present; fallback to
-        // toString. The pattern attribute is set lazily on first afterSetValue
-        // so that setFormatter(MaskFormatter) before any setValue still
-        // gets the pattern installed. Idempotent — same regex, same
-        // attribute value.
+    public String documentText(JFormattedTextField field, Object value) {
         AbstractFormatter formatter = field.getFormatter();
-        if (formatter instanceof MaskFormatter mf) {
-            String regex = maskToRegex(mf.getMask());
-            tf.setBrowserPattern(regex);
-        }
-        String text;
         if (formatter == null) {
-            text = value == null ? "" : value.toString();
-        } else {
-            try {
-                text = formatter.valueToString(value);
-            } catch (ParseException e) {
-                vaadinx.EHelper.onUnimplemented("JFormattedTextField",
-                        "MaskFormatter.valueToString rejected value (degrading to toString)", value);
-                text = value == null ? "" : value.toString();
-            }
+            return value == null ? "" : value.toString();
         }
-        tf.setValue(text);
+        try {
+            return formatter.valueToString(value);
+        } catch (ParseException e) {
+            vaadinx.EHelper.onUnimplemented("JFormattedTextField",
+                    "MaskFormatter.valueToString rejected value (degrading to toString)", value);
+            return value == null ? "" : value.toString();
+        }
+    }
+
+    /** The mask's browser pattern; the text reaches the peer through the Document sync. */
+    @Override
+    public void afterSetValue(JFormattedTextField field, Component peer, Object value) {
+        if (field.getFormatter() instanceof MaskFormatter mf) {
+            ((SJFormattedTextField) peer).setBrowserPattern(maskToRegex(mf.getMask()));
+        }
     }
 
     @Override

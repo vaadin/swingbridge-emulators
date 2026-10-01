@@ -64,6 +64,11 @@ final class IntegerStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedIntegerField.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         FormattedFieldStrategy.relayBrowserEdits(field, (SJFormattedIntegerField) peer, v -> v);
     }

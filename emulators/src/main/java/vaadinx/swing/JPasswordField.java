@@ -53,7 +53,7 @@ package vaadinx.swing;
 // JPasswordField (it is a leaf class in javax.swing's hierarchy). With no
 // subclass needing the D_peer_ctor_injection custom-peer escape hatch, the protected
 // JPasswordField(Component peer) ctor is gone and the root public ctor
-// calls super(new SJPasswordField()) directly. Result: every JPasswordField
+// peers on SJPasswordField directly. Result: every JPasswordField
 // instance — through any public ctor or any future subclass — is guaranteed
 // to peer over an SJPasswordField. The class itself stays non-final to
 // match JDK shape per R_swing_is_truth, but the peer type is locked at the type system
@@ -119,7 +119,7 @@ public class JPasswordField extends vaadinx.swing.JTextField {
         // installs the emulator-side R_swing_is_truth sync, and SJPasswordField's own
         // ctor installs the surrogate-side sync — see SD_sjtextfield §"Two-layer
         // R_swing_is_truth sync" for the convergence argument.
-        super(new com.vaadin.swingbridge.surrogates.SJPasswordField());
+        super(com.vaadin.swingbridge.surrogates.SJPasswordField.class, com.vaadin.swingbridge.surrogates.SJPasswordField::new);
         if (columns < 0) {
             throw new IllegalArgumentException("columns less than zero.");
         }

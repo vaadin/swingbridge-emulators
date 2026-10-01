@@ -169,7 +169,7 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
     }
 
     public JEditorPane() {
-        this(new com.vaadin.swingbridge.surrogates.SJEditorPane());
+        this(com.vaadin.swingbridge.surrogates.SJEditorPane.class, com.vaadin.swingbridge.surrogates.SJEditorPane::new);
     }
 
     /**
@@ -178,7 +178,7 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      * writes the initial markup.
      */
     public JEditorPane(java.lang.String type, java.lang.String text) {
-        this(new com.vaadin.swingbridge.surrogates.SJEditorPane());
+        this(com.vaadin.swingbridge.surrogates.SJEditorPane.class, com.vaadin.swingbridge.surrogates.SJEditorPane::new);
         setContentType(type);
         setText(text);
     }
@@ -188,7 +188,7 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      * {@link #setPage(java.net.URL)}. IOException propagates per Swing's signature.
      */
     public JEditorPane(java.net.URL initialPage) throws java.io.IOException {
-        this(new com.vaadin.swingbridge.surrogates.SJEditorPane());
+        this(com.vaadin.swingbridge.surrogates.SJEditorPane.class, com.vaadin.swingbridge.surrogates.SJEditorPane::new);
         setPage(initialPage);
     }
 
@@ -197,7 +197,7 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      * {@link #setPage(java.lang.String)}.
      */
     public JEditorPane(java.lang.String url) throws java.io.IOException {
-        this(new com.vaadin.swingbridge.surrogates.SJEditorPane());
+        this(com.vaadin.swingbridge.surrogates.SJEditorPane.class, com.vaadin.swingbridge.surrogates.SJEditorPane::new);
         setPage(url);
     }
 
@@ -209,11 +209,22 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      */
     protected JEditorPane(com.vaadin.flow.component.Component peer) {
         super(peer);
+        installEditorSync();
+    }
+
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> JEditorPane(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        installEditorSync();
+    }
+
+    private void installEditorSync() {
         // peer → Swing: browser edits mirror into the Document. RTE isn't a
         // TextFieldBase, so JTextComponent's base sync skips it — wire it here.
-        if (peer instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
-            wirePeerToDocument(editor);
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) wirePeerToDocument(editor);
+        });
     }
 
     /**
@@ -305,14 +316,14 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      * {@code super.setText} already made, so it overrides this to a no-op.
      */
     protected void pushTextToPeer(java.lang.String t) {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
+        if (peerIs(com.vaadin.swingbridge.surrogates.SJEditorPane.class)) {
             if (!isBlankHtml(t)) {
                 pushedContentToPeer = true;   // expect the client to echo this on attach
             }
             withPeer(p -> {
                 preventPeerEvents = true;
                 try {
-                    editor.setText(t == null ? "" : t);
+                    ((com.vaadin.swingbridge.surrogates.SJEditorPane) p).setText(t == null ? "" : t);
                 } finally {
                     preventPeerEvents = false;
                 }
@@ -326,9 +337,9 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
         // TextFieldBase peers. RTE read-only mode lives on the surrogate, so
         // forward explicitly — setReadOnly(!b) hides the RTE toolbar.
         super.setEditable(b);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
-            withPeer(p -> editor.setEditable(b));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) editor.setEditable(b);
+        });
     }
 
     // The content types javax.swing.JEditorPane registers a kit for out of the box
@@ -390,9 +401,9 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      */
     private void installKitFor(java.lang.String type) {
         contentType = type;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
-            withPeer(p -> editor.setContentType(this.contentType));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) editor.setContentType(this.contentType);
+        });
         if (contentTypeInstallsDocument()) {
             setDocument(createDocumentFor(type));
             pushTextToPeer(getText());
@@ -441,10 +452,10 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
      * both matching Swing.
      */
     public synchronized void addHyperlinkListener(javax.swing.event.HyperlinkListener listener) {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
+        if (peerIs(com.vaadin.swingbridge.surrogates.SJEditorPane.class)) {
             if (!hyperlinkBridgeInstalled) {
                 hyperlinkBridgeInstalled = true;
-                withPeer(p -> editor.addHyperlinkListener(e -> vaadinx.EHelper.callSwing(
+                withPeer(p -> ((com.vaadin.swingbridge.surrogates.SJEditorPane) p).addHyperlinkListener(e -> vaadinx.EHelper.callSwing(
                         () -> fireHyperlinkUpdate(new javax.swing.event.HyperlinkEvent(
                                 this, e.getEventType(), resolveHref(e.getDescription()),
                                 e.getDescription(), null)))));
@@ -667,8 +678,8 @@ public class JEditorPane extends vaadinx.swing.text.JTextComponent {
         javax.swing.text.EditorKit old = this.editorKit;
         this.editorKit = kit;
         if (kit instanceof vaadinx.swing.text.html.HTMLEditorKit htmlKit
-                && getPeer() instanceof com.vaadin.swingbridge.surrogates.SJEditorPane editor) {
-            withPeer(p -> htmlKit._bindTo(editor));
+                && peerIs(com.vaadin.swingbridge.surrogates.SJEditorPane.class)) {
+            withPeer(p -> htmlKit._bindTo((com.vaadin.swingbridge.surrogates.SJEditorPane) p));
         } else if (kit != null) {
             vaadinx.EHelper.onUnimplemented("JEditorPane", "setEditorKit(install)", kit);
         }

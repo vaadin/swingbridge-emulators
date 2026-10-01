@@ -144,7 +144,7 @@ public class JTextPane extends JEditorPane {
     };
 
     public JTextPane() {
-        super(new SJEditorPane());
+        super(SJEditorPane.class, SJEditorPane::new);
         // The JDK's ctor builds its kit through the hook, so an override has to run
         // here or nowhere (R_no_vaadin_in_api limb 2). Not handed on to setEditorKit
         // as the JDK's ctor hands it: that path WARNs that the kit drives no
@@ -213,6 +213,9 @@ public class JTextPane extends JEditorPane {
             if (ignoreInitHandshake(e.isFromClient(), isBlankHtml(e.getValue()))) {
                 return;
             }
+            // Read the feedback-loop guard before entering callSwing, not only inside
+            // the callback — see JTextComponent's listener for why.
+            if (preventPeerEvents) return;
             vaadinx.EHelper.callSwing(() -> syncDocumentFromHtml(e.getValue()));
         });
     }
@@ -228,7 +231,7 @@ public class JTextPane extends JEditorPane {
         if (preventPeerEvents) {
             return;
         }
-        if (getPeer() instanceof SJEditorPane editor) {
+        if (peerIs(SJEditorPane.class)) {
             // Push via the main HTML value — NOT asDelta().setValue, whose async
             // executeJs("return this.htmlValue") reconcile races Quill to empty
             // during construction (D_jtextpane). Karibu can't reproduce that browser race,
@@ -240,7 +243,7 @@ public class JTextPane extends JEditorPane {
             withPeer(p -> {
                 preventPeerEvents = true;
                 try {
-                    editor.setText(html);
+                    ((SJEditorPane) p).setText(html);
                 } finally {
                     preventPeerEvents = false;
                 }

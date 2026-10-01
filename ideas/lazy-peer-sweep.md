@@ -25,7 +25,8 @@ that file.
   `Checkbox`, `Choice`, `List`, `Scrollbar`, `ScrollPane`, and the button family — `JButton`,
   `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`, `JCheckBoxMenuItem`,
   `JRadioButtonMenuItem`, and the shared-model components `JSlider`, `JProgressBar`, `JSpinner`,
-  `JComboBox`, `JList`, `JTree`. `vaadinx.LazyPeerTest` builds and configures each on a
+  `JComboBox`, `JList`, `JTree`, and the text family — `JTextField`, `JPasswordField`,
+  `JTextArea`, `JFormattedTextField` (all five peers), `JEditorPane`, `JTextPane`. `vaadinx.LazyPeerTest` builds and configures each on a
   bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
 - **`FieldReconciler.register` anchors on the UI**, not the peer, so an emulator whose peer is
   not built yet still gets its bootstrap check.
@@ -42,8 +43,9 @@ that file.
    flag is cleared before a queued write drains, and the echo it suppresses gets through
    (JTable's `peerSelectionMuted`; the drain assertion caught it).
 2. **A peer type check goes inside the write**: `withPeer(p -> { if (p instanceof X x) … })`, not
-   `if (getPeer() instanceof X x) withPeer(…)`. The outside form reaches the peer to ask. In
-   `vaadinx.awt`, `peerIs(X.class)` answers without building.
+   `if (getPeer() instanceof X x) withPeer(…)`. The outside form reaches the peer to ask. Where the
+   branch has to be outside (an `else` that WARNs), the protected `peerIs(X.class)` answers from
+   the declared type without building.
 3. **Another component's peer is read inside the write** that uses it:
    `withPeer(p -> surrogate().setContent(view.getPeer()))`, never a local captured before. Same for
    Vaadin components the write creates (`new Div()`).
@@ -65,20 +67,15 @@ that file.
 
 ## The worklist, in order
 
-1. **Text components** — `JTextComponent`, `JTextField`, `JPasswordField`, `JTextArea`: the
-   emulator-owned `Document` pushes to the peer (a sink), but the ctor installs the peer-side sync;
-   apply rule 5. `JFormattedTextField` echoes into its `Document` inside a write (§3 (a)) — a pure-sink
-   violator to move Swing-side first; it also picks one of five peers at construction, which the
-   declared type must name. `JEditorPane` / `JTextPane` last.
-2. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
-   `JProgressBar`, `JColorChooser`, `JMenuBar`, `JPopupMenu`, `JDesktopPane`, `JFileChooser`,
-   `JOptionPane` (a `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–8.
-3. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
+1. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
+   `JColorChooser`, `JMenuBar`, `JPopupMenu`, `JDesktopPane`, `JFileChooser`, `JOptionPane` (a
+   `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–8.
+2. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
    `EHelper.runInUIThread`, which finds a UI through the `EmulatorContext`; `JFrame` picks its peer by
    `@MainWindow` (D_frame_strategy), so the declared type is a choice too.
-4. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
+3. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
    surrogate the public ctors built. It has to build them itself, as the JDK's ctor does.
-5. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
+4. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
    lazy overload for its subclasses; the eager one stays for a migrator's own subclass.
 
 ## After the sweep

@@ -69,6 +69,11 @@ final class NumberStrategy implements FormattedFieldStrategy {
     }
 
     @Override
+    public Class<? extends Component> peerType() {
+        return SJFormattedNumberField.class;
+    }
+
+    @Override
     public void install(JFormattedTextField field, Component peer) {
         FormattedFieldStrategy.relayBrowserEdits(field, (SJFormattedNumberField) peer, v -> v);
     }
