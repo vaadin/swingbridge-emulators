@@ -17,30 +17,59 @@ that file.
   delegates to `withPeer`. `EHelper.callSwing` asserts a drained write never reaches it (pure sink).
 - **Step 2, lazy construction** — `vaadinx.awt.Component(Class<P>, Supplier<P>)` beside the eager
   `(Component peer)` ctor. The peer is built by the first write, `getPeer()` or attaching add that
-  has a UI current. Type checks before it exists answer from the declared type (`peerIs`, package
-  `vaadinx.awt` only). A raw `getPeer()` with no UI still builds it, off-thread as before, reported
-  once per JVM by `EHelper.onPeerBuiltOffUIThread` and counted in `EHelper.peersBuiltOffUIThread()`.
-- **Lazy today:** `JLabel`, `JPanel`, `JSeparator`, `JScrollBar`, `JViewport`, `JLayeredPane`,
-  `JTableHeader`, `Box`, `Box.Filler`, `Container()` (so AWT `Panel`), AWT `Label`, `Button`,
-  `Checkbox`, `Choice`, `List`, `Scrollbar`, `ScrollPane`, and the button family — `JButton`,
-  `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`, `JCheckBoxMenuItem`,
-  `JRadioButtonMenuItem`, and the shared-model components `JSlider`, `JProgressBar`, `JSpinner`,
-  `JComboBox`, `JList`, `JTree`, and the text family — `JTextField`, `JPasswordField`,
-  `JTextArea`, `JFormattedTextField` (all five peers), `JEditorPane`, `JTextPane`, and `JScrollPane`,
-  `JSplitPane`, `JToolBar`, `JTabbedPane`, `JColorChooser`, `JMenuBar`, `JPopupMenu`,
-  `JDesktopPane`, `JOptionPane`, `JFileChooser`, a standalone `JRootPane`, and `JTable`. `vaadinx.LazyPeerTest` builds and configures each on a
-  bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
-- **A menu tree's snapshot is taken inside the write** (`JMenuBar` / `JPopupMenu.pushTree`), so the
-  peer shows the tree's state at the drain and the items' icons become Vaadin `Image`s with a UI current.
-- **`FieldReconciler.register` anchors on the UI**, not the peer, so an emulator whose peer is
-  not built yet still gets its bootstrap check.
-- **The button family owns its `ButtonModel`** ([D_emulator_button_model](../emulators/decisions.md#D_emulator_button_model)):
-  the surrogate is handed the emulator's model and renders it, `doClick` / `setSelected` never
-  reach the peer, and `ButtonGroup` coordinates models as the JDK's does.
-- **JTable owns its sorter and columns** (`notifySorter(ModelChange)`, `createDefaultColumnsFromModel`,
-  `SJTable.setSorterNotifiedByOwner`), so a queued write no longer holds back what Swing reads, and
-  its constructor is the JDK's sequence (column model, selection model, data model, each through its
-  setter) over a surrogate that starts with no columns.
+  has a UI current. Type checks before it exists answer from the declared type (the protected
+  `peerIs`). A raw `getPeer()` with no UI still builds it, off-thread as before, reported once per
+  JVM by `EHelper.onPeerBuiltOffUIThread` and counted in `EHelper.peersBuiltOffUIThread()`.
+- **Lazy today — everything but the windows.** `vaadinx.LazyPeerTest` builds and configures each
+  on a bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
+  - AWT: `Container()` (so `Panel`), `Label`, `Button`, `Checkbox`, `Choice`, `List`, `Scrollbar`,
+    `ScrollPane`.
+  - Structural: `JLabel`, `JPanel`, `JSeparator`, `JScrollBar`, `JViewport`, `JLayeredPane`,
+    `JTableHeader`, `Box`, `Box.Filler`.
+  - Buttons and menus: `JButton`, `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`,
+    `JCheckBoxMenuItem`, `JRadioButtonMenuItem`, `JMenuBar`, `JPopupMenu`.
+  - Shared models: `JSlider`, `JProgressBar`, `JSpinner`, `JComboBox`, `JList`, `JTree`, `JTable`.
+  - Text: `JTextField`, `JPasswordField`, `JTextArea`, `JFormattedTextField` (all five peers),
+    `JEditorPane`, `JTextPane`.
+  - Containers and leaves: `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`, `JColorChooser`,
+    `JDesktopPane`, `JOptionPane`, `JFileChooser`, a standalone `JRootPane`.
+- **Lazy protected ctors** (D_peer_ctor_injection, the eager one beside each): `Component`,
+  `Container`, `JComponent`, `AbstractButton`, `JToggleButton`, `JMenuItem`, `JTextComponent`,
+  `JTextField`, `JEditorPane`.
+
+### Progress log
+
+- **2026-10-01** — eight commits on `main` (`70dd01c`, then `4050166` … `9f37f98`): the AWT widgets
+  and structural leaves, `ScrollPane`, the button family, the shared-model components, the text
+  family, the remaining containers and leaves, `JTable`. Each passed a clean reactor build.
+  What each batch changed beyond "lazy", so it is findable later:
+  - **The button family owns its `ButtonModel`** ([D_emulator_button_model](../emulators/decisions.md#D_emulator_button_model)):
+    the JDK's `Handler` is the whole event fan-out, the surrogate is handed the emulator's model and
+    renders it, `doClick` / `setSelected` / the action command never reach the peer, menu items click
+    through `doClick(0)`, and `ButtonGroup` is the JDK's over models (its membership lives on the public
+    `vaadinx.swing.JToggleButton.ToggleButtonModel`). `AbstractButtonMixin.setModel` now takes the
+    model's enabled state, as the JDK does. Deliberately not on the model: the mnemonic.
+  - **Shared-model components build the JDK ctor's model** and hand it over (rule 8);
+    `FieldReconciler.register` anchors on the UI, not the peer. `JList` does `BasicListUI`'s selection
+    shift itself, on the model's thread, and `SJList.setSelectionAdjustedByOwner` stands the surrogate
+    down; `SJList.setSelectionModel` now shows the new model's selection (so do `SJCheckBox` /
+    `SJRadioButton.setModel`).
+  - **Text**: `JFormattedTextField` sets its Document text Swing-side, as the JDK formatter's
+    `install` does — the §3 (a) echo in [withpeer-shape.md](./withpeer-shape.md) is closed
+    (D_formatted_strategy_interface). `JTextPane`'s browser-edit listener now reads
+    `preventPeerEvents` before `callSwing`; the drain assertion caught it. `peerIs` became protected.
+  - **Containers and leaves**: menu snapshots are taken inside the write (`JMenuBar` / `JPopupMenu.pushTree`).
+  - **`JTable`** runs the JDK ctor's sequence (column model, selection model, data model, each
+    through its setter) over a surrogate that starts with no columns; the JDK's
+    `createDefaultColumnModel` / `createDefaultDataModel` hooks exist and are reached. The selection
+    mirror and the renderer install wait for a data model. It also owns its sorter and columns
+    (`SJTable.setSorterNotifiedByOwner`).
+- **Left as found, noticed on the way:** `new JTable(Object[][], Object[])` builds a
+  `DefaultTableModel` where the JDK builds an `AbstractTableModel` over the arrays; `JCheckBox` /
+  `JRadioButton` skip the JDK ctor's `setBorderPainted(false)` / `setHorizontalAlignment(LEADING)`;
+  `JTree(null)` throws where the JDK accepts a null model; a few render-time callbacks (`JList`,
+  `JTree`, `JTable` cell renderers, `JTree.onPeerToggle`) still read the surrogate — they run on the
+  peer, so they are not reaches, but they are not emulator-owned state either.
 
 ## Rules the sweep taught — check each when converting an emulator
 
@@ -78,8 +107,9 @@ that file.
    type is a choice too. Two things ride on it: a window's `JRootPane` shares its surrogate's
    `SJRootPane` (the eager protected ctor), and the blocking choosers (`JColorChooser.showDialog` /
    `createDialog`, `JFileChooser`'s open/save) compose raw Vaadin buttons into the dialog's peer.
-2. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
-   lazy overload for its subclasses; the eager one stays for a migrator's own subclass.
+2. **The rest of the non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection)
+   — `JLabel`, and `Window` / `Frame` with the windows. Give each a lazy overload for its
+   subclasses; the eager one stays for a migrator's own subclass.
 
 ## After the sweep
 
@@ -96,7 +126,8 @@ that file.
 - **Open, not yet measured:** a surrogate's own `onAttach` runs before the emulator's drain listener,
   so a nested peer with queued writes meets attach with its pre-drain state.
   `JTable.installEditorComponents` reads `comp.getPeer()` outside a write — browser-driven today.
-- **Docs to change at graduation:** R_no_vaadin_in_api (names `getPeer` as the sanctioned accessor),
+- **Docs to change at graduation:** SD_toggle_checkbox_first_cut's Validation paragraph (still says
+  the emulator's events come through a bridged surrogate pulse); R_no_vaadin_in_api (names `getPeer` as the sanctioned accessor),
   R_tolerate_off_ui_thread limb 2 (names it as the chokepoint) and limb 3 (`withPeer` is synchronous —
   it now queues), R_match_swing_errors case (7) (writes no longer need a context), D_attach_aware_hop,
   D_no_context_throws, D_sync_ui_hop, SD_sjbutton, CLAUDE.md § Current scope (most emulators "rendered
