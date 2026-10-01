@@ -77,7 +77,9 @@ public class JSeparator extends vaadinx.swing.JComponent implements javax.swing.
      *         {@code HORIZONTAL} nor {@code VERTICAL}, as in the JDK
      */
     public JSeparator(int orientation) {
-        super(new com.vaadin.swingbridge.surrogates.SJSeparator(checkOrientation(orientation)));
+        super(com.vaadin.swingbridge.surrogates.SJSeparator.class,
+                () -> new com.vaadin.swingbridge.surrogates.SJSeparator(orientation));
+        checkOrientation(orientation);
         this.orientation = orientation;
         setFocusable(false);
         updateUI();

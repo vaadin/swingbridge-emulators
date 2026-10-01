@@ -105,7 +105,7 @@ public class JViewport extends vaadinx.swing.JComponent implements javax.accessi
         // Inert Div peer — JViewport doesn't render to the DOM, but every
         // Component-hierarchy emulator needs a peer for the
         // EHelper.onCreated registry / Container parent chain to work.
-        super(new Div());
+        super(Div.class, Div::new);
         this.owner = owner;
     }
 
@@ -117,7 +117,7 @@ public class JViewport extends vaadinx.swing.JComponent implements javax.accessi
      * {@code setViewport}, at which point {@link #bindOwner} is called.
      */
     public JViewport() {
-        super(new Div());
+        super(Div.class, Div::new);
         this.owner = null;
     }
 

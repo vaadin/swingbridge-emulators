@@ -104,7 +104,7 @@ public class Button extends vaadinx.awt.Component implements javax.accessibility
      */
     public Button(java.lang.String label) throws java.awt.HeadlessException {
         // R_leaf_peer_lockdown lock-down: super(...) takes the SButton directly, no peer seam.
-        super(new com.vaadin.swingbridge.surrogates.SButton());
+        super(com.vaadin.swingbridge.surrogates.SButton.class, com.vaadin.swingbridge.surrogates.SButton::new);
         // Peer → AWT event pipeline. The surrogate already funnels browser
         // clicks through SHelper.callSwing into its own ActionListener
         // fan-out with the actionCommand resolved; we re-source the event to
@@ -118,13 +118,13 @@ public class Button extends vaadinx.awt.Component implements javax.accessibility
         // so entering at the second hop leaves a migrator's processEvent
         // override compiling, looking wired, and never running on a real click
         // (R_no_vaadin_in_api limb 2).
-        surrogate().addActionListener(e -> vaadinx.EHelper.callSwing(() ->
+        withPeer(peer -> surrogate().addActionListener(e -> vaadinx.EHelper.callSwing(() ->
                 processEvent(new java.awt.event.ActionEvent(
                         this,
                         e.getID(),
                         e.getActionCommand(),
                         e.getWhen(),
-                        e.getModifiers()))));
+                        e.getModifiers())))));
         setLabel(label);
     }
 

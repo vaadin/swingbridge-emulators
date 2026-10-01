@@ -75,7 +75,7 @@ public class JPanel extends vaadinx.swing.JComponent implements javax.accessibil
         //
         // Real Swing chains:
         //   setLayout(layout); setDoubleBuffered(...); setUIProperty("opaque", TRUE); updateUI();
-        super(new com.vaadin.swingbridge.surrogates.SJPanel());
+        super(com.vaadin.swingbridge.surrogates.SJPanel.class, com.vaadin.swingbridge.surrogates.SJPanel::new);
         setLayout(layout);
         setDoubleBuffered(isDoubleBuffered);   // no buffer to install, but isDoubleBuffered() answers it
         setOpaque(true);  // Real Swing sets this via setUIProperty at L&F time.

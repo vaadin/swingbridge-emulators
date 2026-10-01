@@ -136,7 +136,7 @@ public class Checkbox extends vaadinx.awt.Component
     public Checkbox(java.lang.String label, boolean state, CheckboxGroup group)
             throws java.awt.HeadlessException {
         // R_leaf_peer_lockdown lock-down: super(...) takes the SCheckbox directly, no peer seam.
-        super(new com.vaadin.swingbridge.surrogates.SCheckbox());
+        super(com.vaadin.swingbridge.surrogates.SCheckbox.class, com.vaadin.swingbridge.surrogates.SCheckbox::new);
         installPeerBridge();
         // Field assignments before any peer push (R_swing_is_truth), and in the JDK's own
         // order — group.setSelectedCheckbox(this) below reads all three.
@@ -146,9 +146,11 @@ public class Checkbox extends vaadinx.awt.Component
         if (state && group != null) {
             group.setSelectedCheckbox(this);
         }
-        surrogate().setLabel(label);
-        surrogate().setState(this.state);
-        surrogate().setRadioLook(group != null);
+        withPeer(peer -> {
+            surrogate().setLabel(label);
+            surrogate().setState(this.state);
+            surrogate().setRadioLook(group != null);
+        });
     }
 
     /** Argument order swapped; no other difference from the three-arg ctor. */
@@ -158,33 +160,36 @@ public class Checkbox extends vaadinx.awt.Component
     }
 
     private void installPeerBridge() {
-        // Peer → AWT event pipeline. The surrogate funnels browser toggles
-        // through SHelper.callSwing into its own ItemListener fan-out; we
-        // re-source the event to `this` so migrated code casting
-        // `(Checkbox) e.getItemSelectable()` — or reading e.getItem() — sees
-        // the emulator and the emulator's label. callSwing again per R_callswing_envelope: the
-        // surrogate's envelope is already open, and nested callSwing runs
-        // inline (D_callswing_loom).
-        //
-        // Enter at processEvent, not processItemEvent: AWT routes a
-        // peer-posted event dispatchEvent → processEvent → processItemEvent,
-        // so entering at the second hop would leave a migrator's processEvent
-        // override compiling, looking wired, and never running on a real
-        // toggle (R_no_vaadin_in_api limb 2).
-        surrogate().addItemListener(e -> vaadinx.EHelper.callSwing(() -> {
-            boolean selected = e.getStateChange() == java.awt.event.ItemEvent.SELECTED;
-            setState(selected);
-            if (state != selected) {
-                // The group vetoed it — an AWT radio cannot be clicked off,
-                // and re-clicking the current selection is a no-op that posts
-                // nothing (JDK bug 4039594's comment in XCheckboxPeer.action).
-                // setStateInternal has already pushed the peer back to
-                // checked, so there is nothing left to do but stay silent.
-                return;
-            }
-            processEvent(new java.awt.event.ItemEvent(
-                    this, e.getID(), this.label, e.getStateChange()));
-        }));
+        // Registered once the peer exists, which for a lazy peer is when a UI is current.
+        withPeer(peer -> {
+            // Peer → AWT event pipeline. The surrogate funnels browser toggles
+            // through SHelper.callSwing into its own ItemListener fan-out; we
+            // re-source the event to `this` so migrated code casting
+            // `(Checkbox) e.getItemSelectable()` — or reading e.getItem() — sees
+            // the emulator and the emulator's label. callSwing again per R_callswing_envelope: the
+            // surrogate's envelope is already open, and nested callSwing runs
+            // inline (D_callswing_loom).
+            //
+            // Enter at processEvent, not processItemEvent: AWT routes a
+            // peer-posted event dispatchEvent → processEvent → processItemEvent,
+            // so entering at the second hop would leave a migrator's processEvent
+            // override compiling, looking wired, and never running on a real
+            // toggle (R_no_vaadin_in_api limb 2).
+            surrogate().addItemListener(e -> vaadinx.EHelper.callSwing(() -> {
+                boolean selected = e.getStateChange() == java.awt.event.ItemEvent.SELECTED;
+                setState(selected);
+                if (state != selected) {
+                    // The group vetoed it — an AWT radio cannot be clicked off,
+                    // and re-clicking the current selection is a no-op that posts
+                    // nothing (JDK bug 4039594's comment in XCheckboxPeer.action).
+                    // setStateInternal has already pushed the peer back to
+                    // checked, so there is nothing left to do but stay silent.
+                    return;
+                }
+                processEvent(new java.awt.event.ItemEvent(
+                        this, e.getID(), this.label, e.getStateChange()));
+            }));
+        });
     }
 
     private com.vaadin.swingbridge.surrogates.SCheckbox surrogate() {

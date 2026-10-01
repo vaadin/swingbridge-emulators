@@ -76,7 +76,7 @@ public class Box extends JComponent implements javax.accessibility.Accessible {
         // overridden setLayout (which always throws per JDK contract) so
         // the BoxLayout install lands. Mirrors JDK's `super.setLayout`
         // workaround verbatim.
-        super(new Div());
+        super(Div.class, Div::new);
         super.setLayout(new BoxLayout(this, axis));
     }
 
@@ -179,7 +179,7 @@ public class Box extends JComponent implements javax.accessibility.Accessible {
         private Dimension maxSize;
 
         public Filler(Dimension min, Dimension pref, Dimension max) {
-            super(new Div());
+            super(Div.class, Div::new);
             // Defensive copies — JDK Filler stores references and mutates
             // them in changeShape, but migrators occasionally pass a shared
             // Dimension; cloning matches the JDK ctor's documented "the

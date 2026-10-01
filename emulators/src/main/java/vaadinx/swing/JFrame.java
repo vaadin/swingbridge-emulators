@@ -260,7 +260,9 @@ public class JFrame extends vaadinx.awt.Frame
         // height inside it. The pane-level classes are applied by the surrogate
         // chain; this adds the host-level one, which only the frame knows about
         // — the classes and the measurements are in emul/swindow.css.
-        com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(getPeer(), getContentPane().getPeer(), null);
+        // A write, so a content pane whose peer is lazy is built with a UI, not here.
+        vaadinx.awt.Container contentPane = getContentPane();
+        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
         // Per D_inline_route_sizing: InlineStrategy frames fill their route by default
         // (SJPanel peer gets width:100% / height:100% so it stretches
         // inside the route's setSizeFull()). The setPreferredSize override

@@ -94,7 +94,7 @@ public class JScrollBar extends vaadinx.swing.JComponent
     }
 
     public JScrollBar(int orientation, int value, int extent, int min, int max) {
-        super(new Div());  // inert peer — no DOM rendering
+        super(Div.class, Div::new);  // inert peer — no DOM rendering
         if (orientation != java.awt.Adjustable.HORIZONTAL && orientation != java.awt.Adjustable.VERTICAL) {
             throw new IllegalArgumentException("orientation must be HORIZONTAL or VERTICAL");
         }

@@ -112,6 +112,88 @@ class LazyPeerTest extends AbstractKaribuTest {
         assertInstanceOf(Image.class, peer.getIcon(), "and the icon became an Image, with a UI current");
     }
 
+    /** Every lazy emulator, constructed and configured the way a worker typically leaves one. */
+    private static java.util.Map<String, java.util.function.Supplier<? extends vaadinx.awt.Component>> lazyEmulators() {
+        java.util.Map<String, java.util.function.Supplier<? extends vaadinx.awt.Component>> m = new java.util.LinkedHashMap<>();
+        m.put("JLabel", () -> new JLabel("x"));
+        m.put("JPanel", JPanel::new);
+        m.put("JPanel(BorderLayout)", () -> {
+            JPanel p = new JPanel(new vaadinx.awt.BorderLayout());
+            p.add(new JLabel("north"), vaadinx.awt.BorderLayout.NORTH);
+            return p;
+        });
+        m.put("JSeparator", vaadinx.swing.JSeparator::new);
+        m.put("JScrollBar", vaadinx.swing.JScrollBar::new);
+        m.put("JViewport", vaadinx.swing.JViewport::new);
+        m.put("JLayeredPane", vaadinx.swing.JLayeredPane::new);
+        m.put("JTableHeader", vaadinx.swing.table.JTableHeader::new);
+        m.put("Box", () -> {
+            vaadinx.swing.Box box = vaadinx.swing.Box.createHorizontalBox();
+            box.add(vaadinx.swing.Box.createHorizontalStrut(5));
+            box.add(new JLabel("after the strut"));
+            return box;
+        });
+        m.put("AWT Label", () -> new vaadinx.awt.Label("x", vaadinx.awt.Label.RIGHT));
+        m.put("AWT Button", () -> {
+            vaadinx.awt.Button b = new vaadinx.awt.Button("go");
+            b.setActionCommand("cmd");
+            return b;
+        });
+        m.put("AWT Checkbox", () -> new vaadinx.awt.Checkbox("check", true, new vaadinx.awt.CheckboxGroup()));
+        m.put("AWT Choice", () -> {
+            vaadinx.awt.Choice c = new vaadinx.awt.Choice();
+            c.add("one");
+            c.add("two");
+            c.select(1);
+            return c;
+        });
+        m.put("AWT List", () -> {
+            vaadinx.awt.List l = new vaadinx.awt.List(3, true);
+            l.add("one");
+            l.add("two");
+            l.select(0);
+            return l;
+        });
+        m.put("AWT Scrollbar", () -> {
+            vaadinx.awt.Scrollbar s = new vaadinx.awt.Scrollbar(vaadinx.awt.Scrollbar.HORIZONTAL, 10, 5, 0, 100);
+            s.setValue(20);
+            return s;
+        });
+        m.put("AWT Panel", () -> {
+            vaadinx.awt.Panel p = new vaadinx.awt.Panel();
+            p.add(new vaadinx.awt.Label("inside"));
+            return p;
+        });
+        return m;
+    }
+
+    @org.junit.jupiter.api.TestFactory
+    @DisplayName("a lazy emulator configured on a worker builds no Vaadin component there")
+    java.util.stream.Stream<org.junit.jupiter.api.DynamicTest> builtOnWorker() {
+        return lazyEmulators().entrySet().stream().map(e -> org.junit.jupiter.api.DynamicTest.dynamicTest(
+                e.getKey(), () -> assertBuiltOnWorkerWithoutVaadin(e.getKey(), e.getValue())));
+    }
+
+    private static void assertBuiltOnWorkerWithoutVaadin(String name,
+            java.util.function.Supplier<? extends vaadinx.awt.Component> factory) {
+        int builtOffThreadBefore = EHelper.peersBuiltOffUIThread();
+        AtomicReference<vaadinx.awt.Component> built = new AtomicReference<>();
+
+        onBareThread(() -> {
+            vaadinx.awt.Component c = factory.get();
+            c.setName("named");
+            c.setEnabled(false);
+            c.setBackground(Color.YELLOW);
+            if (c instanceof vaadinx.swing.JComponent jc) jc.setToolTipText("tip");
+            built.set(c);
+        });
+
+        assertEquals(builtOffThreadBefore, EHelper.peersBuiltOffUIThread(),
+                name + " reached its peer on the worker; the WARN's stack names the reach");
+        UI.getCurrent().add(built.get().getPeer());
+        assertEquals(true, built.get().getPeer().isAttached(), "and it renders once attached");
+    }
+
     @Test
     @DisplayName("a label added to a panel on a worker is built when the panel's add runs with a UI")
     void jLabelInPanelBuiltOnWorker() {

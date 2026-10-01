@@ -161,7 +161,7 @@ public class List extends vaadinx.awt.Component
         // R_leaf_peer_lockdown lock-down: super(...) takes the SList directly, no peer seam.
         // The substitution happens before the peer is built so a half-built
         // List with the wrong row count is never observable.
-        super(new com.vaadin.swingbridge.surrogates.SList(rows != 0 ? rows : DEFAULT_VISIBLE_ROWS, multipleMode));
+        super(com.vaadin.swingbridge.surrogates.SList.class, () -> new com.vaadin.swingbridge.surrogates.SList(rows != 0 ? rows : DEFAULT_VISIBLE_ROWS, multipleMode));
         this.rows = rows != 0 ? rows : DEFAULT_VISIBLE_ROWS;
         this.multipleMode = multipleMode;
         installPeerBridge();
@@ -171,39 +171,42 @@ public class List extends vaadinx.awt.Component
     static final int DEFAULT_VISIBLE_ROWS = 4;
 
     private void installPeerBridge() {
-        // Peer → AWT, both types. The surrogate is this list's platform peer:
-        // it diffs the browser's selection into one ItemEvent per row, as
-        // XListPeer posts one per click. The row's new state goes into
-        // `selected` by the peer's rules, as XListPeer's own does, and the
-        // event is re-sourced to `this` so migrated code casting
-        // `(List) e.getItemSelectable()` sees the emulator. callSwing again
-        // per R_callswing_envelope — nested calls run inline (D_callswing_loom).
-        //
-        // Enter at processEvent, not processItemEvent: AWT routes a
-        // peer-posted event dispatchEvent → processEvent → process*Event, so
-        // entering at the second hop would leave a migrator's processEvent
-        // override compiling, looking wired, and never running (R_no_vaadin_in_api limb 2,
-        // and the exact defect D_awt_dead_hooks swept out of this lane).
-        surrogate().addItemListener(e -> vaadinx.EHelper.callSwing(() -> {
-            int index = (Integer) e.getItem();
-            synchronized (this) {
-                if (e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
-                    focusIndex = index;
-                    peerSelectItem(index);
-                } else {
-                    if (multipleMode) {
+        // Registered once the peer exists, which for a lazy peer is when a UI is current.
+        withPeer(peer -> {
+            // Peer → AWT, both types. The surrogate is this list's platform peer:
+            // it diffs the browser's selection into one ItemEvent per row, as
+            // XListPeer posts one per click. The row's new state goes into
+            // `selected` by the peer's rules, as XListPeer's own does, and the
+            // event is re-sourced to `this` so migrated code casting
+            // `(List) e.getItemSelectable()` sees the emulator. callSwing again
+            // per R_callswing_envelope — nested calls run inline (D_callswing_loom).
+            //
+            // Enter at processEvent, not processItemEvent: AWT routes a
+            // peer-posted event dispatchEvent → processEvent → process*Event, so
+            // entering at the second hop would leave a migrator's processEvent
+            // override compiling, looking wired, and never running (R_no_vaadin_in_api limb 2,
+            // and the exact defect D_awt_dead_hooks swept out of this lane).
+            surrogate().addItemListener(e -> vaadinx.EHelper.callSwing(() -> {
+                int index = (Integer) e.getItem();
+                synchronized (this) {
+                    if (e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
                         focusIndex = index;
+                        peerSelectItem(index);
+                    } else {
+                        if (multipleMode) {
+                            focusIndex = index;
+                        }
+                        peerDeselectItem(index);
                     }
-                    peerDeselectItem(index);
                 }
-            }
-            processEvent(new java.awt.event.ItemEvent(
-                    this, e.getID(), e.getItem(), e.getStateChange()));
-        }));
-        surrogate().addActionListener(e -> vaadinx.EHelper.callSwing(() ->
-                processEvent(new java.awt.event.ActionEvent(
-                        this, e.getID(), e.getActionCommand(),
-                        e.getWhen(), e.getModifiers()))));
+                processEvent(new java.awt.event.ItemEvent(
+                        this, e.getID(), e.getItem(), e.getStateChange()));
+            }));
+            surrogate().addActionListener(e -> vaadinx.EHelper.callSwing(() ->
+                    processEvent(new java.awt.event.ActionEvent(
+                            this, e.getID(), e.getActionCommand(),
+                            e.getWhen(), e.getModifiers()))));
+        });
     }
 
     private com.vaadin.swingbridge.surrogates.SList surrogate() {

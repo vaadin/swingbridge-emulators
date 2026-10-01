@@ -160,8 +160,7 @@ public class JScrollPane extends vaadinx.swing.JComponent
         if (old != null) viewport.detachView(old);
         this.viewportView = view;
         if (view != null) viewport.attachView(view);
-        com.vaadin.flow.component.Component vaadinChild = view != null ? view.getPeer() : null;
-        withPeer(p -> surrogate().setContent(vaadinChild));
+        withPeer(p -> surrogate().setContent(view != null ? view.getPeer() : null));
         // Re-apply policy after content swap: auto-scrolling content forces
         // NONE on the surrogate (already done by setContent's guard); the
         // push below skips for auto-scrolling content so the field-shadowed

@@ -100,7 +100,8 @@ kept regardless; each one is a design problem to solve.
 
 ## The mechanism — queue per island, drain at the attaching write
 
-Agreed 2026-10-01, not built. It answers `Q_flush_not_queue`, `Q_materialise_at_attach`,
+Agreed 2026-10-01; built and partly rolled out — the worklist and the rules the sweep taught are in
+[lazy-peer-sweep.md](./lazy-peer-sweep.md). It answers `Q_flush_not_queue`, `Q_materialise_at_attach`,
 `Q_sync_points` and `Q_getpeer_contract`, and supersedes the seam split in
 [withpeer-shape.md](./withpeer-shape.md) §2.
 

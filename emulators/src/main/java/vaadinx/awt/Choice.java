@@ -110,34 +110,37 @@ public class Choice extends vaadinx.awt.Component
      */
     public Choice() throws java.awt.HeadlessException {
         // R_leaf_peer_lockdown lock-down: super(...) takes the SChoice directly, no peer seam.
-        super(new com.vaadin.swingbridge.surrogates.SChoice());
+        super(com.vaadin.swingbridge.surrogates.SChoice.class, com.vaadin.swingbridge.surrogates.SChoice::new);
         installPeerBridge();
     }
 
     private void installPeerBridge() {
-        surrogate().addValueChangeListener(e -> {
-            // AWT posts nothing for a programmatic select, which is exactly
-            // the !isFromClient case — so there is no echo to suppress.
-            if (!e.isFromClient()) return;
-            Integer index = e.getValue();
-            // A browser-side clear has no AWT counterpart: java.awt.Choice
-            // fires only SELECTED, never a deselection.
-            if (index == null || index < 0 || index >= surrogate().getItemCount()) return;
-            // The browser's item, read here on the request thread.
-            java.lang.String item = surrogate().getItemAt(index);
-            // R_callswing_envelope: the browser → AWT seam funnels through callSwing so a
-            // listener that opens a modal dialog can park on the loom virtual
-            // thread. Nested callSwing runs inline (D_callswing_loom).
-            vaadinx.EHelper.callSwing(() -> {
-                // XChoicePeer's and LWChoicePeer's order: select, then post.
-                select(index);
-                // Enter at processEvent, not processItemEvent: AWT routes a
-                // peer-posted event dispatchEvent → processEvent →
-                // processItemEvent, so entering at the second hop would leave a
-                // migrator's processEvent override never running (R_no_vaadin_in_api limb 2).
-                processEvent(new java.awt.event.ItemEvent(this,
-                        java.awt.event.ItemEvent.ITEM_STATE_CHANGED, item,
-                        java.awt.event.ItemEvent.SELECTED));
+        // Registered once the peer exists, which for a lazy peer is when a UI is current.
+        withPeer(peer -> {
+            surrogate().addValueChangeListener(e -> {
+                // AWT posts nothing for a programmatic select, which is exactly
+                // the !isFromClient case — so there is no echo to suppress.
+                if (!e.isFromClient()) return;
+                Integer index = e.getValue();
+                // A browser-side clear has no AWT counterpart: java.awt.Choice
+                // fires only SELECTED, never a deselection.
+                if (index == null || index < 0 || index >= surrogate().getItemCount()) return;
+                // The browser's item, read here on the request thread.
+                java.lang.String item = surrogate().getItemAt(index);
+                // R_callswing_envelope: the browser → AWT seam funnels through callSwing so a
+                // listener that opens a modal dialog can park on the loom virtual
+                // thread. Nested callSwing runs inline (D_callswing_loom).
+                vaadinx.EHelper.callSwing(() -> {
+                    // XChoicePeer's and LWChoicePeer's order: select, then post.
+                    select(index);
+                    // Enter at processEvent, not processItemEvent: AWT routes a
+                    // peer-posted event dispatchEvent → processEvent →
+                    // processItemEvent, so entering at the second hop would leave a
+                    // migrator's processEvent override never running (R_no_vaadin_in_api limb 2).
+                    processEvent(new java.awt.event.ItemEvent(this,
+                            java.awt.event.ItemEvent.ITEM_STATE_CHANGED, item,
+                            java.awt.event.ItemEvent.SELECTED));
+                });
             });
         });
     }

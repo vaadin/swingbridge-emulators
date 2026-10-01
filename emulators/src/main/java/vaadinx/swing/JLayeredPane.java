@@ -65,7 +65,7 @@ public class JLayeredPane extends JComponent implements javax.accessibility.Acce
     public static final String LAYER_PROPERTY = "layeredContainerLayer";
 
     public JLayeredPane() {
-        super(new com.vaadin.flow.component.html.Div());
+        super(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
     }
 
     public void setLayer(vaadinx.awt.Component c, int layer) {

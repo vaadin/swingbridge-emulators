@@ -196,8 +196,7 @@ public class JSplitPane extends vaadinx.swing.JComponent
         if (c == old) return;
         if (old != null) removeSlotChild(old);
         this.leftComponent = c;
-        com.vaadin.flow.component.Component vc = c != null ? c.getPeer() : null;
-        withPeer(p -> surrogate().setLeftComponent(vc));
+        withPeer(p -> surrogate().setLeftComponent(c != null ? c.getPeer() : null));
         if (c != null) addSlotChild(c, -1);
     }
 
@@ -218,8 +217,7 @@ public class JSplitPane extends vaadinx.swing.JComponent
         if (c == old) return;
         if (old != null) removeSlotChild(old);
         this.rightComponent = c;
-        com.vaadin.flow.component.Component vc = c != null ? c.getPeer() : null;
-        withPeer(p -> surrogate().setRightComponent(vc));
+        withPeer(p -> surrogate().setRightComponent(c != null ? c.getPeer() : null));
         if (c != null) addSlotChild(c, -1);
     }
 

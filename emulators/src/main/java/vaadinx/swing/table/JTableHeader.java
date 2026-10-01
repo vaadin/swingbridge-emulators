@@ -98,7 +98,7 @@ public class JTableHeader extends JComponent implements TableColumnModelListener
         // onUnimplemented WARN doesn't fire — the Div is functionally
         // unreachable from migrated code (header.getPeer() returns it,
         // but no normal flow inspects it).
-        super(new com.vaadin.flow.component.html.Div());
+        super(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
 
         if (cm == null) {
             cm = createDefaultColumnModel();

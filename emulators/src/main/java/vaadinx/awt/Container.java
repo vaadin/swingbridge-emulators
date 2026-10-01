@@ -75,7 +75,7 @@ public class Container extends vaadinx.awt.Component {
 
     public Container() {
         // Plain Div peer — D_layout_css_on_content's assumed substrate for LayoutManager CSS.
-        this(new com.vaadin.flow.component.html.Div());
+        this(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
     }
 
     protected Container(com.vaadin.flow.component.Component peer) {

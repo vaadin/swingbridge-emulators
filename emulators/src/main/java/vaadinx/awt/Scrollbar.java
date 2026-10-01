@@ -157,57 +157,64 @@ public class Scrollbar extends vaadinx.awt.Component
     public Scrollbar(int orientation, int value, int visible, int minimum, int maximum)
             throws java.awt.HeadlessException {
         // R_leaf_peer_lockdown lock-down: super(...) takes the SScrollbar directly, no peer seam.
-        // The orientation check happens inside, before any peer write.
-        super(new com.vaadin.swingbridge.surrogates.SScrollbar(orientation));
+        super(com.vaadin.swingbridge.surrogates.SScrollbar.class, () -> new com.vaadin.swingbridge.surrogates.SScrollbar(orientation));
+        // Checked here, not left to the peer's ctor, which a lazy peer runs later.
+        switch (orientation) {
+            case HORIZONTAL, VERTICAL -> { }
+            default -> throw new IllegalArgumentException("illegal scrollbar orientation");
+        }
         this.orientation = orientation;
         setValues(value, visible, minimum, maximum);
         installPeerBridge();
     }
 
     private void installPeerBridge() {
-        // Peer → AWT event pipeline, with the source re-bound to `this` so
-        // migrated code casting `(Scrollbar) e.getAdjustable()` sees the
-        // emulator. The surrogate cannot build this event itself:
-        // AdjustmentEvent's source parameter is typed java.awt.Adjustable, and
-        // SScrollbar cannot implement Adjustable (int getValue() and
-        // int getOrientation() clash irreconcilably with Vaadin's Double /
-        // Orientation returns). SD_sscrollbar.
-        //
-        // Enter at processEvent, not processAdjustmentEvent: AWT routes a
-        // peer-posted event dispatchEvent → processEvent → processAdjustmentEvent,
-        // so entering at the second hop would leave a migrator's processEvent
-        // override compiling, looking wired, and never running (R_no_vaadin_in_api limb 2,
-        // and D_awt_dead_hooks's finding on the click bridge).
-        surrogate().addValueChangeListener(e -> {
-            // AWT posts nothing for a programmatic write, which is exactly the
-            // !isFromClient case — so there is no echo to suppress and no
-            // preventPeerEvents flag to carry.
-            if (!e.isFromClient()) return;
-            // The browser's report, read here on the request thread. The
-            // surrogate's own listener ran first (it registered in its ctor),
-            // so its flag already says the gesture is in flight.
-            int v = surrogate().getIntValue();
-            boolean adjusting = surrogate().getValueIsAdjusting();
-            // R_callswing_envelope: the browser → AWT seam funnels through callSwing so a
-            // listener that opens a modal dialog can park on the loom virtual
-            // thread. Nested callSwing runs inline (D_callswing_loom).
-            vaadinx.EHelper.callSwing(() -> {
-                // WScrollbarPeer.postAdjustmentEvent's order.
-                setValueIsAdjusting(adjusting);
-                setValue(v);
-                postAdjustment(v, adjusting);
+        // Registered once the peer exists, which for a lazy peer is when a UI is current.
+        withPeer(peer -> {
+            // Peer → AWT event pipeline, with the source re-bound to `this` so
+            // migrated code casting `(Scrollbar) e.getAdjustable()` sees the
+            // emulator. The surrogate cannot build this event itself:
+            // AdjustmentEvent's source parameter is typed java.awt.Adjustable, and
+            // SScrollbar cannot implement Adjustable (int getValue() and
+            // int getOrientation() clash irreconcilably with Vaadin's Double /
+            // Orientation returns). SD_sscrollbar.
+            //
+            // Enter at processEvent, not processAdjustmentEvent: AWT routes a
+            // peer-posted event dispatchEvent → processEvent → processAdjustmentEvent,
+            // so entering at the second hop would leave a migrator's processEvent
+            // override compiling, looking wired, and never running (R_no_vaadin_in_api limb 2,
+            // and D_awt_dead_hooks's finding on the click bridge).
+            surrogate().addValueChangeListener(e -> {
+                // AWT posts nothing for a programmatic write, which is exactly the
+                // !isFromClient case — so there is no echo to suppress and no
+                // preventPeerEvents flag to carry.
+                if (!e.isFromClient()) return;
+                // The browser's report, read here on the request thread. The
+                // surrogate's own listener ran first (it registered in its ctor),
+                // so its flag already says the gesture is in flight.
+                int v = surrogate().getIntValue();
+                boolean adjusting = surrogate().getValueIsAdjusting();
+                // R_callswing_envelope: the browser → AWT seam funnels through callSwing so a
+                // listener that opens a modal dialog can park on the loom virtual
+                // thread. Nested callSwing runs inline (D_callswing_loom).
+                vaadinx.EHelper.callSwing(() -> {
+                    // WScrollbarPeer.postAdjustmentEvent's order.
+                    setValueIsAdjusting(adjusting);
+                    setValue(v);
+                    postAdjustment(v, adjusting);
+                });
             });
-        });
-        // The drag-end event. Without this the "commit when getValueIsAdjusting()
-        // goes false" idiom — the whole point of the property — would never
-        // fire: the browser's `change` carries no new value, so it produces no
-        // Vaadin value-change event for the listener above to ride.
-        getPeer().getElement().addEventListener("change", e -> {
-            int v = surrogate().getIntValue();
-            vaadinx.EHelper.callSwing(() -> {
-                // WScrollbarPeer.dragEnd: no setValue, the last drag step wrote it.
-                setValueIsAdjusting(false);
-                postAdjustment(v, false);
+            // The drag-end event. Without this the "commit when getValueIsAdjusting()
+            // goes false" idiom — the whole point of the property — would never
+            // fire: the browser's `change` carries no new value, so it produces no
+            // Vaadin value-change event for the listener above to ride.
+            getPeer().getElement().addEventListener("change", e -> {
+                int v = surrogate().getIntValue();
+                vaadinx.EHelper.callSwing(() -> {
+                    // WScrollbarPeer.dragEnd: no setValue, the last drag step wrote it.
+                    setValueIsAdjusting(false);
+                    postAdjustment(v, false);
+                });
             });
         });
     }

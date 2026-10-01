@@ -203,7 +203,9 @@ public class JDialog extends vaadinx.awt.Dialog
         // Content pane fills the window body rather than sitting at intrinsic
         // height inside it. The pane-level classes come from the surrogate chain;
         // this adds the host-level one — see emul/swindow.css.
-        com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(getPeer(), getContentPane().getPeer(), null);
+        // A write, so a content pane whose peer is lazy is built with a UI, not here.
+        vaadinx.awt.Container contentPane = getContentPane();
+        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
         setRootPaneCheckingEnabled(true);
     }
 

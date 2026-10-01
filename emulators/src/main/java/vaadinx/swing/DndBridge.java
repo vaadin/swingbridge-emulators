@@ -93,10 +93,9 @@ final class DndBridge {
      * any prior wiring first, then installs fresh wiring iff a handler is set.
      */
     static void reconfigure(JComponent emu) {
-        Component peer = emu.getPeer();
         // The wiring is peer writes, reachable from a background thread through
         // setDragEnabled / setTransferHandler / setDropMode (D_attach_aware_hop).
-        emu.withPeer(p -> {
+        emu.withPeer(peer -> {
             teardown(peer);
 
             TransferHandler handler = emu.getTransferHandler();

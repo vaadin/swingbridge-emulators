@@ -111,7 +111,7 @@ public class Label extends vaadinx.awt.Component implements javax.accessibility.
         // R_leaf_peer_lockdown lock-down: super(...) takes the SLabel directly, no peer seam.
         // The JDK assigns the text and routes the alignment through the public
         // setAlignment, so a subclass override runs here and setText's does not.
-        super(new com.vaadin.swingbridge.surrogates.SLabel(text, LEFT));
+        super(com.vaadin.swingbridge.surrogates.SLabel.class, () -> new com.vaadin.swingbridge.surrogates.SLabel(text, LEFT));
         this.text = text;
         setAlignment(alignment);
     }

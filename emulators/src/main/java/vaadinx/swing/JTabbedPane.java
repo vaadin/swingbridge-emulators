@@ -389,8 +389,8 @@ public class JTabbedPane extends vaadinx.swing.JComponent
         }
         int at = newIndex;
         javax.swing.Icon jdkIcon = unwrap("insertTab", icon);
-        com.vaadin.flow.component.Component content = component != null ? component.getPeer() : null;
-        peerWrite(jdkIcon, p -> surrogate().insertTab(page.title, jdkIcon, content, tip, at));
+        peerWrite(jdkIcon, p -> surrogate().insertTab(page.title, jdkIcon,
+                component != null ? component.getPeer() : null, tip, at));
         if (component != null) {
             component.setVisible(false);
         } else {
@@ -701,9 +701,8 @@ public class JTabbedPane extends vaadinx.swing.JComponent
                 component.setVisible(selectedPage);
                 addSlotChild(component, -1);
             }
-            com.vaadin.flow.component.Component content = component != null
-                    ? component.getPeer() : new com.vaadin.flow.component.html.Div();
-            peerWrite(p -> surrogate().setComponentAt(index, content));
+            peerWrite(p -> surrogate().setComponentAt(index, component != null
+                    ? component.getPeer() : new com.vaadin.flow.component.html.Div()));
         }
     }
 
@@ -747,8 +746,7 @@ public class JTabbedPane extends vaadinx.swing.JComponent
                 setTabComponentAt(tabComponentIndex, null);
             }
             pages.get(index).tabComponent = component;
-            com.vaadin.flow.component.Component header = component != null ? component.getPeer() : null;
-            peerWrite(p -> surrogate().setTabComponentAt(index, header));
+            peerWrite(p -> surrogate().setTabComponentAt(index, component != null ? component.getPeer() : null));
             firePropertyChange("indexForTabComponent", -1, index);
         }
     }
