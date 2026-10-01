@@ -52,3 +52,4 @@ inventoryApp.db.mv.db
 # Python bytecode from the ideas/ measurement scripts
 __pycache__/
 *.pyc
+.playwright-mcp
