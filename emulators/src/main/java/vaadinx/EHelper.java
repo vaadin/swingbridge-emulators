@@ -327,6 +327,44 @@ public final class EHelper {
     }
 
     /**
+     * Set while a queued peer write runs during a drain ({@code vaadinx.awt.Component.withPeer});
+     * {@link #callSwing} asserts it is clear, since a queued write must be a pure sink.
+     */
+    private static final ThreadLocal<Boolean> IN_QUEUED_PEER_WRITE = new ThreadLocal<>();
+
+    /** Whether this thread is running a queued peer write; see {@link #runQueuedPeerWrite}. */
+    public static boolean inQueuedPeerWrite() {
+        return IN_QUEUED_PEER_WRITE.get() != null;
+    }
+
+    /**
+     * Runs a queued peer write as it is drained, marked so that {@link #callSwing} can assert the
+     * write is a pure sink. Nested writes and Vaadin's own attach cascade run inside the mark;
+     * {@link #outsideQueuedPeerWrite} lifts it for the attach and detach listeners, which are
+     * peer→Swing work by design.
+     */
+    public static void runQueuedPeerWrite(Runnable write) {
+        Boolean outer = IN_QUEUED_PEER_WRITE.get();
+        IN_QUEUED_PEER_WRITE.set(Boolean.TRUE);
+        try {
+            write.run();
+        } finally {
+            IN_QUEUED_PEER_WRITE.set(outer);
+        }
+    }
+
+    /** Runs {@code body} with the {@link #runQueuedPeerWrite} mark lifted. */
+    public static void outsideQueuedPeerWrite(Runnable body) {
+        Boolean outer = IN_QUEUED_PEER_WRITE.get();
+        IN_QUEUED_PEER_WRITE.remove();
+        try {
+            body.run();
+        } finally {
+            IN_QUEUED_PEER_WRITE.set(outer);
+        }
+    }
+
+    /**
      * The R_callswing_envelope seam: runs {@code runnable} — a peer listener's Swing-side body —
      * on a virtual thread so it can park on a modal dialog without blocking the
      * Vaadin request thread. Every peer→Swing listener wraps its body in this:
@@ -378,6 +416,9 @@ public final class EHelper {
      * user-configured error handling and hide bugs.
      */
     public static void callSwing(Runnable runnable) {
+        assert !inQueuedPeerWrite() : "A queued peer write reached EHelper.callSwing while being drained: "
+                + "a queued write must be a pure sink, whose effect Swing cannot observe until attach "
+                + "(ideas/vaadin-ui-thread-only.md § \"The mechanism\")";
         final UI ui = UI.getCurrent();
         if (ui == null) {
             // Shutdown carve-out to R_callswing_envelope: on the request-less reaper thread that

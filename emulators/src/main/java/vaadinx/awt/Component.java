@@ -78,23 +78,26 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * but it is why {@link #peer} is private rather than {@code protected}, which is
      * what makes the chokepoint hold for emulator methods not yet written.
      *
+     * <p>With a UI current, writes {@link #withPeer} queued while the peer had no UI are
+     * drained first, so the peer handed back carries them — which is also what makes a
+     * parent's {@code parentPeer.add(child.getPeer())} the write that drains the child.
+     *
      * <p>Two call sites inside this class deliberately read the field instead: the
      * constructor, since construction off the UI thread is tolerated, and
      * {@link #toString()}, since logging a component must never itself warn.
      */
     public final com.vaadin.flow.component.Component getPeer() {
         vaadinx.EHelper.checkUIThread();
+        peerWrites.drainIfUICurrent();
         return peer;
     }
 
     /**
      * Runs {@code body} against this component's peer, under its session's lock and with
-     * the UI holding the peer current — the seam every emulator peer <em>write</em> goes
-     * through, since any of them may arrive from a background thread
-     * (R_tolerate_off_ui_thread). Synchronous: the body has run by the time this returns.
-     * Inline when a UI is already current, and when the peer has no session yet, which means
-     * it has never been attached and has no lock to take. See
-     * {@link com.vaadin.swingbridge.surrogates.SHelper#runOnSession} (D_attach_aware_hop).
+     * a UI current — the seam every emulator peer <em>write</em> goes through, since any of
+     * them may arrive from a background thread (R_tolerate_off_ui_thread). Inline or through
+     * a synchronous hop when a UI is reachable; otherwise queued, and run in order once one
+     * is — see {@link PeerWriteQueue}. A queued body must be a pure sink.
      *
      * <p>Public because code outside the component hierarchy needs it too — a layout
      * manager, the drag-and-drop wiring, and a migrator's own worker that wants to touch
@@ -111,51 +114,23 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * each call is its own trip through the seam, so a body setting three styles belongs
      * in one {@code withPeer} rather than three. Nested calls are free.
      *
-     * <p>A body that needs a current UI even while the peer is detached — one that
-     * registers a resource URL, or shows a window — goes through
-     * {@link #withPeerOnLiveUI} instead.
      */
     public final void withPeer(java.util.function.Consumer<com.vaadin.flow.component.Component> body) {
-        com.vaadin.flow.component.Component p = getPeer();
-        com.vaadin.flow.server.VaadinSession session = peerSession;
-        if (session == null) {
-            // Built where no session was known. The writing thread's own session, if it has
-            // one, still serialises this write against an attach in flight on the UI thread,
-            // whose listener has not recorded the session yet.
-            vaadinx.EmulatorContext ctx = vaadinx.EmulatorContext.getOrNull();
-            session = ctx != null ? ctx.session() : null;
-        }
-        com.vaadin.swingbridge.surrogates.SHelper.runOnSession(session, p, () -> body.accept(p));
+        vaadinx.EHelper.checkUIThread();
+        peerWrites.write(() -> body.accept(peer));
     }
 
-    /**
-     * The session {@link #withPeer} hops through: the constructing thread's, via its
-     * {@link vaadinx.EmulatorContext}, when it has one, else the one the peer joins at its
-     * first attach. Kept here rather than read off the peer, because a bare {@code Div} or
-     * {@code Span} peer has nowhere to keep it. {@code volatile}, since the attach that
-     * writes it runs on the UI thread and the writes that read it do not.
-     */
-    private volatile com.vaadin.flow.server.VaadinSession peerSession;
+    /** Carries {@link #withPeer}'s writes onto {@link #peer}, now or once it has a UI. */
+    private final PeerWriteQueue peerWrites;
 
     /**
-     * Runs {@code body} against this component's peer on the session's live UI, taking
-     * the session off this thread's {@link vaadinx.EmulatorContext}: the variant of
-     * {@link #withPeer} for a body that needs a current UI even while the peer is
-     * detached. An {@code ImageIcon} becoming a Vaadin {@code Image} is the measured case,
-     * since the image's ctor resolves a resource URL. See
-     * {@link vaadinx.EHelper#runInUIThread}.
-     *
-     * @param callerPlansToBlockAfterwards {@code true} only for a modal show, which waits for a
-     *                  browser answer once the body has run and so cannot degrade — it would park
-     *                  forever. Passed straight through; see
-     *                  {@link vaadinx.EHelper#runInUIThread(boolean, Runnable)} for what it
-     *                  decides.
-     * @throws IllegalStateException off the UI thread, on a thread with no
-     *                  {@link vaadinx.EmulatorContext} (R_match_swing_errors case (7))
+     * {@link #withPeer}, which now gives every body a current UI, a body needing one while the
+     * peer is detached included. Every caller passes {@code false}; a window show goes through
+     * {@link vaadinx.EHelper#runInUIThread} itself.
      */
     protected final void withPeerOnLiveUI(boolean callerPlansToBlockAfterwards,
             java.util.function.Consumer<com.vaadin.flow.component.Component> body) {
-        vaadinx.EHelper.runInUIThread(callerPlansToBlockAfterwards, () -> body.accept(getPeer()));
+        withPeer(body);
     }
 
     private java.lang.String name;
@@ -266,9 +241,9 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
         // Before anything else can see the peer: an emulator built on a worker is the one
         // way its surrogate learns its session before attach (SHelper.sessionOf).
         vaadinx.EmulatorContext ctx = vaadinx.EmulatorContext.getOrNull();
-        this.peerSession = ctx != null ? ctx.session() : null;
-        com.vaadin.swingbridge.surrogates.SHelper.offerSession(peer, peerSession);
-        peer.addAttachListener(e -> peerSession = e.getSession());
+        com.vaadin.swingbridge.surrogates.SHelper.offerSession(peer, ctx != null ? ctx.session() : null);
+        // First of this emulator's attach listeners, so the ones below see the queued writes.
+        this.peerWrites = new PeerWriteQueue(peer, getClass());
         // Register the 1:1 mapping so getParent()-style lookups find this emulator
         // instead of synthesizing a new one. See D_peer_emulator_mapping.
         vaadinx.EHelper.onCreated(peer, this);
@@ -292,8 +267,12 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
         // automatic at the peer level. callSwing per R_callswing_envelope so future
         // virtual-thread wrapping catches these too; exceptions escalate to
         // Vaadin's ErrorHandler rather than short-circuiting the attach path.
-        peer.addAttachListener(e -> vaadinx.EHelper.callSwing(this::onPeerAttached));
-        peer.addDetachListener(e -> vaadinx.EHelper.callSwing(this::onPeerDetached));
+        // Outside the queued-write mark: an attach cascade a drained write starts (an add) is
+        // peer→Swing work by design, not a queued write reaching Swing.
+        peer.addAttachListener(e -> vaadinx.EHelper.outsideQueuedPeerWrite(
+                () -> vaadinx.EHelper.callSwing(this::onPeerAttached)));
+        peer.addDetachListener(e -> vaadinx.EHelper.outsideQueuedPeerWrite(
+                () -> vaadinx.EHelper.callSwing(this::onPeerDetached)));
     }
 
     /**

@@ -164,7 +164,7 @@ public final class SHelper {
      * The UI owning {@code peer}'s state tree, or {@code null} if it has none. Only call it
      * holding the session lock.
      */
-    private static com.vaadin.flow.component.UI ownerUI(com.vaadin.flow.component.Component peer) {
+    public static com.vaadin.flow.component.UI ownerUI(com.vaadin.flow.component.Component peer) {
         if (peer.getElement().getNode().getOwner() instanceof com.vaadin.flow.internal.StateTree tree) {
             return tree.getUI();
         }
