@@ -54,8 +54,8 @@ package vaadinx.swing;
 //     mutation of the ported model, this table's own
 //     createDefaultColumnsFromModel included, translates to a JDK op on the
 //     surrogate (which fires JDK events that drive Vaadin column rebuild).
-//     The other direction runs once, in the ctor (rebuildPortedColumnsFromJdk),
-//     guarded by preventColumnLoop per R_swing_is_truth.
+//     There is no other direction: the surrogate starts with no columns and
+//     never creates its own.
 //
 // Renderer bridge (D_event_port_policy + D_jcombobox + R_vaadin_first): emulator carries a per-class
 // TableCellRenderer registry + per-column TableColumn.getCellRenderer
@@ -136,13 +136,6 @@ public class JTable extends vaadinx.swing.JComponent
     /** Listener installed on {@link #columnModel} that translates ported events to JDK ops on the surrogate. */
     private TableColumnModelListener portedToJdkBridge;
 
-    /**
-     * Loop guard for the ported↔JDK column-model sync. Set during a one-
-     * direction push so the reverse listener bails. Same R_swing_is_truth shape as
-     * SJTable's preventPeerEvents.
-     */
-    private boolean preventColumnLoop;
-
     /** Per-column-class fallback renderer registry (ported types). Walks superclass chain on lookup. */
     protected final Map<Class<?>, TableCellRenderer> defaultRenderersByColumnClass = new HashMap<>();
 
@@ -204,63 +197,57 @@ public class JTable extends vaadinx.swing.JComponent
     // --- Ctors ---
 
     public JTable() {
-        this(new SJTable());
+        this(null, null, null);
     }
 
     public JTable(TableModel dm) {
-        this(new SJTable(dm));
+        this(dm, null, null);
     }
 
     public JTable(TableModel dm, TableColumnModel cm) {
-        this(new SJTable(dm, jdkMirrorOf(cm)));
-        // User supplied a ported column model — replace our default with theirs.
-        if (cm != null) swapColumnModel(cm);
-    }
-
-    public JTable(TableModel dm, TableColumnModel cm, ListSelectionModel sm) {
-        // sm holds view rows, so it is this table's model rather than the surrogate's, which
-        // holds model rows and keeps its own default (see setSelectionModel).
-        this(new SJTable(dm, jdkMirrorOf(cm)), sm);
-        if (cm != null) swapColumnModel(cm);
+        this(dm, cm, null);
     }
 
     public JTable(int numRows, int numCols) {
-        this(new SJTable(numRows, numCols));
+        this(new javax.swing.table.DefaultTableModel(numRows, numCols));
     }
 
     public JTable(Object[][] rowData, Object[] columnNames) {
-        this(new SJTable(rowData, columnNames));
+        this(new javax.swing.table.DefaultTableModel(rowData, columnNames));
     }
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public JTable(Vector rowData, Vector columnNames) {
-        this(new SJTable((Vector) rowData, (Vector) columnNames));
-    }
-
-    private JTable(SJTable peer) {
-        this(peer, null);
+        this(new javax.swing.table.DefaultTableModel((Vector) rowData, (Vector) columnNames));
     }
 
     /**
-     * Private ctor: R_leaf_peer_lockdown lock-down (JDK leaf — no protected (Component) ctor).
+     * The root ctor, as in the JDK: the column model, the selection model and then the data
+     * model, each through its setter, so the default columns are this table's own
+     * {@link #createDefaultColumnsFromModel}. The only ctor naming the peer: R_leaf_peer_lockdown
+     * lock-down (JDK leaf — no protected (Component) ctor).
      *
-     * @param sm the view-row selection model, or {@code null} for {@link #createDefaultSelectionModel()}'s
+     * @param cm the columns; {@code null} for {@link #createDefaultColumnModel}'s, filled from
+     *        the model since {@code autoCreateColumnsFromModel} is then set
+     * @param sm the view-row selection model; {@code null} for {@link #createDefaultSelectionModel}'s
      */
-    private JTable(SJTable peer, ListSelectionModel sm) {
-        super(peer);
+    public JTable(TableModel dm, TableColumnModel cm, ListSelectionModel sm) {
+        // The surrogate starts with no columns and a placeholder model; the writes below give it
+        // this table's, in order. Its own column creation stays off: the columns are this table's.
+        super(SJTable.class, () -> new SJTable(new javax.swing.table.DefaultTableModel(),
+                new javax.swing.table.DefaultTableColumnModel()));
         // The table listens to its own model, as the JDK's does, and drives the surrogate's
         // handling from tableChanged — so the sort bookkeeping runs around the moment the
-        // sorter hears the change, and a subclass's tableChanged override is on the path.
-        // First, because every accessor below reads the model through dataModel.
-        peer.getModel().removeTableModelListener(peer);
-        listenToModel(peer.getModel());
-        // The table creates its own columns and tells its own sorter about model changes, as
-        // the JDK's does, on the thread the model fired on; the surrogate only renders them, so
-        // a write queued until attach never holds back what Swing reads (D_emulator_owned_state).
-        // Seeded from the peer first: the public ctors configured it as the JDK's would.
-        autoCreateColumnsFromModel = peer.getAutoCreateColumnsFromModel();
-        peer.setAutoCreateColumnsFromModel(false);
-        peer.setSorterNotifiedByOwner(true);
+        // sorter hears the change, and a subclass's tableChanged override is on the path. It
+        // creates its own columns and tells its own sorter, on the thread the model fired on;
+        // the surrogate only renders them, so a write queued until attach never holds back
+        // what Swing reads (D_emulator_owned_state).
+        withPeer(p -> {
+            SJTable sb = surrogate();
+            sb.getModel().removeTableModelListener(sb);
+            sb.setAutoCreateColumnsFromModel(false);
+            sb.setSorterNotifiedByOwner(true);
+        });
 
         // Seed the default renderer registry. JDK seeds Object/Number/Date/
         // Boolean/Icon/ImageIcon — Object + Boolean ship; the rest ride the
@@ -285,22 +272,15 @@ public class JTable extends vaadinx.swing.JComponent
         defaultEditorsByColumnClass.put(Number.class, new NumberEditor());
         defaultEditorsByColumnClass.put(Boolean.class, new BooleanEditor());
 
-        // Build the emulator's ported column model from the surrogate's JDK one
-        // (which the SJTable ctor already populated via createDefaultColumnsFromModel).
-        this.columnModel = new DefaultTableColumnModel();
-        rebuildPortedColumnsFromJdk();
-
-        // Install the two bridge listeners.
+        // The bridge mirroring every ported column change onto the surrogate's JDK columns.
         this.portedToJdkBridge = new TableColumnModelListener() {
             // Each mirrors one event in one write, the surrogate's columns read only inside it:
             // a write queued until attach meets them as the earlier queued writes left them.
             @Override public void columnAdded(TableColumnModelEvent e) {
-                if (preventColumnLoop) return;
                 javax.swing.table.TableColumn mirror = jdkMirrorOf(columnModel.getColumn(e.getToIndex()));
                 withPeer(p -> surrogate().getColumnModel().addColumn(mirror));
             }
             @Override public void columnRemoved(TableColumnModelEvent e) {
-                if (preventColumnLoop) return;
                 int idx = e.getFromIndex();
                 withPeer(p -> {
                     javax.swing.table.TableColumnModel jdk = surrogate().getColumnModel();
@@ -308,7 +288,6 @@ public class JTable extends vaadinx.swing.JComponent
                 });
             }
             @Override public void columnMoved(TableColumnModelEvent e) {
-                if (preventColumnLoop) return;
                 if (e.getFromIndex() == e.getToIndex()) return;
                 withPeer(p -> surrogate().getColumnModel().moveColumn(e.getFromIndex(), e.getToIndex()));
             }
@@ -319,22 +298,47 @@ public class JTable extends vaadinx.swing.JComponent
                 // Column selection R_vaadin_first drop — Vaadin Grid is row-only.
             }
         };
-        this.columnModel.addColumnModelListener(portedToJdkBridge);
-
         // No JDK→ported listener bridge: the surrogate never creates columns of its own
-        // (its autoCreateColumnsFromModel is off), so after this sync every column
-        // change starts on the ported model. setColumnModel and
-        // createDefaultColumnsFromModel re-install the emulator renderers once the
-        // bridge has mirrored their changes.
+        // (its autoCreateColumnsFromModel is off), so every column change starts on the
+        // ported model. setColumnModel and createDefaultColumnsFromModel re-install the
+        // emulator renderers once the bridge has mirrored their changes.
 
-        // Install the dynamic Vaadin renderer on every existing column.
-        installEmulatorVaadinRenderers();
-
-        // This class sources its own MOUSE_CLICKED just below, off the surrogate's
-        // Grid item-click wire, which also reports the cell for rowAtPoint /
-        // columnAtPoint. Keep Component's generic DOM bridge out, or every click
-        // arrives twice.
+        // This class sources its own MOUSE_CLICKED, off the surrogate's Grid item-click
+        // wire, which also reports the cell for rowAtPoint / columnAtPoint. Keep
+        // Component's generic DOM bridge out, or every click arrives twice.
         suppressMouseBridge();
+        withPeer(p -> installPeerBridges());
+
+        // The JDK ctor's sequence.
+        if (cm == null) {
+            cm = createDefaultColumnModel();
+            autoCreateColumnsFromModel = true;
+        }
+        setColumnModel(cm);
+        setSelectionModel(sm != null ? sm : createDefaultSelectionModel());
+        setModel(dm != null ? dm : createDefaultDataModel());
+
+        vaadinx.FieldReconciler.register(this);
+    }
+
+    /**
+     * Returns the default column model object, which is a {@code DefaultTableColumnModel}.
+     * A subclass can override this to return a different column model object.
+     */
+    protected TableColumnModel createDefaultColumnModel() {
+        return new DefaultTableColumnModel();
+    }
+
+    /**
+     * Returns the default table model object, which is a {@code DefaultTableModel}.
+     * A subclass can override this to return a different table model object.
+     */
+    protected TableModel createDefaultDataModel() {
+        return new javax.swing.table.DefaultTableModel();
+    }
+
+    /** The surrogate's mouse, editing and selection bridges: a write, since they need the peer. */
+    private void installPeerBridges() {
 
         // Mouse re-source (D_jtable (b)): the surrogate's MOUSE_CLICKED (driven by
         // Grid item-click / item-double-click, carrying the row + column) →
@@ -398,10 +402,7 @@ public class JTable extends vaadinx.swing.JComponent
         // Two selection models (D_jtable_selection): this table's holds view rows, the JDK
         // contract; the surrogate's holds model rows and drives the Grid. Browser selections
         // arrive on the surrogate's and are pulled across; everything else is pushed to it.
-        peer.getListSelectionModel().addListSelectionListener(peerSelectionBridge);
-        setSelectionModel(sm != null ? sm : createDefaultSelectionModel());
-
-        vaadinx.FieldReconciler.register(this);
+        surrogate().getListSelectionModel().addListSelectionListener(peerSelectionBridge);
     }
 
     /**
@@ -461,10 +462,9 @@ public class JTable extends vaadinx.swing.JComponent
 
     /**
      * Build a JDK {@link javax.swing.table.DefaultTableColumnModel} from a
-     * ported {@link TableColumnModel}. Used to seed the surrogate when a
-     * user-supplied ported column model is passed to the ctor — the
-     * surrogate keeps the JDK mirror, the emulator stores the user's
-     * ported reference and bridges between them.
+     * ported {@link TableColumnModel}, which {@link #setColumnModel} hands the
+     * surrogate — the surrogate keeps the JDK mirror, the emulator stores the
+     * user's ported reference and bridges between them.
      */
     private static javax.swing.table.TableColumnModel jdkMirrorOf(TableColumnModel ported) {
         if (ported == null) return null;
@@ -492,69 +492,6 @@ public class JTable extends vaadinx.swing.JComponent
         jdk.setPreferredWidth(ported.getPreferredWidth());
         jdk.setResizable(ported.getResizable());
         return jdk;
-    }
-
-    /**
-     * Replace the emulator's ported column model with a user-supplied one
-     * after the surrogate has been seeded with the JDK mirror. Used by
-     * the JTable(TableModel, TableColumnModel) ctor — super(new SJTable(...
-     * jdkMirrorOf(cm))) passed the mirror to the surrogate, but we want
-     * the user's ported reference to survive as our public-facing column
-     * model so listener registrations on it work. Tears down the default
-     * ported model + bridges installed in the private ctor and re-attaches
-     * to the user's reference.
-     */
-    private void swapColumnModel(TableColumnModel newPortedCm) {
-        if (newPortedCm == columnModel) return;
-        // Detach bridges from the old (default) ported model.
-        if (columnModel != null && portedToJdkBridge != null) {
-            columnModel.removeColumnModelListener(portedToJdkBridge);
-        }
-        this.columnModel = newPortedCm;
-        // Re-attach the same listener (it closes over our state, not over
-        // the old model reference).
-        if (portedToJdkBridge != null) {
-            columnModel.addColumnModelListener(portedToJdkBridge);
-        }
-        // No structural rebuild — the surrogate already has the JDK mirror
-        // matching this ported model.
-        firePropertyChange("columnModel", null, newPortedCm);
-    }
-
-    /**
-     * Rebuild the ported {@link #columnModel} from the surrogate's JDK column model: the
-     * constructor's one sync, after the {@code SJTable} ctor built its columns the way the
-     * matching JDK ctor would. Every later structure change is this table's own
-     * {@link #createDefaultColumnsFromModel}, mirrored the other way.
-     *
-     * <p>Wraps mutations in {@link #preventColumnLoop} so the
-     * portedToJdkBridge doesn't echo our writes back into the surrogate.
-     */
-    private void rebuildPortedColumnsFromJdk() {
-        preventColumnLoop = true;
-        try {
-            while (columnModel.getColumnCount() > 0) {
-                columnModel.removeColumn(columnModel.getColumn(0));
-            }
-            javax.swing.table.TableColumnModel jdk = surrogate().getColumnModel();
-            for (int i = 0; i < jdk.getColumnCount(); i++) {
-                javax.swing.table.TableColumn jTc = jdk.getColumn(i);
-                TableColumn pTc = new TableColumn(jTc.getModelIndex(), jTc.getWidth());
-                pTc.setHeaderValue(jTc.getHeaderValue());
-                pTc.setIdentifier(jTc.getIdentifier());
-                pTc.setMinWidth(jTc.getMinWidth());
-                pTc.setMaxWidth(jTc.getMaxWidth());
-                pTc.setPreferredWidth(jTc.getPreferredWidth());
-                pTc.setResizable(jTc.getResizable());
-                watchCellRenderer(pTc);
-                columnModel.addColumn(pTc);
-            }
-        } finally {
-            preventColumnLoop = false;
-        }
-        // After the ported model settles, re-install Vaadin renderers on
-        // the surrogate (column count or order may have changed).
-        installEmulatorVaadinRenderers();
     }
 
     /**
@@ -615,10 +552,13 @@ public class JTable extends vaadinx.swing.JComponent
      * (default ↔ custom) re-runs this method — cheap now that
      * {@link SJTable#setRenderer} swaps in place ({@code Grid.Column.setRenderer})
      * without churning the column. Re-run from {@link #setDefaultRenderer} and the
-     * per-column {@code cellRenderer} PCE (see {@link #rebuildPortedColumnsFromJdk}).
+     * per-column {@code cellRenderer} PCE (see {@link #watchCellRenderer}).
      */
     private void installEmulatorVaadinRenderers() {
         withPeer(p -> {
+            // Before the JDK ctor's setModel there are no column classes to choose by;
+            // its structure change installs them.
+            if (getModel() == null) return;
             SJTable sb = surrogate();
             int n = sb.getColumnModel().getColumnCount();
             for (int i = 0; i < n; i++) {
@@ -1104,12 +1044,15 @@ public class JTable extends vaadinx.swing.JComponent
 
     /**
      * Mirrors the view selection onto the surrogate's model-row selection, which drives the
-     * Grid. Skipped mid model change ({@link #tableChanged} pushes once at its end) and when
+     * Grid. Skipped mid model change ({@link #tableChanged} pushes once at its end), before
+     * there is a model, and when
      * the model rows are already the ones selected — a re-sort moves view rows, not model
      * rows, and a no-op push would still churn the Grid's selection.
      */
     private void pushSelectionToPeer() {
-        if (changingModel || pullingPeerSelection) return;
+        // No model yet: the JDK ctor installs the selection model first, and setModel's
+        // structure change pushes once the rows exist.
+        if (changingModel || pullingPeerSelection || dataModel == null) return;
         int viewRowCount = getRowCount();
         int[] modelRows = java.util.Arrays.stream(selectionModel.getSelectedIndices())
                 .filter(v -> v < viewRowCount)

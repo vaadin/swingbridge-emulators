@@ -287,6 +287,12 @@ class LazyPeerTest extends AbstractKaribuTest {
         m.put("JOptionPane", () -> new vaadinx.swing.JOptionPane("message"));
         m.put("JFileChooser", vaadinx.swing.JFileChooser::new);
         m.put("JRootPane", vaadinx.swing.JRootPane::new);
+        m.put("JTable", () -> {
+            vaadinx.swing.JTable t = new vaadinx.swing.JTable(new Object[][] {{"a", 1}, {"b", 2}}, new Object[] {"name", "n"});
+            t.setRowSelectionInterval(1, 1);
+            t.setAutoCreateRowSorter(true);
+            return t;
+        });
         m.put("AWT ScrollPane", () -> {
             vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
             sp.add(new vaadinx.awt.Label("first"));
@@ -391,6 +397,29 @@ class LazyPeerTest extends AbstractKaribuTest {
         com.vaadin.swingbridge.surrogates.SScrollPane peer =
                 assertInstanceOf(com.vaadin.swingbridge.surrogates.SScrollPane.class, built.get().getPeer());
         assertEquals(second.get().getPeer(), peer.getContent(), "the queued content swaps drained in order");
+    }
+
+    @Test
+    @DisplayName("a JTable built and filled on a worker shows its columns and rows once attached")
+    void jTableBuiltOnWorker() {
+        AtomicReference<vaadinx.swing.JTable> built = new AtomicReference<>();
+        onBareThread(() -> {
+            javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(
+                    new Object[][] {{"a", 1}}, new Object[] {"name", "n"});
+            vaadinx.swing.JTable t = new vaadinx.swing.JTable(model);
+            model.addRow(new Object[] {"b", 2});
+            t.getColumnModel().getColumn(0).setHeaderValue("Name");
+            built.set(t);
+        });
+
+        vaadinx.swing.JTable table = built.get();
+        assertEquals(2, table.getColumnCount(), "the table created its own columns on the worker");
+        assertEquals(2, table.getRowCount());
+        UI.getCurrent().add(table.getPeer());
+        com.vaadin.swingbridge.surrogates.SJTable peer =
+                assertInstanceOf(com.vaadin.swingbridge.surrogates.SJTable.class, table.getPeer());
+        assertEquals(2, peer.getColumnModel().getColumnCount(), "the queued column writes reached the surrogate, once each");
+        assertEquals(2, com.github.mvysny.kaributesting.v10.GridKt._size(peer));
     }
 
     @Test
