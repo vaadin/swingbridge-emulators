@@ -37,13 +37,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import vaadinx.AbstractKaribuTest;
 import vaadinx.Counter;
-import vaadinx.EHelper;
 
 import java.awt.event.ItemEvent;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,22 +56,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * JToggleButtonTest extensions.
  */
 class ButtonGroupTest extends AbstractKaribuTest {
-
-    /**
-     * Runs {@code body} with the WARN hook capturing, restoring the prior hook.
-     * The three drop-and-WARN tests below share the shape.
-     */
-    private static List<String> capturingWarns(Runnable body) {
-        List<String> warned = new ArrayList<>();
-        Consumer<String> prior = EHelper.warnHook;
-        EHelper.warnHook = warned::add;
-        try {
-            body.run();
-        } finally {
-            EHelper.warnHook = prior;
-        }
-        return warned;
-    }
 
     @Test
     @DisplayName("empty group has no selection and zero count")
@@ -226,40 +207,47 @@ class ButtonGroupTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("getSelection drops to WARN and returns null per R_match_swing_errors (c)")
-    void getSelectionWarnsAndReturnsNull() {
+    @DisplayName("getSelection is the selected button's model")
+    void getSelectionIsTheSelectedModel() {
         ButtonGroup g = new ButtonGroup();
-        g.add(new JRadioButtonMenuItem("A", true));
-        List<String> warned = capturingWarns(() -> assertNull(g.getSelection()));
-        assertTrue(warned.stream().anyMatch(
-                w -> w.contains("ButtonGroup") && w.contains("getSelection")));
+        assertNull(g.getSelection());
+        JRadioButtonMenuItem a = new JRadioButtonMenuItem("A", true);
+        g.add(a);
+        assertSame(a.getModel(), g.getSelection());
     }
 
     @Test
-    @DisplayName("isSelected(ButtonModel) drops to WARN and returns false")
-    void isSelectedModelWarnsAndReturnsFalse() {
+    @DisplayName("isSelected(ButtonModel) compares with the selection, so null matches an empty group")
+    void isSelectedModelComparesWithTheSelection() {
         ButtonGroup g = new ButtonGroup();
-        List<String> warned = capturingWarns(() -> assertFalse(g.isSelected(null)));
-        assertTrue(warned.stream().anyMatch(
-                w -> w.contains("ButtonGroup") && w.contains("isSelected")));
+        // JDK 25, measured: an empty group's selection is null, and so is the argument.
+        assertTrue(g.isSelected(null));
+        JRadioButtonMenuItem a = new JRadioButtonMenuItem("A", true);
+        g.add(a);
+        assertTrue(g.isSelected(a.getModel()));
+        assertFalse(g.isSelected(null));
     }
 
     @Test
-    @DisplayName("setSelected(ButtonModel, boolean) drops to WARN")
-    void setSelectedModelWarns() {
+    @DisplayName("setSelected(ButtonModel, true) moves the selection; false does nothing")
+    void setSelectedModelMovesTheSelection() {
         ButtonGroup g = new ButtonGroup();
-        List<String> warned = capturingWarns(() -> g.setSelected(null, true));
-        assertTrue(warned.stream().anyMatch(
-                w -> w.contains("ButtonGroup") && w.contains("setSelected")));
+        JRadioButtonMenuItem a = new JRadioButtonMenuItem("A", true);
+        JRadioButtonMenuItem b = new JRadioButtonMenuItem("B");
+        g.add(a);
+        g.add(b);
+        g.setSelected(b.getModel(), true);
+        assertFalse(a.isSelected());
+        assertTrue(b.isSelected());
+        g.setSelected(b.getModel(), false);
+        assertTrue(b.isSelected(), "deselecting is not the group's to do");
     }
 
     @Test
-    @DisplayName("JButton in group never becomes selected (no selection state)")
+    @DisplayName("an unselected JButton joins the group without becoming its selection")
     void plainButtonNeverBecomesTheSelection() {
-        // JButton's setSelected is onNoop — adding it to a group is
-        // shape-only. AbstractButton.isSelected returns false (also
-        // onNoop). Group.add proceeds; the button counts in
-        // getButtonCount but never becomes the selection.
+        // Its DefaultButtonModel never consults the group, as in the JDK; the button
+        // counts in getButtonCount but is not the selection.
         ButtonGroup g = new ButtonGroup();
         JButton jb = new JButton("Plain");
         g.add(jb);

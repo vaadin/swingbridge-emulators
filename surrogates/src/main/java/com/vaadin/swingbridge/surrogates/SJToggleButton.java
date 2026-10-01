@@ -81,8 +81,8 @@ import java.awt.event.ItemListener;
  * The surrogate carries no {@code ButtonGroup} awareness — standalone, a
  * click toggles on/off via the ToggleButtonModel pulse. Stage-3 group
  * mutex uses {@code :emulators.JToggleButton} + {@code vaadinx.swing.ButtonGroup}
- * per D_buttongroup; the emulator's Item bridge coordinates and pushes the group's
- * verdict back through {@link #setSelected}.
+ * per D_buttongroup: the emulator hands this surrogate a model whose
+ * {@code setSelected} consults the group (D_emulator_button_model).
  */
 @StyleSheet("emul/sjtogglebutton.css")
 public class SJToggleButton extends Button implements AbstractButtonMixin {

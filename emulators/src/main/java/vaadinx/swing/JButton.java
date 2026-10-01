@@ -40,15 +40,14 @@
 package vaadinx.swing;
 
 /**
- * Emulator for {@link javax.swing.JButton} — a thin delegating shell over its
+ * Emulator for {@link javax.swing.JButton}, rendered by its
  * {@link com.vaadin.swingbridge.surrogates.SJButton} peer. Responsibility splits across the two:
  *
  * <ul>
- *   <li><b>Surrogate</b> — the ButtonModel-driven click/armed/pressed pulse,
- *       the {@code AbstractButtonMixin} Action wiring, and the rendered Vaadin
- *       Button peer.</li>
- *   <li><b>Emulator (here + {@link AbstractButton})</b> — the Swing-shape API
- *       migrated code compiles against: {@code ActionListener} with
+ *   <li><b>Surrogate</b> — the rendered Vaadin Button peer, which pulses the
+ *       emulator's {@code ButtonModel} on a browser click.</li>
+ *   <li><b>Emulator (here + {@link AbstractButton})</b> — the {@code ButtonModel}
+ *       and the Swing-shape API migrated code compiles against: {@code ActionListener} with
  *       {@code source == this} JButton, PCEs on the emulator's own
  *       {@code PropertyChangeSupport}, and the JButton-specific
  *       {@code defaultCapable} / {@code isDefaultButton} / {@code paramString}
@@ -70,9 +69,9 @@ public class JButton extends vaadinx.swing.AbstractButton implements javax.acces
     private boolean defaultCapable = true;
 
     public JButton(java.lang.String text, vaadinx.swing.Icon icon) {
-        // Root ctor for the public surface: instantiate the SJButton
-        // surrogate (SD_sjbutton — peer-side ButtonModel pulse +
-        // AbstractButtonMixin Action wiring + rendered Vaadin Button),
+        // Root ctor for the public surface: peer on the SJButton surrogate
+        // (SD_sjbutton — the rendered Vaadin Button, which pulses the model
+        // it is handed on a click), install the JDK's DefaultButtonModel,
         // then funnel through AbstractButton.init(text, icon). JDK follows
         // the same shape — every JButton ctor converges on init so subclass
         // overrides of init() fire exactly once (R_swing_is_truth). Icon rendering for
@@ -87,7 +86,8 @@ public class JButton extends vaadinx.swing.AbstractButton implements javax.acces
         // the SJButton directly. User-code subclasses inherit the locked
         // peer; behavioural overrides still work, and rendering overrides
         // are out of scope per R_match_swing_errors (b).
-        super(new com.vaadin.swingbridge.surrogates.SJButton());
+        super(com.vaadin.swingbridge.surrogates.SJButton.class, com.vaadin.swingbridge.surrogates.SJButton::new);
+        setModel(new javax.swing.DefaultButtonModel());
         init(text, icon);
     }
 

@@ -175,7 +175,8 @@ class JCheckBoxMenuItemTest extends AbstractKaribuTest {
         assertTrue(item.getState());
         actionFired.assertEquals(1);
         itemFired.assertEquals(1);
-        changeFired.assertEquals(1);
+        // JDK 25's count, measured: armed, pressed, the selection, released, disarmed.
+        changeFired.assertEquals(5);
     }
 
     @Test

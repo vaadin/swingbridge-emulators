@@ -39,6 +39,7 @@
 
 package vaadinx.swing;
 
+import javax.swing.ButtonModel;
 import java.io.Serializable;
 import java.util.Enumeration;
 import java.util.Vector;
@@ -47,212 +48,112 @@ import java.util.Vector;
  * Emulator port of {@link javax.swing.ButtonGroup}, accepting
  * {@link vaadinx.swing.AbstractButton} subclasses (the JDK class accepts
  * {@code javax.swing.AbstractButton}, which our ported subclasses do not
- * extend). Per D_buttongroup, coordination operates on the ported buttons directly;
- * {@link javax.swing.ButtonModel}-taking JDK methods are preserved in
- * shape so import-swap compiles, but drop-and-WARN at runtime (R_match_swing_errors sub-bucket
- * (c) — {@code AbstractButton} stores selection directly, so there is no
- * model to return; migrators iterate via {@link #getElements} +
- * {@code button.isSelected()}).
+ * extend). Coordinates the buttons' {@link javax.swing.ButtonModel}s as the
+ * JDK's does: {@link #getSelection} is the selected button's model, and
+ * {@link #setSelected(javax.swing.ButtonModel, boolean)} deselects the previous
+ * selection before selecting the new one.
  *
- * <p>Coordination mirrors JDK {@code DefaultButtonModel.setSelected}: a
- * selection-bearing subclass (JToggleButton, JCheckBoxMenuItem,
- * JRadioButtonMenuItem) consults its installed group at the top of
- * {@code setSelected} / {@code makeOnClick} via the package-private
- * {@link #setSelectedButton} / {@link #isSelectedButton} hooks. The group
- * flips its selection slot and cascades {@code setSelected(false)} to the
- * previously-selected sibling; a deselect request on the current selection
- * is a no-op (JDK's suppression of click-to-deselect a radio). Browser-click
- * coordination on JToggleButton-in-group rides the SJToggleButton→emulator
- * bridge per D_buttongroup_browser_click.
+ * <p>The JDK keeps a model's group on the model, as a {@code javax.swing.ButtonGroup},
+ * which this group is not. So membership is recorded on the emulator's
+ * {@link JToggleButton.ToggleButtonModel} instead, whose {@code setSelected}
+ * consults the group where the JDK's consults its own — which is what makes a
+ * browser click on a selected radio button leave it selected. A button whose model
+ * is some other {@code ButtonModel} joins the group's bookkeeping but is never
+ * consulted, as a {@code JButton}'s {@code DefaultButtonModel} is not in the JDK.
  */
 public class ButtonGroup implements Serializable {
 
-    /**
-     * Buttons in the group, in insertion order. Matches JDK's protected
-     * {@code Vector<AbstractButton>} field by element class — only ours
-     * holds {@link vaadinx.swing.AbstractButton}, not
-     * {@link javax.swing.AbstractButton}. Made package-private so tests
-     * can introspect; JDK exposes it as protected, which we don't need
-     * since this class is non-final but doesn't have a paired UI / impl
-     * subclass that mutates the list directly.
-     */
     // protected, and a Vector, because the JDK's is both and a subclass names it
     // (D_instance_field_surface). Kept final where the JDK's is not: the visibility
     // audit is about reachability, and letting a subclass null out the group's own
     // storage buys nothing a migrator wants.
     protected final Vector<AbstractButton> buttons = new Vector<>();
 
-    /**
-     * The currently-selected button in the group, or {@code null} when
-     * nothing is selected. Stored as {@code AbstractButton} rather than
-     * {@code ButtonModel} because :emulators flattened the model surface
-     * (selection lives directly on JToggleButton / JCheckBoxMenuItem /
-     * JRadioButtonMenuItem fields, not on a {@code DefaultButtonModel}).
-     */
-    private AbstractButton selectedButton;
+    /** The selected button's model, or {@code null} when nothing is selected. */
+    ButtonModel selection = null;
 
     /** Default constructor — empty group, no selection. */
     public ButtonGroup() {
     }
 
     /**
-     * Add a button to the group. JDK contract: a null argument is a
-     * silent no-op (real Swing's body short-circuits on null without
-     * NPE). If the button is already selected when added, it becomes
-     * the group's selection — unless another button is already
-     * selected, in which case the newly-added button is forced
-     * deselected to maintain the at-most-one invariant.
+     * Adds a button; {@code null} is a silent no-op, as in the JDK. A selected newcomer
+     * becomes the selection unless there already is one, in which case it is deselected
+     * before it joins, so the group does not veto that.
      */
     public void add(AbstractButton b) {
-        if (b == null) return;
+        if (b == null) {
+            return;
+        }
         buttons.addElement(b);
-        b.setButtonGroup(this);
+
         if (b.isSelected()) {
-            if (selectedButton == null) {
-                selectedButton = b;
+            if (selection == null) {
+                selection = b.getModel();
             } else {
-                // Force the newcomer off — group invariant beats the
-                // newcomer's preconfigured state. Same shape JDK takes
-                // (DefaultButtonModel.setGroup → group.setSelected).
                 b.setSelected(false);
             }
         }
+
+        setGroup(b.getModel(), this);
     }
 
-    /**
-     * Remove a button from the group. JDK contract: a null argument is
-     * a silent no-op. If the removed button was the selection, the
-     * group's selection clears.
-     */
+    /** Removes a button; {@code null} is a silent no-op, as in the JDK. */
     public void remove(AbstractButton b) {
-        if (b == null) return;
+        if (b == null) {
+            return;
+        }
         buttons.removeElement(b);
-        b.setButtonGroup(null);
-        if (b == selectedButton) {
-            selectedButton = null;
+        if (b.getModel() == selection) {
+            selection = null;
         }
+        setGroup(b.getModel(), null);
     }
 
-    /**
-     * Clear the current selection. The previously-selected button
-     * (if any) is told to deselect via its own {@code setSelected(false)}
-     * — which fires Item + Change events, just as a JDK radio's
-     * deselection would. The group's selection slot clears before the
-     * cascade so the outgoing button's own setSelected re-consult of
-     * the group sees a null selection (avoiding the JDK-no-op-on-false
-     * branch from interfering).
-     */
+    /** Clears the selection: afterwards no button in the group is selected. */
     public void clearSelection() {
-        if (selectedButton != null) {
-            AbstractButton old = selectedButton;
-            selectedButton = null;
-            old.setSelected(false);
+        if (selection != null) {
+            ButtonModel oldSelection = selection;
+            selection = null;
+            oldSelection.setSelected(false);
         }
     }
 
-    /**
-     * Enumerate the buttons in insertion order. Returns
-     * {@code Enumeration<AbstractButton>} where {@code AbstractButton}
-     * is {@link vaadinx.swing.AbstractButton} — JDK's signature is
-     * {@code Enumeration<javax.swing.AbstractButton>}, an irreducible
-     * cross-package divergence (D_buttongroup_cross_package). Migrators iterating with a
-     * {@code for (vaadinx.swing.AbstractButton b : Collections.list(group.getElements()))}
-     * loop work without changes; cross-cast attempts to JDK
-     * AbstractButton would fail, but that pattern doesn't survive an
-     * import-swap anyway.
-     */
     public Enumeration<AbstractButton> getElements() {
         return buttons.elements();
     }
 
-    /** Number of buttons in the group. */
+    public ButtonModel getSelection() {
+        return selection;
+    }
+
+    /**
+     * Makes {@code m} the selection when {@code b} is {@code true}, deselecting the previous
+     * one first. Deselecting is not done here: {@code false} does nothing.
+     */
+    public void setSelected(ButtonModel m, boolean b) {
+        if (b && m != null && m != selection) {
+            ButtonModel oldSelection = selection;
+            selection = m;
+            if (oldSelection != null) {
+                oldSelection.setSelected(false);
+            }
+            m.setSelected(true);
+        }
+    }
+
+    public boolean isSelected(ButtonModel m) {
+        return (m == selection);
+    }
+
     public int getButtonCount() {
         return buttons.size();
     }
 
-    /**
-     * JDK contract: returns the selected button's {@code ButtonModel}.
-     * :emulators doesn't model {@code ButtonModel}, so this returns null
-     * with a WARN per R_match_swing_errors sub-bucket (c). Migrators relying on
-     * {@code group.getSelection()} chained dereferences (e.g.
-     * {@code group.getSelection().isSelected()}) will NPE — documented
-     * gap; use {@link #getElements} + per-button {@code isSelected()}
-     * instead.
-     */
-    public javax.swing.ButtonModel getSelection() {
-        vaadinx.EHelper.onUnimplemented("ButtonGroup", "getSelection");
-        return null;
-    }
-
-    /**
-     * JDK contract: true if the given model is the group's selection.
-     * Drop-and-WARN — :emulators doesn't model ButtonModel, so the
-     * argument has no canonical match against our {@code selectedButton}
-     * slot. Always returns false. Use {@link AbstractButton#isSelected}
-     * directly. R_match_swing_errors sub-bucket (c).
-     */
-    public boolean isSelected(javax.swing.ButtonModel m) {
-        vaadinx.EHelper.onUnimplemented("ButtonGroup", "isSelected", m);
-        return false;
-    }
-
-    /**
-     * JDK contract: when {@code b} is true and {@code m} is not the
-     * current selection, set it as the new selection (deselecting the
-     * old one). Drop-and-WARN — :emulators doesn't model ButtonModel.
-     * Use the package-private {@link #setSelectedButton(AbstractButton, boolean)}
-     * coordination hook from inside the ported AbstractButton subclasses
-     * instead. R_match_swing_errors sub-bucket (c).
-     */
-    public void setSelected(javax.swing.ButtonModel m, boolean b) {
-        vaadinx.EHelper.onUnimplemented("ButtonGroup", "setSelected", m, b);
-    }
-
-    // ------------------------------------------------------------------
-    // Package-private coordination hooks called from AbstractButton
-    // subclasses' setSelected / makeOnClick. These are the ported
-    // counterparts of JDK's group.setSelected(model, b) /
-    // group.isSelected(model) — the same shape the JDK uses when
-    // coordinating a DefaultButtonModel.setSelected through a group.
-    // ------------------------------------------------------------------
-
-    /**
-     * Coordination entry point — called from a button's setSelected /
-     * makeOnClick when the button has this group installed. Mirrors JDK
-     * {@code ButtonGroup.setSelected(ButtonModel, boolean)}: when
-     * {@code b} is true and {@code requester} differs from the current
-     * selection, it becomes the new selection and the prior selection
-     * (if any) cascades to {@code setSelected(false)}. When {@code b}
-     * is false, this is a no-op — the requester's own setSelected then
-     * re-reads {@link #isSelectedButton} (which still returns true if
-     * the requester was the selection), discovers that the group
-     * vetoed the deselection, and keeps itself selected.
-     */
-    void setSelectedButton(AbstractButton requester, boolean b) {
-        if (b && requester != null && requester != selectedButton) {
-            AbstractButton oldSelection = selectedButton;
-            selectedButton = requester;
-            if (oldSelection != null) {
-                // Cascade the deselection. The recursive call lands in
-                // the old button's setSelected(false) — its group
-                // consult sees b=false and is a no-op (per the branch
-                // above), then b becomes whatever the group says it
-                // is via isSelectedButton(old) — false, since
-                // selectedButton has already moved on. So the old
-                // button's own state machine proceeds with b=false and
-                // fires DESELECTED.
-                oldSelection.setSelected(false);
-            }
+    /** The JDK's {@code model.setGroup(group)}, onto the one model kind that consults a group. */
+    private static void setGroup(ButtonModel model, ButtonGroup group) {
+        if (model instanceof JToggleButton.ToggleButtonModel toggle) {
+            toggle.buttonGroup = group;
         }
-    }
-
-    /**
-     * Coordination read-back — called from a button's setSelected /
-     * makeOnClick AFTER {@link #setSelectedButton} to discover the
-     * group's verdict on whether the button should end up selected.
-     * Mirrors JDK {@code ButtonGroup.isSelected(ButtonModel)}.
-     */
-    boolean isSelectedButton(AbstractButton b) {
-        return b != null && b == selectedButton;
     }
 }

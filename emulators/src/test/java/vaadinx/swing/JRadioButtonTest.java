@@ -144,8 +144,8 @@ class JRadioButtonTest extends AbstractKaribuTest {
     void peerValueChangeMirrorsIntoSelectedField() {
         // R_swing_is_truth peer → setter path: setting VaadinRadioButton's checked
         // (simulating a browser-side toggle) updates isSelected via the
-        // ValueChange wire on the surrogate + the Item bridge on the
-        // emulator.
+        // ValueChange wire on the surrogate, which pulses the emulator's
+        // own model.
         JRadioButton rb = new JRadioButton();
         peerOf(rb).setValue(true);
         assertTrue(rb.isSelected());
@@ -295,11 +295,9 @@ class JRadioButtonTest extends AbstractKaribuTest {
     @Test
     @DisplayName("ButtonGroup deselect cascade fires DESELECTED on the prior selection")
     void buttonGroupDeselectCascadeFiresDeselected() {
-        // The cascade flows: group.setSelectedButton(b, true) → group
-        // sees old selection (a), calls a.setSelected(false) → walks the
-        // sibling's setSelected → consults group (no-op for false), then
-        // abm.setSelected(false) on a's peer → model fires DESELECTED →
-        // bridge re-fires at the emulator level.
+        // The cascade flows: b's model consults the group, which calls
+        // setSelected(false) on a's model → it fires DESELECTED → a's
+        // Handler re-fires it at the emulator level.
         JRadioButton a = new JRadioButton("A", true);
         JRadioButton b = new JRadioButton("B");
         ButtonGroup g = new ButtonGroup();
@@ -319,10 +317,9 @@ class JRadioButtonTest extends AbstractKaribuTest {
     @Test
     @DisplayName("ButtonGroup browser-click bridge cascades deselect to prior selection")
     void buttonGroupBridgeCascadesDeselect() {
-        // Direct surrogate-side toggle = simulates a browser click. The
-        // SJRadioButton→emulator Item-bridge consults the group, sees the
-        // click should land, cascades deselect through the group, and
-        // lets the verdict proceed for the click target.
+        // Direct surrogate-side toggle = simulates a browser click. It
+        // pulses the emulator's model, whose setSelected consults the
+        // group, which cascades the deselect to the prior selection.
         JRadioButton a = new JRadioButton("A", true);
         JRadioButton b = new JRadioButton("B");
         ButtonGroup g = new ButtonGroup();

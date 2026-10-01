@@ -112,7 +112,7 @@ public class MenusPanel extends JPanel {
         JRadioButtonMenuItem darkTheme = new JRadioButtonMenuItem("Dark");
         darkTheme.addActionListener(e -> readout.setText("View → Dark theme"));
         // ButtonGroup coordination per D_buttongroup — clicking Dark deselects
-        // Light through the group's setSelectedButton cascade; clicking
+        // Light through the group's cascade over the items' models; clicking
         // the already-selected item is a no-op for selection state but
         // still fires ActionEvent (matches JDK).
         ButtonGroup themeGroup = new ButtonGroup();

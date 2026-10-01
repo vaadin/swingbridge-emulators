@@ -44,21 +44,16 @@ package vaadinx.swing;
 // JRadioButton is a public Swing leaf (no public class in javax.swing.*
 // extends it, ignoring javax.swing.plaf.* per R_leaf_peer_lockdown). R_leaf_peer_lockdown stance applies:
 // the protected (Component peer) ctor is omitted, the root public ctor
-// hard-codes the canonical peer as `new com.vaadin.swingbridge.surrogates.SJRadioButton()`.
+// hard-codes the canonical peer as SJRadioButton.
 // User-code subclassing for behaviour inherits the locked peer and works
 // fine; user-code subclassing for custom rendering (paintComponent
 // override, pluggable BasicRadioButtonUI) is out of scope per R_match_swing_errors
 // sub-bucket (b).
 //
-// Inherits ALL behaviour from vaadinx.swing.JToggleButton: ButtonGroup
-// veto in setSelected, Item-bridge from the surrogate's
-// JToggleButton.ToggleButtonModel pulse, peer-aware doClick + setText
-// routing, ValueChange-driven browser path. None of those code paths
-// narrows on a concrete surrogate type after D_jradiobutton's mixin refactor —
-// they dispatch on AbstractButtonMixin (which SJRadioButton implements)
-// and HasLabel (which VaadinRadioButton implements), so the SJRadioButton
-// peer slots straight into the existing toggle pipeline with zero new
-// per-peer narrowing.
+// Inherits ALL behaviour from vaadinx.swing.JToggleButton: the emulator-owned
+// ToggleButtonModel with its ButtonGroup consult, the model-driven event
+// fan-out and doClick, and setText's HasLabel routing. SJRadioButton renders
+// that model and pulses it on a browser click, through AbstractButtonMixin.
 
 /** Emulator for {@link javax.swing.JRadioButton}. */
 public class JRadioButton extends vaadinx.swing.JToggleButton implements javax.accessibility.Accessible {
@@ -89,24 +84,17 @@ public class JRadioButton extends vaadinx.swing.JToggleButton implements javax.a
 
     public JRadioButton(javax.swing.Action action) {
         // JDK pattern: this(); setAction(a). Chaining to the no-arg ctor
-        // means the peer install and bridge wires fire once; setAction
+        // means the model is installed once; setAction
         // does NAME / MNEMONIC / ICON / COMMAND / ENABLED copy afterwards.
         this();
         setAction(action);
     }
 
     public JRadioButton(java.lang.String text, vaadinx.swing.Icon icon, boolean selected) {
-        // Root ctor — R_leaf_peer_lockdown lock-down: peer is hard-coded to SJRadioButton.
-        // Forwards to JToggleButton's peer-taking ctor so the bridge wires
-        // (Action + Change in AbstractButton; Item in JToggleButton)
-        // install exactly once. After D_jradiobutton those bridges dispatch on
-        // AbstractButtonMixin, which SJRadioButton implements, so the
-        // SJRadioButton peer slots straight in.
-        super(new com.vaadin.swingbridge.surrogates.SJRadioButton());
-        init(text, icon);
-        if (selected) {
-            setSelected(true);
-        }
+        // Root ctor — R_leaf_peer_lockdown lock-down: peer is hard-coded to SJRadioButton,
+        // which renders the ToggleButtonModel JToggleButton's ctor installs.
+        super(com.vaadin.swingbridge.surrogates.SJRadioButton.class, com.vaadin.swingbridge.surrogates.SJRadioButton::new);
+        initToggle(text, icon, selected);
     }
 
     public java.lang.String getUIClassID() {

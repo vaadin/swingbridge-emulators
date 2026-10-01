@@ -22,8 +22,13 @@ that file.
   once per JVM by `EHelper.onPeerBuiltOffUIThread` and counted in `EHelper.peersBuiltOffUIThread()`.
 - **Lazy today:** `JLabel`, `JPanel`, `JSeparator`, `JScrollBar`, `JViewport`, `JLayeredPane`,
   `JTableHeader`, `Box`, `Box.Filler`, `Container()` (so AWT `Panel`), AWT `Label`, `Button`,
-  `Checkbox`, `Choice`, `List`, `Scrollbar`, `ScrollPane`. `vaadinx.LazyPeerTest` builds and configures each on a
+  `Checkbox`, `Choice`, `List`, `Scrollbar`, `ScrollPane`, and the button family — `JButton`,
+  `JToggleButton`, `JCheckBox`, `JRadioButton`, `JMenuItem`, `JMenu`, `JCheckBoxMenuItem`,
+  `JRadioButtonMenuItem`. `vaadinx.LazyPeerTest` builds and configures each on a
   bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
+- **The button family owns its `ButtonModel`** ([D_emulator_button_model](../emulators/decisions.md#D_emulator_button_model)):
+  the surrogate is handed the emulator's model and renders it, `doClick` / `setSelected` never
+  reach the peer, and `ButtonGroup` coordinates models as the JDK's does.
 - **JTable owns its sorter and columns** (`notifySorter(ModelChange)`, `createDefaultColumnsFromModel`,
   `SJTable.setSorterNotifiedByOwner`), so a queued write no longer holds back what Swing reads. It is
   still eager.
@@ -52,32 +57,25 @@ that file.
 
 ## The worklist, in order
 
-1. **Model ownership for the button family** (agreed 2026-10-01): `AbstractButton`, `JToggleButton`,
-   `JButton`, `JCheckBox`, `JRadioButton`, `JMenuItem` and its subclasses. `doClick()` and the
-   selection fan-out run through the surrogate's `ButtonModel` (`abm.doClick` → model pulse → the
-   ctor's bridge into the emulator's listeners), which is notification, not a pure sink. The
-   emulator owns the `ButtonModel` and fires as the JDK does; the surrogate renders it. Reverses
-   SD_sjbutton's "surrogate model stays authoritative" and touches D_jradiobutton's ButtonGroup
-   coordination — record the decision. Then convert; `AbstractButton` / `JToggleButton` need the lazy
-   ctor overload, and their ctor bridges become writes (rule 5).
-2. **Shared-model components** — `JSlider`, `JSpinner`, `JList`, `JComboBox`, `JTree`: the surrogate
+1. **Shared-model components** — `JSlider`, `JSpinner`, `JList`, `JComboBox`, `JTree`: the surrogate
    is built over a JDK model and writes browser changes into it
    ([withpeer-shape.md](./withpeer-shape.md) §3 (h)). Where the emulator reads its model *from* the
-   peer at construction, it must build the model itself and hand it over. Same agreed direction as 1.
-3. **Text components** — `JTextComponent`, `JTextField`, `JPasswordField`, `JTextArea`: the
+   peer at construction, it must build the model itself and hand it over — the button family is
+   the worked case (D_emulator_button_model).
+2. **Text components** — `JTextComponent`, `JTextField`, `JPasswordField`, `JTextArea`: the
    emulator-owned `Document` pushes to the peer (a sink), but the ctor installs the peer-side sync;
    apply rule 5. `JFormattedTextField` echoes into its `Document` inside a write (§3 (a)) — a pure-sink
    violator to move Swing-side first; it also picks one of five peers at construction, which the
    declared type must name. `JEditorPane` / `JTextPane` last.
-4. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
+3. **The remaining containers and leaves** — `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`,
    `JProgressBar`, `JColorChooser`, `JMenuBar`, `JPopupMenu`, `JDesktopPane`, `JFileChooser`,
-   `JOptionPane` (a `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–6.
-5. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
+   `JOptionPane` (a `Div`), `JInternalFrame`, `JRootPane`. Check each for rules 1–7.
+4. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`: shows go through
    `EHelper.runInUIThread`, which finds a UI through the `EmulatorContext`; `JFrame` picks its peer by
    `@MainWindow` (D_frame_strategy), so the declared type is a choice too.
-6. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
+5. **`JTable`** — its private `JTable(SJTable)` ctor reads the model, columns and flags back out of the
    surrogate the public ctors built. It has to build them itself, as the JDK's ctor does.
-7. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
+6. **The non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection) — give each a
    lazy overload for its subclasses; the eager one stays for a migrator's own subclass.
 
 ## After the sweep

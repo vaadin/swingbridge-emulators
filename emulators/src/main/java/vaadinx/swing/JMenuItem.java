@@ -88,7 +88,7 @@ public class JMenuItem extends vaadinx.swing.AbstractButton implements javax.acc
         // Root no-arg ctor: peer is a placeholder Span that's never
         // attached. The actual rendered MenuItem is built by the parent
         // JMenuBar's tree-rebuild walk on each push.
-        super(new com.vaadin.flow.component.html.Span());
+        this(com.vaadin.flow.component.html.Span.class, com.vaadin.flow.component.html.Span::new);
     }
 
     public JMenuItem(java.lang.String text) {
@@ -130,6 +130,14 @@ public class JMenuItem extends vaadinx.swing.AbstractButton implements javax.acc
      */
     protected JMenuItem(com.vaadin.flow.component.Component peer) {
         super(peer);
+        setModel(new javax.swing.DefaultButtonModel());
+    }
+
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> JMenuItem(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        setModel(new javax.swing.DefaultButtonModel());
     }
 
     // ---- Parent / tree-rebuild bubble --------------------------------
@@ -229,12 +237,15 @@ public class JMenuItem extends vaadinx.swing.AbstractButton implements javax.acc
 
     /**
      * Build the onClick Runnable for the MenuNode. Top-level JMenus
-     * (Vaadin auto-opens their submenu) return {@code null}; leaf
-     * items + JCheckBoxMenuItem / JRadioButtonMenuItem return a
-     * Runnable that fires the JDK ActionEvent through this item's
-     * listenerList. Overridden by JMenu (returns null when it has
-     * children) and JCheckBoxMenuItem / JRadioButtonMenuItem (flip
-     * selection then fireActionPerformed).
+     * (Vaadin auto-opens their submenu) return {@code null}; every other
+     * item returns a Runnable that clicks it as the JDK's menu UI does,
+     * through {@link #doClick(int) doClick(0)}: the model pulse fires the
+     * item's Change / Action events, and flips a checkable item's selection
+     * through its {@code ToggleButtonModel} and {@code ButtonGroup}.
+     *
+     * <p>A checkable item re-renders afterwards even when nothing changed:
+     * Vaadin toggles a checkable {@code MenuItem} on the click itself, so a
+     * group refusing to deselect its selection has to be shown again.
      *
      * <p>Body wraps in {@link vaadinx.EHelper#callSwing(Runnable)} per R_callswing_envelope
      * / D_callswing_loom: SJMenuBar's installed click listener invokes this Runnable
@@ -243,17 +254,21 @@ public class JMenuItem extends vaadinx.swing.AbstractButton implements javax.acc
      * emulator side before user {@code actionPerformed} runs — otherwise
      * user code calling {@code JOptionPane.showXxxDialog} or modal
      * {@code dialog.setVisible(true)} fails {@code Dialog.parkUntilClose}'s
-     * UI-fiber check. Same per-seam pattern that
-     * {@code AbstractButton}'s SJButton / SJToggleButton bridge listeners
-     * use.
+     * UI-fiber check.
      */
     Runnable makeOnClick() {
-        return () -> vaadinx.EHelper.callSwing(() -> fireActionPerformed(new java.awt.event.ActionEvent(
-                this,
-                java.awt.event.ActionEvent.ACTION_PERFORMED,
-                getActionCommand(),
-                System.currentTimeMillis(),
-                0)));
+        return () -> vaadinx.EHelper.callSwing(() -> {
+            doClick(0);
+            if (isCheckableNode()) {
+                notifyTreeMutated();
+            }
+        });
+    }
+
+    /** A checkable item's checked state is part of the rendered tree. */
+    @Override
+    void modelSelectionChanged() {
+        notifyTreeMutated();
     }
 
     // ---- Text / icon / actionCommand / enabled — bubble on change ---

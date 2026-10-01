@@ -74,10 +74,27 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     // which becomes "" at the peer write so a Vaadin Button doesn't NPE.
     private java.lang.String text;
 
-    // AWT: actionCommand defaults to null; getActionCommand falls back to
-    // the button's text when null, so a freshly-constructed button with
-    // text "OK" still produces a meaningful ActionEvent.actionCommand.
-    private java.lang.String actionCommand;
+    /**
+     * The button's state machine — armed, pressed, selected, enabled, rollover — and its action
+     * command, as in the JDK. The emulator builds it and listens to it; the surrogate is handed
+     * the same instance, so a browser click pulses this model and the surrogate renders its
+     * selection.
+     */
+    protected javax.swing.ButtonModel model = null;
+
+    /** The model's {@code ChangeListener}, {@link #createChangeListener}'s result. */
+    protected javax.swing.event.ChangeListener changeListener = null;
+
+    /** The model's {@code ActionListener}, {@link #createActionListener}'s result. */
+    protected java.awt.event.ActionListener actionListener = null;
+
+    /** The model's {@code ItemListener}, {@link #createItemListener}'s result. */
+    protected java.awt.event.ItemListener itemListener = null;
+
+    /** Only one {@code ChangeEvent} is needed per button, as its sole state is the source. */
+    protected transient javax.swing.event.ChangeEvent changeEvent;
+
+    private Handler handler;
 
     // Icon fields — the Swing-side state; setIcon pushes an ImageIcon to the peer
     // as a Vaadin Image and WARNs for other Icon implementations.
@@ -105,8 +122,8 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     private boolean hideActionText = false;
     private java.awt.Insets margin;
 
-    // Mnemonic state. Swing stores mnemonic in the ButtonModel; we flatten
-    // to a field since ButtonModel isn't modeled. displayedMnemonicIndex
+    // Mnemonic state. Swing stores mnemonic in the ButtonModel too; here it is
+    // the button's own field, so model.getMnemonic() does not see it. displayedMnemonicIndex
     // defaults to -1 per javadoc ("no mnemonic character displayed").
     private int mnemonic = 0;
     private int displayedMnemonicIndex = -1;
@@ -134,15 +151,6 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     // can detach cleanly.
     private java.beans.PropertyChangeListener actionPropertyChangeListener;
 
-    // ButtonGroup membership per D_buttongroup. JDK stores this on ButtonModel
-    // (DefaultButtonModel.group); we lift it to the button since
-    // :emulators flattened the model surface. Set by ButtonGroup.add /
-    // ButtonGroup.remove (package-private below); consulted at the top
-    // of setSelected / makeOnClick on selection-bearing subclasses
-    // (JToggleButton, JCheckBoxMenuItem, JRadioButtonMenuItem) to
-    // implement the JDK select-one-of-N pulse.
-    vaadinx.swing.ButtonGroup buttonGroup;
-
     protected AbstractButton() {
         // Can't pick a peer without a concrete subclass ctor providing
         // one; this no-arg path only exists because AWT has it. Div keeps
@@ -153,57 +161,42 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         vaadinx.EHelper.onUnimplemented("AbstractButton", "<init>");
     }
 
+    /**
+     * Peers on {@code peer}, built by the caller. Installs no model: as in the JDK, the concrete
+     * subclass's constructor does ({@link #setModel}).
+     */
     protected AbstractButton(com.vaadin.flow.component.Component peer) {
         super(peer);
-        // Peer → AWT event pipeline. Two shapes depending on peer type:
-        //
-        //   (a) AbstractButtonMixin peer (every landed surrogate — SJButton
-        //       (SD_sjbutton), SJToggleButton / SJCheckBox (SD_toggle_checkbox_first_cut),
-        //       SJRadioButton (D_jradiobutton)): bridge the surrogate's mixin-
-        //       supplied ActionListener + ChangeListener fan-outs (driven
-        //       by the installed ButtonModel's armed/pressed pulse on both
-        //       browser click and surrogate-side doClick) into the
-        //       emulator's listenerList. Source rebound to `this` so
-        //       migrated user code casting `(JButton) e.getSource()` sees
-        //       the emulator, not the surrogate — same JSlider / JSpinner
-        //       pattern post SD_sjslider / SD_sjspinner. Item is NOT bridged here —
-        //       JToggleButton subclasses install their own ItemListener
-        //       bridge (since AbstractButton has no selection-state
-        //       contract, only the toggle descendants do).
-        //
-        //       The mixin dispatch generalises away the original SJButton-
-        //       only / SJToggleButton-only branches per D_jradiobutton: any future
-        //       AbstractButton surrogate that implements the mixin gets
-        //       the bridge for free, no per-peer branch needed.
-        //
-        //   (b) Non-surrogate peer (any custom Vaadin component passed
-        //       through the protected ctor): the direct ClickNotifier
-        //       wiring stays as a fallback. Synthesize an ActionEvent on
-        //       click since there's no ButtonModel pulse to bridge.
-        //
-        // All paths funnel through EHelper.callSwing per R_callswing_envelope / D_callswing_funnel so the
-        // UI-fiber seam lands in one place. Exceptions
-        // propagate back to Vaadin's ErrorHandler.
-        if (peer instanceof com.vaadin.swingbridge.surrogates.swing.AbstractButtonMixin abm) {
-            // Relayed rather than callSwing'd: a ButtonModel mutated off the UI thread
-            // (setSelected, doClick) fires these too (SD_background_model_hop).
-            abm.addActionListener(e -> vaadinx.EHelper.relayModelEvent(() ->
-                    fireActionPerformed(new java.awt.event.ActionEvent(
-                            this,
-                            e.getID(),
-                            e.getActionCommand(),
-                            e.getWhen(),
-                            e.getModifiers()))));
-            abm.addChangeListener(e -> vaadinx.EHelper.relayModelEvent(this::fireStateChanged));
-        } else if (peer instanceof com.vaadin.flow.component.ClickNotifier<?> cn) {
-            cn.addClickListener(e -> vaadinx.EHelper.callSwing(() ->
-                    fireActionPerformed(new java.awt.event.ActionEvent(
-                            this,
-                            java.awt.event.ActionEvent.ACTION_PERFORMED,
-                            getActionCommand(),
-                            System.currentTimeMillis(),
-                            0))));
-        }
+        installClickBridge();
+    }
+
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> AbstractButton(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        installClickBridge();
+    }
+
+    /**
+     * A surrogate peer pulses the model it is handed ({@link #setModel}) on a browser click, and
+     * the model's events reach this button through {@link Handler}. Any other clickable peer gets
+     * the same pulse from here, funnelled through {@code callSwing} per R_callswing_envelope.
+     */
+    private void installClickBridge() {
+        withPeer(p -> {
+            if (!(p instanceof com.vaadin.swingbridge.surrogates.swing.AbstractButtonMixin)
+                    && p instanceof com.vaadin.flow.component.ClickNotifier<?> cn) {
+                cn.addClickListener(e -> vaadinx.EHelper.callSwing(this::pulseModel));
+            }
+        });
+    }
+
+    /** A click's model transitions, as the JDK's button listener and {@link #doClick} drive them. */
+    private void pulseModel() {
+        model.setArmed(true);
+        model.setPressed(true);
+        model.setPressed(false);
+        model.setArmed(false);
     }
 
     protected void init(java.lang.String text, vaadinx.swing.Icon icon) {
@@ -277,138 +270,36 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     }
 
     public boolean isSelected() {
-        return selected;
+        return model.isSelected();
     }
 
     /**
-     * Flips the selection flag and, on an actual change, fires {@code ItemEvent} then
-     * {@code ChangeEvent} — the fan-out {@code DefaultButtonModel.setSelected} performs.
+     * Hands the flag to the model, which fires on an actual change: {@code ItemEvent} then
+     * {@code ChangeEvent} from a {@code DefaultButtonModel}, the reverse from a
+     * {@link JToggleButton.ToggleButtonModel}, which also consults its {@link ButtonGroup}.
      *
-     * <p>A plain {@code JButton} has no <em>visual</em> selected state, but it very much has
-     * the selection <em>state</em>: {@code new JButton("go").setSelected(true)} then
-     * {@code isSelected()} answers {@code true} on JDK 25, with an {@code ItemEvent} and a
-     * {@code ChangeEvent} delivered on the way. Only the rendering is missing here, which is
-     * the half R_decline_effect_only permits dropping. {@code JToggleButton} overrides this
-     * to coordinate its {@code ButtonGroup} and its surrogate's model (D_jradiobutton).
+     * <p>A plain {@code JButton} has the selection <em>state</em> but no rendering of it: only
+     * the effect is missing, the half R_decline_effect_only permits dropping.
      */
-    public void setSelected(boolean arg0) {
-        if (selected == arg0) {
-            // The JDK fires nothing when the flag does not move, and inventing an event
-            // real Swing never fires is the same class of bug as dropping one.
-            return;
-        }
-        selected = arg0;
-        fireItemStateChanged(new java.awt.event.ItemEvent(
-                this, java.awt.event.ItemEvent.ITEM_STATE_CHANGED, this,
-                arg0 ? java.awt.event.ItemEvent.SELECTED : java.awt.event.ItemEvent.DESELECTED));
-        fireStateChanged();
-        vaadinx.EHelper.onNoop("AbstractButton", "setSelected");
+    public void setSelected(boolean b) {
+        model.setSelected(b);
     }
-
-    /**
-     * The selection flag, mirroring {@code DefaultButtonModel}'s {@code SELECTED} bit.
-     *
-     * <p>Lives on the emulator rather than a {@code ButtonModel} because the model is
-     * flattened here (D_jradiobutton); {@code JToggleButton} keeps its own field in step with
-     * its surrogate's model through the Item bridge.
-     */
-    private boolean selected;
 
     public void doClick() {
-        // AWT's doClick() delegates to doClick(68) — the legacy 68 ms
-        // "pressed" duration used to animate a visible click. We skip the
-        // animation (no ButtonModel, no ChangeEvent fanout) and fire
-        // ActionEvent directly in doClick(int).
         doClick(68);
     }
 
+    /**
+     * Pulses the model as a press and release would, so a disabled button does nothing and a
+     * toggle button flips. The JDK paints the pressed state and sleeps {@code pressTime} between
+     * press and release; nothing paints here, so neither happens.
+     */
     public void doClick(int pressTime) {
-        // "Act as if pressed programmatically." Two paths:
-        //
-        //   (a) AbstractButtonMixin peer (every landed surrogate per D_jradiobutton):
-        //       route through the surrogate's doClick so the ButtonModel's
-        //       armed/pressed pulse fires — its ActionEvent + ChangeEvent
-        //       reach our listenerList through the bridge installed in the
-        //       ctor. Surrogate model stays authoritative (mirrors JSlider
-        //       / JSpinner shape).
-        //
-        //   (b) Non-surrogate peer: fire ActionEvent directly without
-        //       round-tripping through the peer. Peer-state (enabled,
-        //       focused) isn't consulted — AWT's doClick ignores isEnabled,
-        //       matching the contract that programmatic clicks bypass UI
-        //       gating. Timestamp + zero modifiers follow Swing's doClick
-        //       sources (no input device).
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.swing.AbstractButtonMixin abm) {
-            abm.doClick(pressTime);
-        } else {
-            fireActionPerformed(new java.awt.event.ActionEvent(
-                    this,
-                    java.awt.event.ActionEvent.ACTION_PERFORMED,
-                    getActionCommand(),
-                    System.currentTimeMillis(),
-                    0));
-        }
+        pulseModel();
     }
 
-    /**
-     * @return the model {@link #setModel} installed, or {@code null} when none
-     *     was — the button's real state machine is the surrogate's, not
-     *     reachable through this accessor (SD_sjbutton)
-     */
     public javax.swing.ButtonModel getModel() {
-        if (buttonModel == null) vaadinx.EHelper.onUnimplemented("AbstractButton", "getModel");
-        return buttonModel;
-    }
-
-    // Null unless user code installs one; inert either way — see setModel.
-    private javax.swing.ButtonModel buttonModel;
-
-    /**
-     * Set this button's {@link vaadinx.swing.ButtonGroup} membership.
-     * Package-private — called only from {@link ButtonGroup#add} and
-     * {@link ButtonGroup#remove}. Stored without further side effects;
-     * subclass setSelected / makeOnClick consults the field at the top
-     * of their bodies per D_buttongroup_coordination.
-     */
-    void setButtonGroup(vaadinx.swing.ButtonGroup g) {
-        this.buttonGroup = g;
-    }
-
-    /**
-     * Return this button's installed {@link vaadinx.swing.ButtonGroup},
-     * or null if not in a group. Package-private mirror of JDK's
-     * {@code ButtonModel.getGroup()} — :emulators flattened the model
-     * surface, so the accessor lives on the button. Used by the
-     * SJToggleButton→emulator bridge in {@link JToggleButton} for D_buttongroup_browser_click
-     * browser-click coordination.
-     */
-    vaadinx.swing.ButtonGroup getButtonGroup() {
-        return buttonGroup;
-    }
-
-    /**
-     * Group-coordinated state computation for selection-bearing
-     * subclasses ({@link JToggleButton}, {@link JCheckBoxMenuItem},
-     * {@link JRadioButtonMenuItem}). Called at the top of
-     * {@code setSelected(boolean)} / {@code makeOnClick} bodies:
-     *
-     * <pre>{@code
-     * public void setSelected(boolean b) {
-     *     b = consultButtonGroup(b);
-     *     // … existing fan-out …
-     * }
-     * }</pre>
-     *
-     * Returns the effective new state after the group's veto. When no
-     * group is installed, returns {@code b} unchanged. Mirrors JDK's
-     * {@code DefaultButtonModel.setSelected}: consult the group's
-     * setSelected then re-read isSelected to discover the final
-     * verdict (see D_buttongroup_coordination).
-     */
-    boolean consultButtonGroup(boolean b) {
-        if (buttonGroup == null) return b;
-        buttonGroup.setSelectedButton(this, b);
-        return buttonGroup.isSelectedButton(this);
+        return model;
     }
 
     public void setRolloverEnabled(boolean rolloverEnabled) {
@@ -472,20 +363,19 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     }
 
     public void setActionCommand(java.lang.String command) {
-        this.actionCommand = command;
-        // No PropertyChangeEvent: AbstractButton.setActionCommand is one line
-        // in the JDK — getModel().setActionCommand(command) — and neither it
-        // nor DefaultButtonModel fires anything bound. The command is read
-        // back at ActionEvent-construction time, which is the whole
+        // No PropertyChangeEvent: neither this nor DefaultButtonModel fires anything bound.
+        // The command is read back at ActionEvent-construction time, which is the whole
         // notification (D_property_fanout_audit).
+        getModel().setActionCommand(command);
     }
 
+    /** @return the model's command, or the button's text when the model has none */
     public java.lang.String getActionCommand() {
-        // AWT contract: fall back to the button's text when no explicit
-        // actionCommand is set. Null text (getText) propagates through —
-        // real Swing does the same so null-checking callers don't see a
-        // surprise "button text used as command" for an uninitialised button.
-        return actionCommand != null ? actionCommand : text;
+        java.lang.String ac = getModel().getActionCommand();
+        if (ac == null) {
+            ac = getText();
+        }
+        return ac;
     }
 
     public void removeActionListener(java.awt.event.ActionListener l) {
@@ -696,8 +586,8 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     public void setMnemonic(int mnemonic) {
         // Swing stores mnemonic in ButtonModel and fires "mnemonic" PCE
         // AND registers an Alt+<key> WHEN_IN_FOCUSED_WINDOW accelerator
-        // that invokes doClick. We flatten the model (no ButtonModel) but
-        // keep the accelerator wiring: the whole point of a mnemonic in
+        // that invokes doClick. We keep the mnemonic on the button, not the
+        // model, and keep the accelerator wiring: the whole point of a mnemonic in
         // a form is that Alt+S submits. Reuses JComponent's
         // registerKeyboardAction → Vaadin Shortcuts plumbing.
         int old = this.mnemonic;
@@ -709,9 +599,7 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
                     javax.swing.KeyStroke.getKeyStroke(old, java.awt.event.InputEvent.ALT_DOWN_MASK));
         }
         if (mnemonic != 0) {
-            // doClick bypasses the peer and fires ActionEvent directly,
-            // matching real Swing's mnemonic behaviour (pressed animation
-            // elided, ActionEvent still fires).
+            // doClick pulses the model, as real Swing's mnemonic binding does.
             registerKeyboardAction(
                     e -> doClick(),
                     javax.swing.KeyStroke.getKeyStroke(mnemonic, java.awt.event.InputEvent.ALT_DOWN_MASK),
@@ -728,9 +616,9 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         // setText doesn't re-fire.
         java.lang.String old = this.text;
         this.text = newText;
-        if (getPeer() instanceof com.vaadin.flow.component.HasText ht) {
-            withPeer(p -> ht.setText(newText != null ? newText : ""));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.HasText ht) ht.setText(newText != null ? newText : "");
+        });
         firePropertyChange("text", old, newText);
     }
 
@@ -747,10 +635,11 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         // On the live UI rather than the peer's: an ImageIcon becomes a Vaadin Image,
         // whose ctor resolves a resource URL and so needs a current UI even while
         // the button is detached — JLabel.setIcon's case.
-        if (getPeer() instanceof com.vaadin.flow.component.button.Button btn) {
-            withPeerOnLiveUI(false, p -> btn.setIcon(
-                    vaadinx.EHelper.toVaadinIconComponent("AbstractButton", icon)));
-        }
+        withPeerOnLiveUI(false, p -> {
+            if (p instanceof com.vaadin.flow.component.button.Button btn) {
+                btn.setIcon(vaadinx.EHelper.toVaadinIconComponent("AbstractButton", icon));
+            }
+        });
         firePropertyChange("icon", old, icon);
     }
 
@@ -768,41 +657,84 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         listenerList.remove(java.awt.event.ItemListener.class, l);
     }
 
+    /** @return the listener {@link #setModel} installs on the model; shared with the other two */
     protected javax.swing.event.ChangeListener createChangeListener() {
-        vaadinx.EHelper.onUnimplemented("AbstractButton", "createChangeListener");
-        return null;
+        return getHandler();
     }
 
+    /** @return the listener {@link #setModel} installs on the model; shared with the other two */
     protected java.awt.event.ActionListener createActionListener() {
-        vaadinx.EHelper.onUnimplemented("AbstractButton", "createActionListener");
-        return null;
+        return getHandler();
     }
 
+    /** @return the listener {@link #setModel} installs on the model; shared with the other two */
     protected java.awt.event.ItemListener createItemListener() {
-        vaadinx.EHelper.onUnimplemented("AbstractButton", "createItemListener");
-        return null;
+        return getHandler();
+    }
+
+    private Handler getHandler() {
+        if (handler == null) {
+            handler = new Handler();
+        }
+        return handler;
+    }
+
+    /**
+     * Re-fires the model's events as this button's, which is the whole of the button's event
+     * fan-out: a click, {@link #doClick} and {@link #setSelected} all reach the listeners only
+     * through the model. The JDK's mnemonic resync and repaint on a state change are not
+     * reproduced — the mnemonic lives on the button here, and nothing paints.
+     *
+     * <p>Each event is relayed rather than run in place: a browser click fires it on the
+     * request thread, where R_callswing_envelope's envelope applies, and a model mutated off the
+     * UI thread fires it on that thread (SD_background_model_hop).
+     */
+    class Handler implements java.awt.event.ActionListener, javax.swing.event.ChangeListener,
+            java.awt.event.ItemListener, java.io.Serializable {
+
+        @Override
+        public void stateChanged(javax.swing.event.ChangeEvent e) {
+            vaadinx.EHelper.relayModelEvent(AbstractButton.this::fireStateChanged);
+        }
+
+        @Override
+        public void actionPerformed(java.awt.event.ActionEvent event) {
+            vaadinx.EHelper.relayModelEvent(() -> fireActionPerformed(event));
+        }
+
+        @Override
+        public void itemStateChanged(java.awt.event.ItemEvent event) {
+            vaadinx.EHelper.relayModelEvent(() -> {
+                fireItemStateChanged(event);
+                modelSelectionChanged();
+            });
+        }
+    }
+
+    /** Runs after the model's selection change reached the listeners; a menu item re-renders. */
+    void modelSelectionChanged() {
     }
 
     public void addChangeListener(javax.swing.event.ChangeListener l) {
-        // Mirrors addActionListener above. ChangeListener fires on
-        // ButtonModel state transitions (armed/pressed/selected); we
-        // don't model ButtonModel, so registrations are accepted but
-        // currently never notified. fireStateChanged below is wired so
-        // subclasses / future model work can deliver to them.
+        // Mirrors addActionListener above. Notified on every model state transition
+        // (armed / pressed / selected / enabled) through the Handler.
         listenerList.add(javax.swing.event.ChangeListener.class, l);
     }
 
     public void addItemListener(java.awt.event.ItemListener l) {
-        // Symmetric to addChangeListener. ItemListener fires on
-        // selected/deselected transitions — meaningful for JToggleButton
-        // / JCheckBox but not JButton. Stored for round-trip.
+        // Symmetric to addChangeListener; notified on the model's selection changes.
         listenerList.add(java.awt.event.ItemListener.class, l);
     }
 
-    // setEnabled inherited from Component — Vaadin Button implements
-    // HasEnabled, so Component.setEnabled writes through and fires the
-    // "enabled" PropertyChangeEvent correctly. AWT's AbstractButton
-    // override updates ButtonModel state too; we don't model that.
+    /** Enables the component and its model, which is what gates {@link #doClick} and a click. */
+    @Override
+    public void setEnabled(boolean b) {
+        if (!b && model.isRollover()) {
+            model.setRollover(false);
+        }
+        super.setEnabled(b);
+        model.setEnabled(b);
+    }
 
     public void setUI(javax.swing.plaf.ButtonUI arg0) {
         vaadinx.EHelper.onUnimplemented("AbstractButton", "setUI", arg0);
@@ -1064,34 +996,39 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     }
 
     /**
-     * Installs a user-supplied {@link javax.swing.ButtonModel}: {@link #getModel}
-     * reports it from here on, the JDK's {@code super.setEnabled(model
-     * .isEnabled())} propagation runs, and {@code "model"} fires. The model
-     * itself is <b>inert</b> — the button's state machine lives in the
-     * surrogate's own ButtonModel (SD_sjbutton), so a foreign model receives no
-     * pressed/armed/selected pulses and drives nothing. That is the declined
-     * effect; the state and notification are owed (R_decline_effect_only, D_owed_events).
+     * Moves the button's listeners from the old model to {@code newModel}, takes its enabled
+     * state, hands it to the surrogate to render, and fires {@code "model"}. A {@code null}
+     * model is legal, as in the JDK, and leaves a button whose state accessors throw.
      *
-     * <p>The JDK's listener rewiring ({@code ChangeListener} /
-     * {@code ActionListener} / {@code ItemListener} onto the new model) is part
-     * of the same declined effect, and its {@code updateMnemonicProperties} /
-     * {@code updateDisplayedMnemonicIndex} calls are R_layouts_close_enough rendering.
-     *
-     * <p>{@link #getModel} keeps returning {@code null} for a button whose model
-     * was never set, which is what it did before — so this changes nothing for
-     * code that never installs one.
+     * <p>The JDK's mnemonic resync from the new model is not reproduced: the mnemonic is the
+     * button's own field here, not the model's.
      */
-    public void setModel(javax.swing.ButtonModel arg0) {
-        javax.swing.ButtonModel old = this.buttonModel;
-        this.buttonModel = arg0;
-        vaadinx.EHelper.onUnimplemented("AbstractButton", "setModel(state machine)", arg0);
-        if (arg0 != null) {
-            // The JDK calls JComponent's setEnabled deliberately here, past
-            // AbstractButton's own override, because setModel can run from a
-            // constructor before the button is initialised.
-            super.setEnabled(arg0.isEnabled());
+    public void setModel(javax.swing.ButtonModel newModel) {
+        javax.swing.ButtonModel oldModel = getModel();
+        if (oldModel != null) {
+            oldModel.removeChangeListener(changeListener);
+            oldModel.removeActionListener(actionListener);
+            oldModel.removeItemListener(itemListener);
+            changeListener = null;
+            actionListener = null;
+            itemListener = null;
         }
-        firePropertyChange(MODEL_CHANGED_PROPERTY, old, arg0);
+        model = newModel;
+        if (newModel != null) {
+            changeListener = createChangeListener();
+            actionListener = createActionListener();
+            itemListener = createItemListener();
+            newModel.addChangeListener(changeListener);
+            newModel.addActionListener(actionListener);
+            newModel.addItemListener(itemListener);
+            // JComponent's, past this class's override, as the JDK does: setModel can run from
+            // a constructor before the button is initialised.
+            super.setEnabled(newModel.isEnabled());
+        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.swingbridge.surrogates.swing.AbstractButtonMixin abm) abm.setModel(newModel);
+        });
+        firePropertyChange(MODEL_CHANGED_PROPERTY, oldModel, newModel);
     }
 
     public javax.swing.event.ChangeListener[] getChangeListeners() {
@@ -1099,14 +1036,14 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
     }
 
     protected void fireStateChanged() {
-        // Lazy ChangeEvent allocation matches Swing's pattern: one event
-        // per fire, shared across listeners since it carries no payload
-        // beyond the source. Iterate over a fresh snapshot (getListeners
-        // copies) so listener self-removal during dispatch is safe.
-        javax.swing.event.ChangeEvent event = new javax.swing.event.ChangeEvent(this);
+        // One ChangeEvent per button, allocated on first use, as the JDK does: its only state is
+        // the source. getListeners copies, so a listener removing itself mid-dispatch is safe.
         for (javax.swing.event.ChangeListener l :
                 listenerList.getListeners(javax.swing.event.ChangeListener.class)) {
-            l.stateChanged(event);
+            if (changeEvent == null) {
+                changeEvent = new javax.swing.event.ChangeEvent(this);
+            }
+            l.stateChanged(changeEvent);
         }
     }
 
@@ -1117,36 +1054,41 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         return listenerList.getListeners(java.awt.event.ActionListener.class);
     }
 
+    /**
+     * Delivers {@code event} with this button as its source, as the JDK does; a model's event
+     * carries no command when the model has none, and the button's {@link #getActionCommand}
+     * stands in.
+     */
     protected void fireActionPerformed(java.awt.event.ActionEvent event) {
-        // Null-guard for parity with Component's process* family — a
-        // misuse here shouldn't crash a smoke test. Re-source the event
-        // only if source differs, matching AWT's "the dispatched event's
-        // source is the firing button" contract. For peer-click and
-        // doClick paths above, event.source is already `this`, so the
-        // re-source is a no-op.
+        // Null-guard for parity with Component's process* family — a misuse here shouldn't
+        // crash a smoke test.
         if (event == null) return;
-        java.awt.event.ActionEvent dispatched = event.getSource() == this
-                ? event
-                : new java.awt.event.ActionEvent(
-                        this,
-                        event.getID(),
-                        event.getActionCommand(),
-                        event.getWhen(),
-                        event.getModifiers());
+        java.awt.event.ActionEvent e = null;
         for (java.awt.event.ActionListener l :
                 listenerList.getListeners(java.awt.event.ActionListener.class)) {
-            l.actionPerformed(dispatched);
+            if (e == null) {
+                java.lang.String actionCommand = event.getActionCommand();
+                if (actionCommand == null) {
+                    actionCommand = getActionCommand();
+                }
+                e = new java.awt.event.ActionEvent(this, java.awt.event.ActionEvent.ACTION_PERFORMED,
+                        actionCommand, event.getWhen(), event.getModifiers());
+            }
+            l.actionPerformed(e);
         }
     }
 
+    /** Delivers {@code event} with this button as both source and item, as the JDK does. */
     protected void fireItemStateChanged(java.awt.event.ItemEvent event) {
-        // Mirrors fireActionPerformed's null-guard + fan-out. Swing does
-        // not re-source ItemEvents (unlike ActionEvent), so we pass the
-        // event through as-is.
         if (event == null) return;
+        java.awt.event.ItemEvent e = null;
         for (java.awt.event.ItemListener l :
                 listenerList.getListeners(java.awt.event.ItemListener.class)) {
-            l.itemStateChanged(event);
+            if (e == null) {
+                e = new java.awt.event.ItemEvent(this, java.awt.event.ItemEvent.ITEM_STATE_CHANGED,
+                        this, event.getStateChange());
+            }
+            l.itemStateChanged(e);
         }
     }
 
@@ -1160,12 +1102,14 @@ public abstract class AbstractButton extends vaadinx.swing.JComponent implements
         return listenerList.getListeners(java.awt.event.ItemListener.class);
     }
 
+    /** @return the button's text while it is selected, {@code null} otherwise */
     public java.lang.Object[] getSelectedObjects() {
-        // ItemSelectable contract: null when nothing is selected. Real
-        // AbstractButton returns [getText()] while isSelected; we don't
-        // model selection (no ButtonModel), so "nothing selected" is the
-        // honest steady state — null is correct, not a stub.
-        return null;
+        if (isSelected() == false) {
+            return null;
+        }
+        java.lang.Object[] selectedObjects = new java.lang.Object[1];
+        selectedObjects[0] = getText();
+        return selectedObjects;
     }
 
 }

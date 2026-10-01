@@ -106,8 +106,8 @@ class RadioButtonsWarnInventoryTest {
         // Demo 2 — group of three. Medium is pre-selected in the ctor.
         // Click "High" via the peer toggle (browser-click equivalent) and
         // assert the cascade: High becomes selected, Medium becomes
-        // deselected. Both via the SJRadioButton→emulator Item-bridge
-        // (D_buttongroup_browser_click) without per-peer narrowing post-D_abstractbutton_mixin_dispatch.
+        // deselected. Both via the emulator's own model, which the peer
+        // pulses (D_emulator_button_model).
         SJRadioButton highPeer = LocatorJ._get(SJRadioButton.class,
                 spec -> spec.withPredicate(r -> "High".equals(r.getText())));
         SJRadioButton mediumPeer = LocatorJ._get(SJRadioButton.class,

@@ -40,77 +40,48 @@
 package vaadinx.swing;
 
 // Hand-finished emulator for javax.swing.JRadioButtonMenuItem per D_menu_tree / SD_sjmenubar.
-// R_leaf_peer_lockdown-locked-down: JDK leaf in javax.swing.*. Renders identically to
-// JCheckBoxMenuItem at the surrogate level (Vaadin setCheckable(true));
-// ButtonGroup coordination (the "select-one-of-N" surface) lands via D_buttongroup
-// — setSelected and makeOnClick consult the installed group at the top
-// of their bodies. Closes the SD_sjmenubar multi-select gap.
+// R_leaf_peer_lockdown-locked-down: JDK leaf in javax.swing.*. Selection is the
+// JDK's: a JToggleButton.ToggleButtonModel, installed by the root ctor, whose
+// setSelected consults the item's ButtonGroup — so a click on the group's
+// selected item leaves it selected. The MenuNode it produces flags
+// checkable=true + checked=isSelected().
 
 /** Emulator for {@link javax.swing.JRadioButtonMenuItem}. R_leaf_peer_lockdown-locked. */
 public class JRadioButtonMenuItem extends vaadinx.swing.JMenuItem {
 
-    /** Selection state. JDK default false. */
-    private boolean selected;
-
     public JRadioButtonMenuItem() {
-        super();
-    }
-
-    public JRadioButtonMenuItem(java.lang.String text) {
-        super(text);
+        this(null, null, false);
     }
 
     public JRadioButtonMenuItem(vaadinx.swing.Icon icon) {
-        super(icon);
+        this(null, icon, false);
+    }
+
+    public JRadioButtonMenuItem(java.lang.String text) {
+        this(text, null, false);
+    }
+
+    public JRadioButtonMenuItem(javax.swing.Action a) {
+        this();
+        setAction(a);
     }
 
     public JRadioButtonMenuItem(java.lang.String text, vaadinx.swing.Icon icon) {
-        super(text, icon);
+        this(text, icon, false);
     }
 
     public JRadioButtonMenuItem(java.lang.String text, boolean selected) {
-        super(text);
-        this.selected = selected;
+        this(text, null, selected);
     }
 
     public JRadioButtonMenuItem(vaadinx.swing.Icon icon, boolean selected) {
-        super(icon);
-        this.selected = selected;
+        this(null, icon, selected);
     }
 
     public JRadioButtonMenuItem(java.lang.String text, vaadinx.swing.Icon icon, boolean selected) {
         super(text, icon);
-        this.selected = selected;
-    }
-
-    public JRadioButtonMenuItem(javax.swing.Action a) {
-        super(a);
-    }
-
-    @Override
-    public boolean isSelected() {
-        return selected;
-    }
-
-    @Override
-    public void setSelected(boolean b) {
-        // ButtonGroup veto per D_buttongroup: when in a group, group.setSelected
-        // re-targets selection (cascading deselect to the prior member),
-        // and group.isSelected re-reads the group's verdict — so trying
-        // to deselect-the-current via setSelected(false) ends up keeping
-        // it selected (matches JDK DefaultButtonModel.setSelected flow).
-        b = consultButtonGroup(b);
-        if (this.selected == b) return;
-        this.selected = b;
-        java.awt.event.ItemEvent e = new java.awt.event.ItemEvent(
-                this,
-                java.awt.event.ItemEvent.ITEM_STATE_CHANGED,
-                this,
-                b ? java.awt.event.ItemEvent.SELECTED
-                  : java.awt.event.ItemEvent.DESELECTED);
-        fireItemStateChanged(e);
-        fireStateChanged();
-        notifyTreeMutated();
+        setModel(new JToggleButton.ToggleButtonModel());
+        setSelected(selected);
     }
 
     @Override
@@ -120,44 +91,7 @@ public class JRadioButtonMenuItem extends vaadinx.swing.JMenuItem {
 
     @Override
     boolean isCheckedNode() {
-        return selected;
-    }
-
-    @Override
-    Runnable makeOnClick() {
-        // Same shape as JCheckBoxMenuItem — flip state then fire the
-        // Item + Change + Action sequence. ButtonGroup coordination per
-        // D_buttongroup lands at the top of the body: consult the group on the
-        // proposed flip, then mutate fields only if the group's verdict
-        // differs from current. ActionEvent fires unconditionally so
-        // an observer-only consumer (no ItemListener) still sees the
-        // click — matches JDK shape where DefaultButtonModel fires
-        // Action regardless of whether the group veto suppressed
-        // ItemEvent.
-        // Body wrapped in vaadinx.EHelper.callSwing per R_callswing_envelope / D_callswing_loom — see
-        // JMenuItem.makeOnClick javadoc for the SJMenuBar-inline-callSwing
-        // hand-off reason.
-        return () -> vaadinx.EHelper.callSwing(() -> {
-            boolean newState = consultButtonGroup(!selected);
-            if (this.selected != newState) {
-                this.selected = newState;
-                java.awt.event.ItemEvent ie = new java.awt.event.ItemEvent(
-                        this,
-                        java.awt.event.ItemEvent.ITEM_STATE_CHANGED,
-                        this,
-                        newState ? java.awt.event.ItemEvent.SELECTED
-                                 : java.awt.event.ItemEvent.DESELECTED);
-                fireItemStateChanged(ie);
-                fireStateChanged();
-            }
-            fireActionPerformed(new java.awt.event.ActionEvent(
-                    this,
-                    java.awt.event.ActionEvent.ACTION_PERFORMED,
-                    getActionCommand(),
-                    System.currentTimeMillis(),
-                    0));
-            notifyTreeMutated();
-        });
+        return isSelected();
     }
 
     @Override

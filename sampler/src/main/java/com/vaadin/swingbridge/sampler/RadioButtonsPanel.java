@@ -41,13 +41,13 @@ import java.awt.event.ItemEvent;
  *   <li><b>Group of three (Priority)</b> — three radios in a single
  *       {@link ButtonGroup} (Low / Medium / High). Standard radio mutex:
  *       clicking one cascades a DESELECTED to the prior selection via
- *       D_buttongroup + D_abstractbutton_mixin_dispatch's mixin-generalised Item-bridge. Pre-selecting Medium
+ *       D_buttongroup, through each button's own model. Pre-selecting Medium
  *       in the ctor demos the group's "newcomer-already-selected"
  *       invariant.</li>
  *   <li><b>Mixed JCheckBox + JRadioButton</b> — one ButtonGroup containing
- *       two JRadioButtons and one JCheckBox. Both peers implement
- *       AbstractButtonMixin, so both Item-bridges install, the group sees
- *       all three, and mutex works across types (D_abstractbutton_mixin_dispatch).</li>
+ *       two JRadioButtons and one JCheckBox. Every member's model is a
+ *       ToggleButtonModel, so the group sees all three and the mutex works
+ *       across types (D_emulator_button_model).</li>
  * </ol>
  */
 public class RadioButtonsPanel extends JPanel {

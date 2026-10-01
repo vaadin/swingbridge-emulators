@@ -585,14 +585,10 @@ class PropertyFanoutTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("AbstractButton setModel stores an inert model, propagates enabled, and fires")
+    @DisplayName("AbstractButton setModel installs the model, takes its enabled state, and fires")
     void abstractButtonSetModelStoresPropagatesAndFires() {
-        // The button's real state machine is the surrogate's (SD_sjbutton), so a
-        // foreign ButtonModel drives nothing. But the JDK's
-        // super.setEnabled(model.isEnabled()) propagation is cheap and
-        // observable, so it runs.
         JButton jb = new JButton("Go");
-        assertNull(jb.getModel());   // none installed — unchanged from before D_owed_events
+        assertInstanceOf(DefaultButtonModel.class, jb.getModel(), "the JDK's JButton ctor installs one");
         List<PropertyChangeEvent> events = record(jb);
 
         DefaultButtonModel model = new DefaultButtonModel();
@@ -602,6 +598,11 @@ class PropertyFanoutTest extends AbstractKaribuTest {
         assertEquals(model, jb.getModel());
         assertEquals(1, named(events, AbstractButton.MODEL_CHANGED_PROPERTY).size());
         assertFalse(jb.isEnabled(), "the JDK propagates the model's enabled state");
+        List<String> actions = new java.util.ArrayList<>();
+        jb.addActionListener(e -> actions.add(e.getActionCommand()));
+        model.setEnabled(true);
+        jb.doClick();
+        assertEquals(List.of("Go"), actions, "the installed model drives the button");
     }
 
     @Test

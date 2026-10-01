@@ -96,9 +96,6 @@ public class InstanceFieldSurfaceTest {
             + "browser-facing facade, D_toolkit_full_surface)";
     private static final String INNER_PLUMBING = "JDK protected inner plumbing class/interface SB-Emulators does not port; "
             + "the machinery it forwards for is browser-owned";
-    private static final String FLATTENED_BUTTONMODEL = "ButtonModel is deliberately flattened onto the button "
-            + "(D_buttongroup); an inert protected field would be worse than the compile error "
-            + "(D_field_write_reconcile bucket 2)";
 
     /**
      * Every JDK public/protected instance field the emulator knowingly does not declare,
@@ -131,13 +128,7 @@ public class InstanceFieldSurfaceTest {
             java.util.Map.entry("vaadinx.swing.JMenu.popupListener", INNER_PLUMBING),
             java.util.Map.entry("vaadinx.swing.JTable.editorComp",
                     "faithful in-cell editor swap is permanently deferred (R_match_swing_errors sub-bucket (b), "
-                            + "D_jtable_cell_editing)"),
-            // The flattened ButtonModel surface (D_field_write_reconcile bucket 2).
-            java.util.Map.entry("vaadinx.swing.AbstractButton.model", FLATTENED_BUTTONMODEL),
-            java.util.Map.entry("vaadinx.swing.AbstractButton.changeListener", FLATTENED_BUTTONMODEL),
-            java.util.Map.entry("vaadinx.swing.AbstractButton.actionListener", FLATTENED_BUTTONMODEL),
-            java.util.Map.entry("vaadinx.swing.AbstractButton.itemListener", FLATTENED_BUTTONMODEL),
-            java.util.Map.entry("vaadinx.swing.AbstractButton.changeEvent", FLATTENED_BUTTONMODEL));
+                            + "D_jtable_cell_editing)"));
 
     @Test
     public void noEmulatorNarrowsAJdkInstanceField() {

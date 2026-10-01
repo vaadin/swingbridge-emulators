@@ -183,12 +183,6 @@ public class R12DeadHookTest {
                 "the label table renders through SJSlider, not a per-label UI — L&F is out");
         DECLINED_TARGET.put("vaadinx.swing.JSpinner#createEditor",
                 "the editor pipeline is drop-and-WARN at setEditor — R_match_swing_errors (c)");
-        DECLINED_TARGET.put("vaadinx.swing.AbstractButton#createChangeListener",
-                "ButtonModel listener rewiring is the declined effect — see setModel's javadoc");
-        DECLINED_TARGET.put("vaadinx.swing.AbstractButton#createActionListener",
-                "ButtonModel listener rewiring is the declined effect — see setModel's javadoc");
-        DECLINED_TARGET.put("vaadinx.swing.AbstractButton#createItemListener",
-                "ButtonModel listener rewiring is the declined effect — see setModel's javadoc");
         DECLINED_TARGET.put("vaadinx.swing.JPopupMenu#firePopupMenuCanceled",
                 "the peer's opened-change signal cannot tell an Esc/click-outside cancel "
                         + "from an item-selection close — R_match_swing_errors sub-bucket (a); "

@@ -219,7 +219,9 @@ public interface AbstractButtonMixin extends JComponentMixin, java.awt.ItemSelec
                 newModel.removeActionListener(al);
                 newModel.removeItemListener(il);
             };
-            newModel.setEnabled(isEnabled());
+            // The button takes the model's enabled state, as the JDK's setModel does: a model
+            // shared with the emulator owns it, and a write must not change it.
+            setEnabled(newModel.isEnabled());
         }
         firePropertyChange("model", old, newModel);
     }

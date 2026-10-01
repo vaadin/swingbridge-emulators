@@ -164,6 +164,29 @@ class LazyPeerTest extends AbstractKaribuTest {
             p.add(new vaadinx.awt.Label("inside"));
             return p;
         });
+        m.put("JButton", () -> {
+            vaadinx.swing.JButton b = new vaadinx.swing.JButton("go");
+            b.setActionCommand("cmd");
+            b.setMnemonic('G');
+            b.doClick();
+            return b;
+        });
+        m.put("JToggleButton", () -> new vaadinx.swing.JToggleButton("t", true));
+        m.put("JCheckBox", () -> {
+            vaadinx.swing.JCheckBox c = new vaadinx.swing.JCheckBox("c");
+            c.doClick();
+            return c;
+        });
+        m.put("JRadioButton", () -> {
+            vaadinx.swing.ButtonGroup g = new vaadinx.swing.ButtonGroup();
+            vaadinx.swing.JRadioButton r = new vaadinx.swing.JRadioButton("r", true);
+            g.add(r);
+            g.add(new vaadinx.swing.JRadioButton("other"));
+            return r;
+        });
+        m.put("JMenuItem", () -> new vaadinx.swing.JMenuItem("item"));
+        m.put("JCheckBoxMenuItem", () -> new vaadinx.swing.JCheckBoxMenuItem("check", true));
+        m.put("JRadioButtonMenuItem", () -> new vaadinx.swing.JRadioButtonMenuItem("radio", true));
         m.put("AWT ScrollPane", () -> {
             vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
             sp.add(new vaadinx.awt.Label("first"));
@@ -199,6 +222,30 @@ class LazyPeerTest extends AbstractKaribuTest {
                 name + " reached its peer on the worker; the WARN's stack names the reach");
         UI.getCurrent().add(built.get().getPeer());
         assertEquals(true, built.get().getPeer().isAttached(), "and it renders once attached");
+    }
+
+    @Test
+    @DisplayName("a JCheckBox selected on a worker shows checked once attached, and a click reaches its listeners")
+    void jCheckBoxSelectedOnWorker() {
+        AtomicReference<vaadinx.swing.JCheckBox> built = new AtomicReference<>();
+        onBareThread(() -> {
+            vaadinx.swing.JCheckBox c = new vaadinx.swing.JCheckBox("c");
+            c.setSelected(true);
+            built.set(c);
+        });
+
+        vaadinx.swing.JCheckBox box = built.get();
+        java.util.List<String> events = new java.util.ArrayList<>();
+        box.addItemListener(e -> events.add("item " + e.getStateChange()));
+        box.addActionListener(e -> events.add("action " + e.getActionCommand()));
+        UI.getCurrent().add(box.getPeer());
+        com.vaadin.swingbridge.surrogates.SJCheckBox peer =
+                assertInstanceOf(com.vaadin.swingbridge.surrogates.SJCheckBox.class, box.getPeer());
+        assertEquals(true, peer.getValue(), "the surrogate renders the emulator's model");
+
+        com.github.mvysny.kaributesting.v10.LocatorJ._setValue(peer, false);
+        assertEquals(false, box.isSelected());
+        assertEquals(java.util.List.of("item " + java.awt.event.ItemEvent.DESELECTED, "action c"), events);
     }
 
     @Test

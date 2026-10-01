@@ -51,17 +51,15 @@ import java.awt.event.ItemListener;
  * SJToggleButton's overrides verbatim — same constraint that drove SD_sjpasswordfield
  * (SJPasswordField duplicating SJTextField).
  *
- * <h2>ButtonGroup mutex lives at the emulator layer (D_buttongroup_browser_click)</h2>
+ * <h2>ButtonGroup mutex lives in the model it is given (D_emulator_button_model)</h2>
  *
- * The surrogate carries no awareness of any {@code ButtonGroup}. Stage-3
- * users wanting radio-group mutex use the emulator-side {@code JRadioButton}
- * + {@code vaadinx.swing.ButtonGroup} per D_buttongroup; the group's
- * {@code setSelectedButton} cascades {@code setSelected(false)} on the
- * previous selection's emulator wrapper, which in turn calls
- * {@link #setSelected(boolean) sjr.setSelected(false)} on this surrogate.
- * The model→peer push wire then drives {@code checked=false} on the
- * sibling's peer under {@link #preventPeerEvents} — same path as a
- * programmatic {@code setSelected} from any other caller.
+ * The surrogate carries no awareness of any {@code ButtonGroup}. Under the
+ * emulator-side {@code JRadioButton} + {@code vaadinx.swing.ButtonGroup}, this
+ * surrogate renders a model whose {@code setSelected} consults the group: the
+ * group deselects the previous selection's model, and that sibling's model→peer
+ * push wire drives {@code checked=false} under {@link #preventPeerEvents} — the
+ * same path as a programmatic {@code setSelected} from any other caller. A click
+ * the model declines (the lone selection) is re-shown as the model's state.
  *
  * <p>Standalone (no group): clicks toggle on/off like a checkbox per the
  * underlying ToggleButtonModel pulse. The "radio stays selected when
@@ -160,6 +158,11 @@ public class SJRadioButton extends VaadinRadioButton implements AbstractButtonMi
             ButtonModel m = getModel();
             if (m == null || m.isSelected() == newValue) return;
             SHelper.callSwing(this::synthesizePeerClick);
+            // A model that declines the toggle — a ButtonGroup keeping its lone selection —
+            // leaves the glyph showing the click; show the model's state instead.
+            if (m.isSelected() != newValue) {
+                pushSelectedToPeer(m.isSelected());
+            }
         });
     }
 
@@ -183,17 +186,22 @@ public class SJRadioButton extends VaadinRadioButton implements AbstractButtonMi
                 boolean v = e.getStateChange() == ItemEvent.SELECTED;
                 if (Boolean.TRUE.equals(getValue()) == v) return;
                 // Allowed by R_tolerate_off_ui_thread because callback from model: ButtonModel ItemListener
-                SHelper.runOnOwnerUI(this, () -> {
-                    preventPeerEvents = true;
-                    try {
-                        setValue(v);
-                    } finally {
-                        preventPeerEvents = false;
-                    }
-                });
+                SHelper.runOnOwnerUI(this, () -> pushSelectedToPeer(v));
             };
             newModel.addItemListener(pushToPeer);
             peerSyncRegistration = () -> newModel.removeItemListener(pushToPeer);
+            pushSelectedToPeer(newModel.isSelected());
+        }
+    }
+
+    /** Shows {@code selected} on the glyph without the write echoing back as a click. */
+    private void pushSelectedToPeer(boolean selected) {
+        if (Boolean.TRUE.equals(getValue()) == selected) return;
+        preventPeerEvents = true;
+        try {
+            setValue(selected);
+        } finally {
+            preventPeerEvents = false;
         }
     }
 

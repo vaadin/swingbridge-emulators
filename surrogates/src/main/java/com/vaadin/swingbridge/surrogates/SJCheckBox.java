@@ -191,6 +191,11 @@ public class SJCheckBox extends Checkbox implements AbstractButtonMixin {
             ButtonModel m = getModel();
             if (m == null || m.isSelected() == newValue) return;
             SHelper.callSwing(this::synthesizePeerClick);
+            // A model that declines the toggle — a ButtonGroup keeping its lone selection —
+            // leaves the glyph showing the click; show the model's state instead.
+            if (m.isSelected() != newValue) {
+                pushSelectedToPeer(m.isSelected());
+            }
         });
     }
 
@@ -214,17 +219,22 @@ public class SJCheckBox extends Checkbox implements AbstractButtonMixin {
                 boolean v = e.getStateChange() == ItemEvent.SELECTED;
                 if (Boolean.TRUE.equals(getValue()) == v) return;
                 // Allowed by R_tolerate_off_ui_thread because callback from model: ButtonModel ItemListener
-                SHelper.runOnOwnerUI(this, () -> {
-                    preventPeerEvents = true;
-                    try {
-                        setValue(v);
-                    } finally {
-                        preventPeerEvents = false;
-                    }
-                });
+                SHelper.runOnOwnerUI(this, () -> pushSelectedToPeer(v));
             };
             newModel.addItemListener(pushToPeer);
             peerSyncRegistration = () -> newModel.removeItemListener(pushToPeer);
+            pushSelectedToPeer(newModel.isSelected());
+        }
+    }
+
+    /** Shows {@code selected} on the glyph without the write echoing back as a click. */
+    private void pushSelectedToPeer(boolean selected) {
+        if (Boolean.TRUE.equals(getValue()) == selected) return;
+        preventPeerEvents = true;
+        try {
+            setValue(selected);
+        } finally {
+            preventPeerEvents = false;
         }
     }
 
