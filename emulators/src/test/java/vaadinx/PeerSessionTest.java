@@ -45,17 +45,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
- * The session a peer write hops through is known without reading anything the UI thread
- * writes (D_attach_aware_hop): handed down from the constructing thread's context, captured at
- * attach, or taken from the writing thread's context. So a worker's write never races an attach
- * in flight on the UI thread.
+ * A worker's peer write never runs without the session locked and a UI current: it hops through
+ * the session the peer attached to, or waits in the peer's queue until a UI is reachable
+ * (vaadinx.awt.PeerWriteQueue). So it never races an attach in flight on the UI thread. The
+ * surrogate still learns its session from the constructing thread's context (D_attach_aware_hop).
  */
 class PeerSessionTest extends AbstractKaribuTest {
 
@@ -104,31 +103,39 @@ class PeerSessionTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("a component with no known session still takes the lock when a context-carrying worker writes it")
-    void writingThreadsContextSerialisesTheWrite() {
+    @DisplayName("a write to a never-attached peer from a context-carrying worker waits for a UI, then runs locked")
+    void contextCarryingWorkerQueuesUntilAUIIsReachable() {
+        assertWriteQueuedUntilAUIIsReachable(true);
+    }
+
+    @Test
+    @DisplayName("with no session known anywhere, the write waits for a UI rather than running unlocked")
+    void noSessionAnywhereQueuesUntilAUIIsReachable() {
+        assertWriteQueuedUntilAUIIsReachable(false);
+    }
+
+    /**
+     * A worker's write to a peer that has never been attached does not run on the worker, context
+     * or not; the next {@code getPeer()} with a UI current runs it, locked and with that UI current.
+     */
+    private static void assertWriteQueuedUntilAUIIsReachable(boolean writerHasContext) {
         AtomicReference<JLabel> built = new AtomicReference<>();
         onThread(false, () -> built.set(new JLabel("x")));
         JLabel label = built.get();
         assertNull(SHelper.sessionOf(label.getPeer()), "built with no session anywhere");
 
-        AtomicBoolean locked = new AtomicBoolean();
-        onThread(true, () -> label.withPeer(p -> locked.set(VaadinSession.getCurrent() != null
-                && VaadinSession.getCurrent().hasLock())));
+        AtomicInteger runs = new AtomicInteger();
+        AtomicBoolean lockedWithUI = new AtomicBoolean();
+        onThread(writerHasContext, () -> label.withPeer(p -> {
+            runs.incrementAndGet();
+            lockedWithUI.set(UI.getCurrent() != null && VaadinSession.getCurrent() != null
+                    && VaadinSession.getCurrent().hasLock());
+        }));
+        assertEquals(0, runs.get(), "the worker has no UI to run the write with, so it waits");
 
-        assertTrue(locked.get(), "the writer's own session serialises it against an attach in flight");
-    }
-
-    @Test
-    @DisplayName("with no session known anywhere, the write runs inline: the peer has no state tree to guard")
-    void noSessionAnywhereRunsInline() {
-        AtomicReference<JLabel> built = new AtomicReference<>();
-        onThread(false, () -> built.set(new JLabel("x")));
-        JLabel label = built.get();
-
-        AtomicBoolean locked = new AtomicBoolean(true);
-        onThread(false, () -> label.withPeer(p -> locked.set(VaadinSession.getCurrent() != null)));
-
-        assertFalse(locked.get());
+        label.getPeer();
+        assertEquals(1, runs.get(), "getPeer() with a UI current drains it, once");
+        assertTrue(lockedWithUI.get(), "and runs it locked, with a UI current");
     }
 
     @Test

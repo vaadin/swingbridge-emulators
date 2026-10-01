@@ -1075,15 +1075,20 @@ public class JTable extends vaadinx.swing.JComponent
     /** Set while this table writes its own selection from the surrogate's, so {@link #valueChanged} does not push it straight back. */
     private boolean pullingPeerSelection;
 
-    /** Also the hop: every write through here is a peer write (D_attach_aware_hop). */
+    /**
+     * Also the hop: every write through here is a peer write (D_attach_aware_hop). The mute is
+     * set inside the write, so a write queued until attach is still muted when it drains.
+     */
     private void onPeerSelectionMuted(Runnable body) {
-        boolean was = peerSelectionMuted;
-        peerSelectionMuted = true;
-        try {
-            withPeer(p -> body.run());
-        } finally {
-            peerSelectionMuted = was;
-        }
+        withPeer(p -> {
+            boolean was = peerSelectionMuted;
+            peerSelectionMuted = true;
+            try {
+                body.run();
+            } finally {
+                peerSelectionMuted = was;
+            }
+        });
     }
 
     /**
@@ -1094,15 +1099,17 @@ public class JTable extends vaadinx.swing.JComponent
      */
     private void pushSelectionToPeer() {
         if (changingModel || pullingPeerSelection) return;
-        ListSelectionModel peerSm = surrogate().getListSelectionModel();
         int viewRowCount = getRowCount();
         int[] modelRows = java.util.Arrays.stream(selectionModel.getSelectedIndices())
                 .filter(v -> v < viewRowCount)
                 .map(this::convertRowIndexToModel)
                 .sorted()
                 .toArray();
-        if (java.util.Arrays.equals(modelRows, peerSm.getSelectedIndices())) return;
         onPeerSelectionMuted(() -> {
+            // Compared inside the write: a queued one meets the surrogate's selection as it is
+            // when it drains, not as it was when it was made.
+            ListSelectionModel peerSm = surrogate().getListSelectionModel();
+            if (java.util.Arrays.equals(modelRows, peerSm.getSelectedIndices())) return;
             peerSm.setValueIsAdjusting(true);
             peerSm.clearSelection();
             for (int m : modelRows) {
@@ -1524,13 +1531,8 @@ public class JTable extends vaadinx.swing.JComponent
      * {@link #sorterChanged}; the re-map is this change's to do.
      */
     private void notifySorter(TableModelEvent e) {
-        try {
-            ignoreSortChange = true;
-            sorterChanged = false;
-            withPeer(p -> surrogate().tableChanged(e));
-        } finally {
-            ignoreSortChange = false;
-        }
+        sorterChanged = false;
+        peerTableChanged(e);
     }
 
     /** Restores the selection after a model event/sort order changes. All coordinates are in terms of the model. */
@@ -2297,12 +2299,7 @@ public class JTable extends vaadinx.swing.JComponent
             if (getAutoCreateColumnsFromModel() && isEditing() && !getCellEditor().stopCellEditing()) {
                 getCellEditor().cancelCellEditing();
             }
-            try {
-                ignoreSortChange = true;
-                withPeer(p -> surrogate().tableChanged(e));   // the sorter's modelStructureChanged, then the Grid columns
-            } finally {
-                ignoreSortChange = false;
-            }
+            peerTableChanged(e);   // the sorter's modelStructureChanged, then the Grid columns
             if (sortManager != null) {
                 sortManager.allChanged();
             }
@@ -2333,7 +2330,25 @@ public class JTable extends vaadinx.swing.JComponent
         } else if (e.getLastRow() == Integer.MAX_VALUE) {
             clearSelectionAndLeadAnchor();
         }
-        withPeer(p -> surrogate().tableChanged(e));
+        peerTableChanged(e);
+    }
+
+    /**
+     * Hands a model change to the surrogate, which tells the sorter and shifts its own
+     * selection before refreshing the Grid. Both are echoes of this change rather than browser
+     * input, so the write runs with {@link #peerSelectionMuted} and {@link #ignoreSortChange}
+     * set — inside it, where a write queued until attach still has them when it drains.
+     */
+    private void peerTableChanged(TableModelEvent e) {
+        onPeerSelectionMuted(() -> {
+            boolean was = ignoreSortChange;
+            ignoreSortChange = true;
+            try {
+                surrogate().tableChanged(e);
+            } finally {
+                ignoreSortChange = was;
+            }
+        });
     }
 
     /**
