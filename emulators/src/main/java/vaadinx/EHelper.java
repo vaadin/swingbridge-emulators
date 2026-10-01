@@ -326,6 +326,30 @@ public final class EHelper {
         return offEdtWarned.get();
     }
 
+    /** How many lazy peers were built with no UI current; see {@link #onPeerBuiltOffUIThread}. */
+    private static final java.util.concurrent.atomic.AtomicInteger PEERS_BUILT_OFF_UI_THREAD =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * A lazy emulator's peer is being built with no UI current: something reached the peer itself,
+     * through a raw {@code getPeer()}, before any write could give it a UI — so the Vaadin
+     * component is constructed off the UI thread after all, as an eager emulator's always is. It
+     * still works; the WARN (once per JVM) names the emulator, and the stack names the reach that
+     * should have been a {@code withPeer} write. Counted for the tests that assert it never happens.
+     */
+    public static void onPeerBuiltOffUIThread(Class<?> emulatorClass) {
+        if (PEERS_BUILT_OFF_UI_THREAD.getAndIncrement() == 0) {
+            log.warn("{} built its Vaadin peer off the UI thread: its peer was reached directly before "
+                    + "any write could give it a UI. Reported once per JVM; the stack is the reach.",
+                    emulatorClass.getName(), new Throwable("peer reached here"));
+        }
+    }
+
+    /** How many lazy peers {@link #onPeerBuiltOffUIThread} has seen built with no UI current. */
+    public static int peersBuiltOffUIThread() {
+        return PEERS_BUILT_OFF_UI_THREAD.get();
+    }
+
     /**
      * Set while a queued peer write runs during a drain ({@code vaadinx.awt.Component.withPeer});
      * {@link #callSwing} asserts it is clear, since a queued write must be a pure sink.

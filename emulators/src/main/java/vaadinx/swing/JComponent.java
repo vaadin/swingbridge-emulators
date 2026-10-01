@@ -54,6 +54,13 @@ public abstract class JComponent extends vaadinx.awt.Container implements java.i
         installDefaults();
     }
 
+    /** The lazy form: see {@link vaadinx.awt.Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> JComponent(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        installDefaults();
+    }
+
     /**
      * Install this class's L&amp;F colours and {@code opaque} flag, as
      * {@code LookAndFeel.installColorsAndFont} does from the UI delegate the JDK
@@ -1411,9 +1418,11 @@ public abstract class JComponent extends vaadinx.awt.Container implements java.i
             blurListenerRegistration = null;
         }
         this.inputVerifier = newVerifier;
-        if (newVerifier != null && getPeer() instanceof com.vaadin.flow.component.BlurNotifier<?> bn) {
-            com.vaadin.flow.shared.Registration[] registered = new com.vaadin.flow.shared.Registration[1];
-            withPeer(p -> registered[0] = bn.addBlurListener(e ->
+        if (newVerifier != null) {
+            // Kept from inside the write, which may run once the peer exists rather than now.
+            withPeer(p -> {
+                if (!(p instanceof com.vaadin.flow.component.BlurNotifier<?> bn)) return;
+                blurListenerRegistration = bn.addBlurListener(e ->
                     vaadinx.EHelper.callSwing(() -> {
                         // verify/shouldYieldFocus reads the component's
                         // state; false means the value is invalid and we
@@ -1423,8 +1432,8 @@ public abstract class JComponent extends vaadinx.awt.Container implements java.i
                                 && getPeer() instanceof com.vaadin.flow.component.Focusable<?> f) {
                             f.focus();
                         }
-                    })));
-            blurListenerRegistration = registered[0];
+                    }));
+            });
         }
         firePropertyChange("inputVerifier", old, newVerifier);
     }
@@ -1469,9 +1478,9 @@ public abstract class JComponent extends vaadinx.awt.Container implements java.i
         // doesn't render in the browser. No WARN: a tooltip on an
         // unsupported peer is a close-enough R_best_effort_behaviour fallback, not an
         // unimplemented stub.
-        if (getPeer() instanceof com.vaadin.flow.component.shared.HasTooltip ht) {
-            withPeer(p -> ht.setTooltipText(text));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.shared.HasTooltip ht) ht.setTooltipText(text);
+        });
         // The text lives in the client-property table, where the JDK puts it,
         // and putClientProperty is what fires "ToolTipText" — no separate
         // field and no separate fire. Routing rather than duplicating is

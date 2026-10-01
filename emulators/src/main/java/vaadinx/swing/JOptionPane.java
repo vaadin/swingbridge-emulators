@@ -375,25 +375,28 @@ public class JOptionPane extends vaadinx.swing.JComponent implements javax.acces
 
         // Top row: icon (if any) + message text. Lay out as flex row
         // so the icon sits beside the message, top-aligned.
+        // Peer writes, not raw peer reads: a dialog built on a worker runs them once it has a UI.
         vaadinx.swing.JPanel header = new vaadinx.swing.JPanel();
-        header.getPeer().getElement().getStyle()
-                .set("display", "flex")
-                .set("flex-direction", "row")
-                .set("align-items", "flex-start")
-                .set("gap", "var(--vaadin-gap-m, 1em)");
+        header.withPeer(p -> {
+            p.getElement().getStyle()
+                    .set("display", "flex")
+                    .set("flex-direction", "row")
+                    .set("align-items", "flex-start")
+                    .set("gap", "var(--vaadin-gap-m, 1em)");
 
-        com.vaadin.flow.component.Component iconComp = resolveIconComponent();
-        if (iconComp != null) {
-            // Plant the Vaadin icon directly on the JPanel's peer
-            // element — JOptionPane's icon glyph is a leaf decoration,
-            // not a JComponent the user will Karibu-lookup against.
-            iconComp.getElement().getStyle().set("flex", "0 0 auto");
-            header.getPeer().getElement().appendChild(iconComp.getElement());
-        }
+            com.vaadin.flow.component.Component iconComp = resolveIconComponent();
+            if (iconComp != null) {
+                // Plant the Vaadin icon directly on the JPanel's peer
+                // element — JOptionPane's icon glyph is a leaf decoration,
+                // not a JComponent the user will Karibu-lookup against.
+                iconComp.getElement().getStyle().set("flex", "0 0 auto");
+                p.getElement().appendChild(iconComp.getElement());
+            }
+        });
 
         if (message != null) {
             vaadinx.swing.JLabel msgLabel = new vaadinx.swing.JLabel(String.valueOf(message));
-            msgLabel.getPeer().getElement().getStyle().set("flex", "1 1 auto");
+            msgLabel.withPeer(p -> p.getElement().getStyle().set("flex", "1 1 auto"));
             header.add(msgLabel);
         }
         add(header);

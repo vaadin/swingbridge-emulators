@@ -106,8 +106,9 @@ public class JLabel extends vaadinx.swing.JComponent implements javax.swing.Swin
         // Swing's own JLabel ctor so subclasses overriding any of these
         // see the same call sequence during construction. Peer is the
         // SJLabel surrogate (NativeLabel-based) — handles text + icon
-        // coexistence via manual DOM children per SD_sjlabel.
-        this(new com.vaadin.swingbridge.surrogates.SJLabel());
+        // coexistence via manual DOM children per SD_sjlabel. Built lazily, once a UI is
+        // current, so a label made on a worker runs no Vaadin code there.
+        super(com.vaadin.swingbridge.surrogates.SJLabel.class, com.vaadin.swingbridge.surrogates.SJLabel::new);
         setHorizontalAlignment(horizontalAlignment);
         setText(text);
         setIcon(icon);
@@ -131,9 +132,9 @@ public class JLabel extends vaadinx.swing.JComponent implements javax.swing.Swin
         java.lang.String old = this.text;
         if (java.util.Objects.equals(old, text)) return;
         this.text = text;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJLabel sj) {
-            withPeer(p -> sj.setText(text == null ? "" : text));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.swingbridge.surrogates.SJLabel sj) sj.setText(text == null ? "" : text);
+        });
         firePropertyChange("text", old, text);
     }
 

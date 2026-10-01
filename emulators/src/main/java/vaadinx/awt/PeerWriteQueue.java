@@ -72,7 +72,11 @@ final class PeerWriteQueue {
     /** Queue length at which {@link #enqueue} WARNs, once per queue. */
     private static final int WARN_THRESHOLD = 1000;
 
-    private final com.vaadin.flow.component.Component peer;
+    /**
+     * {@code null} until {@link #bind}: a lazy emulator's queue exists before its peer, and only
+     * ever queues until then, since nothing can attach a peer that does not exist.
+     */
+    private volatile com.vaadin.flow.component.Component peer;
 
     /** The emulator class the WARN names, which is more useful in a migrator's log than the peer's. */
     private final Class<?> owner;
@@ -94,13 +98,17 @@ final class PeerWriteQueue {
      */
     private Thread drainingThread;
 
-    /**
-     * Registers the attach listener that drains — call it before the emulator registers its own
-     * attach listeners, so they see a peer that already carries its queued writes.
-     */
-    PeerWriteQueue(com.vaadin.flow.component.Component peer, Class<?> owner) {
-        this.peer = peer;
+    PeerWriteQueue(Class<?> owner) {
         this.owner = owner;
+    }
+
+    /**
+     * Binds the queue to the peer once it exists, registering the attach listener that drains —
+     * call it before the emulator registers its own attach listeners, so they see a peer that
+     * already carries its queued writes. The caller drains whatever was queued before.
+     */
+    void bind(com.vaadin.flow.component.Component peer) {
+        this.peer = peer;
         peer.addAttachListener(e -> {
             synchronized (lock) {
                 attachedSession = e.getSession();

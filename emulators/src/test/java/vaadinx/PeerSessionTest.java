@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -122,7 +121,6 @@ class PeerSessionTest extends AbstractKaribuTest {
         AtomicReference<JLabel> built = new AtomicReference<>();
         onThread(false, () -> built.set(new JLabel("x")));
         JLabel label = built.get();
-        assertNull(SHelper.sessionOf(label.getPeer()), "built with no session anywhere");
 
         AtomicInteger runs = new AtomicInteger();
         AtomicBoolean lockedWithUI = new AtomicBoolean();

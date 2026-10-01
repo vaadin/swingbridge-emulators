@@ -62,8 +62,11 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * {@link vaadinx.EHelper#checkUIThread()} observes off-UI-thread access. A
      * {@code protected} field would let any emulator — and any new method on one —
      * reach the peer without passing that chokepoint, and nothing would catch it.
+     *
+     * <p>{@code null} until a lazy emulator's peer is built ({@link #ensurePeer}); written once,
+     * and {@code volatile} because the building thread need not be the reading one.
      */
-    private final com.vaadin.flow.component.Component peer;
+    private volatile com.vaadin.flow.component.Component peer;
 
     /**
      * The Vaadin component backing this emulator — the only way to reach it, from
@@ -78,18 +81,19 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * but it is why {@link #peer} is private rather than {@code protected}, which is
      * what makes the chokepoint hold for emulator methods not yet written.
      *
-     * <p>With a UI current, writes {@link #withPeer} queued while the peer had no UI are
-     * drained first, so the peer handed back carries them — which is also what makes a
-     * parent's {@code parentPeer.add(child.getPeer())} the write that drains the child.
+     * <p>With a UI current, a lazy emulator's peer is built if it does not exist yet, and
+     * writes {@link #withPeer} queued while the peer had no UI are drained first, so the peer
+     * handed back carries them — which is also what makes a parent's
+     * {@code parentPeer.add(child.getPeer())} the write that builds and drains the child.
      *
-     * <p>Two call sites inside this class deliberately read the field instead: the
-     * constructor, since construction off the UI thread is tolerated, and
-     * {@link #toString()}, since logging a component must never itself warn.
+     * <p>{@link #toString()} deliberately reads the field instead, since logging a component
+     * must never itself warn or build anything.
      */
     public final com.vaadin.flow.component.Component getPeer() {
         vaadinx.EHelper.checkUIThread();
+        com.vaadin.flow.component.Component p = ensurePeer();
         peerWrites.drainIfUICurrent();
-        return peer;
+        return p;
     }
 
     /**
@@ -117,6 +121,9 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      */
     public final void withPeer(java.util.function.Consumer<com.vaadin.flow.component.Component> body) {
         vaadinx.EHelper.checkUIThread();
+        // A UI current is the moment a lazy peer may be built; without one the write waits, and
+        // reads the peer only when it runs.
+        if (com.vaadin.flow.component.UI.getCurrent() != null) ensurePeer();
         peerWrites.write(() -> body.accept(peer));
     }
 
@@ -236,14 +243,82 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
         vaadinx.EHelper.onUnimplemented("Component", "<init>");
     }
 
+    /** Peers on {@code peer}, built by the caller: the eager form, which every emulator not yet made lazy uses. */
     protected Component(com.vaadin.flow.component.Component peer) {
-        this.peer = peer;
-        // Before anything else can see the peer: an emulator built on a worker is the one
-        // way its surrogate learns its session before attach (SHelper.sessionOf).
+        this(peer.getClass(), null, peer);
+    }
+
+    /**
+     * Peers on a {@code peerType} that {@code peerFactory} builds only once a UI is current —
+     * at the first write that has one, or at the attach that drains the writes made before it
+     * (ideas/vaadin-ui-thread-only.md § "The mechanism"). So an emulator constructed and
+     * configured on a worker runs no Vaadin code there at all.
+     *
+     * @param peerType what {@code peerFactory} returns, which answers the type checks made
+     *                  before the peer exists
+     */
+    protected <P extends com.vaadin.flow.component.Component> Component(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        this(peerType, peerFactory, null);
+    }
+
+    private Component(Class<? extends com.vaadin.flow.component.Component> peerType,
+            java.util.function.Supplier<? extends com.vaadin.flow.component.Component> peerFactory,
+            com.vaadin.flow.component.Component peer) {
+        this.peerType = peerType;
+        this.peerFactory = peerFactory;
+        // An emulator built on a worker is the one way its surrogate learns its session before
+        // attach (SHelper.sessionOf); captured now, handed over when the peer exists.
         vaadinx.EmulatorContext ctx = vaadinx.EmulatorContext.getOrNull();
-        com.vaadin.swingbridge.surrogates.SHelper.offerSession(peer, ctx != null ? ctx.session() : null);
+        this.constructionSession = ctx != null ? ctx.session() : null;
+        this.peerWrites = new PeerWriteQueue(getClass());
+        if (peer != null) bindPeer(peer);
+    }
+
+    /** What the peer is, or will be once built. */
+    private final Class<? extends com.vaadin.flow.component.Component> peerType;
+
+    /** Builds the peer; {@code null} once it is built, and for an emulator that was handed one. */
+    private java.util.function.Supplier<? extends com.vaadin.flow.component.Component> peerFactory;
+
+    /** The constructing thread's session, offered to the peer when it exists. */
+    private final com.vaadin.flow.server.VaadinSession constructionSession;
+
+    /** Guards {@link #peerFactory}, so the peer is built once. Never held while a write runs. */
+    private final Object peerBuildLock = new Object();
+
+    /** Whether the peer is, or will be, a {@code type}: answers without building it. */
+    final boolean peerIs(Class<?> type) {
+        return type.isAssignableFrom(peerType);
+    }
+
+    /**
+     * The peer, built now if it does not exist yet. With a UI current that is the intended
+     * moment. Without one, a lazy emulator's peer is being reached before any write could give
+     * it a UI — a raw {@link #getPeer()} on a worker — and it is built there anyway, as an eager
+     * emulator's always is, reported by {@link vaadinx.EHelper#onPeerBuiltOffUIThread}.
+     */
+    private com.vaadin.flow.component.Component ensurePeer() {
+        com.vaadin.flow.component.Component p = peer;
+        if (p != null) return p;
+        synchronized (peerBuildLock) {
+            if (peer == null) {
+                if (com.vaadin.flow.component.UI.getCurrent() == null) {
+                    vaadinx.EHelper.onPeerBuiltOffUIThread(getClass());
+                }
+                com.vaadin.flow.component.Component built = peerFactory.get();
+                peerFactory = null;
+                bindPeer(built);
+            }
+            return peer;
+        }
+    }
+
+    /** Wires a freshly built {@code peer} to this emulator; what the eager constructor did inline. */
+    private void bindPeer(com.vaadin.flow.component.Component peer) {
+        com.vaadin.swingbridge.surrogates.SHelper.offerSession(peer, constructionSession);
         // First of this emulator's attach listeners, so the ones below see the queued writes.
-        this.peerWrites = new PeerWriteQueue(peer, getClass());
+        peerWrites.bind(peer);
         // Register the 1:1 mapping so getParent()-style lookups find this emulator
         // instead of synthesizing a new one. See D_peer_emulator_mapping.
         vaadinx.EHelper.onCreated(peer, this);
@@ -273,6 +348,8 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
                 () -> vaadinx.EHelper.callSwing(this::onPeerAttached)));
         peer.addDetachListener(e -> vaadinx.EHelper.outsideQueuedPeerWrite(
                 () -> vaadinx.EHelper.callSwing(this::onPeerDetached)));
+        // Last: the peer is published only once fully wired.
+        this.peer = peer;
     }
 
     /**
@@ -733,8 +810,8 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
             // still fires every mouse callback, so gating anything here would
             // invent a behaviour Swing lacks (R_no_silent_improvements).
             this.enabled = b;
-        } else if (peer instanceof com.vaadin.flow.component.HasEnabled he) {
-            withPeer(p -> he.setEnabled(b));
+        } else if (peerIs(com.vaadin.flow.component.HasEnabled.class)) {
+            withPeer(p -> ((com.vaadin.flow.component.HasEnabled) p).setEnabled(b));
             this.enabled = b;
         } else if (!b) {
             // Peer lacks HasEnabled — no DOM affordance for "disabled". Rather
@@ -986,9 +1063,9 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * never rendered, so the fill is a no-op.
      */
     protected String defaultFillCssClass() {
-        if (peer instanceof com.vaadin.flow.component.menubar.MenuBar) return FILL_CHROME;
-        if (peer instanceof com.vaadin.flow.component.orderedlayout.Scroller) return FILL_DEFAULT;
-        return peer instanceof com.vaadin.flow.component.HtmlContainer ? FILL_DEFAULT : null;
+        if (peerIs(com.vaadin.flow.component.menubar.MenuBar.class)) return FILL_CHROME;
+        if (peerIs(com.vaadin.flow.component.orderedlayout.Scroller.class)) return FILL_DEFAULT;
+        return peerIs(com.vaadin.flow.component.HtmlContainer.class) ? FILL_DEFAULT : null;
     }
 
     public java.awt.Font getFont() {
@@ -1587,9 +1664,9 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      *     focus at all
      */
     boolean focusPeer(String methodName) {
-        if (peer instanceof com.vaadin.flow.component.Focusable<?> f) {
+        if (peerIs(com.vaadin.flow.component.Focusable.class)) {
             withPeer(p -> {
-                f.focus();
+                ((com.vaadin.flow.component.Focusable<?>) p).focus();
                 com.vaadin.swingbridge.surrogates.FocusTracker.setFocusOwner(p);
             });
             return true;
@@ -1671,8 +1748,8 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
                 }));
             }
         });
-        if (!(peer instanceof com.vaadin.flow.component.FocusNotifier<?>)
-                && !(peer instanceof com.vaadin.flow.component.BlurNotifier<?>)) {
+        if (!peerIs(com.vaadin.flow.component.FocusNotifier.class)
+                && !peerIs(com.vaadin.flow.component.BlurNotifier.class)) {
             // Nothing in the browser can report focus for this peer, so a stored
             // listener would never fire. Say so rather than looking wired.
             vaadinx.EHelper.onUnimplemented(getClass().getSimpleName(),

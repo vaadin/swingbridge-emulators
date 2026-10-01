@@ -82,6 +82,12 @@ public class Container extends vaadinx.awt.Component {
         super(peer);
     }
 
+    /** The lazy form: see {@link Component#Component(Class, java.util.function.Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> Container(Class<P> peerType,
+            java.util.function.Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+    }
+
     /**
      * Peer-side element that child peers get attached to, and that built-in
      * LayoutManagers write container-wide CSS to per D_layout_css_on_content. Defaults to the
@@ -312,9 +318,8 @@ public class Container extends vaadinx.awt.Component {
      * been linked, from every insertion path (D_container_enabled_no_cascade).
      */
     private void releasePeerDisableForNewChild() {
-        if (!isEnabled() && !pushesEnabledToPeer()
-                && getPeer() instanceof com.vaadin.flow.component.HasEnabled he) {
-            withPeer(p -> he.setEnabled(true));
+        if (!isEnabled() && !pushesEnabledToPeer() && peerIs(com.vaadin.flow.component.HasEnabled.class)) {
+            withPeer(p -> ((com.vaadin.flow.component.HasEnabled) p).setEnabled(true));
         }
     }
 
