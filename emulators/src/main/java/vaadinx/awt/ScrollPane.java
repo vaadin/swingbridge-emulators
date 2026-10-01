@@ -96,7 +96,7 @@ package vaadinx.awt;
  *
  * Nothing in {@code java.awt} extends {@code ScrollPane}, and
  * {@code javax.swing.plaf} is out of scope (R_match_swing_errors sub-bucket (b)). Both public
- * ctors funnel into {@code super(new SScrollPane(policy))}, so every instance —
+ * ctors funnel into one {@code super(SScrollPane.class, …)}, so every instance —
  * including a user-code subclass — peers over a {@code Scroller} and no ctor
  * offers a peer seam.
  *
@@ -133,17 +133,30 @@ public class ScrollPane extends vaadinx.awt.Container implements javax.accessibi
      * @param scrollbarDisplayPolicy {@link #SCROLLBARS_AS_NEEDED},
      *        {@link #SCROLLBARS_ALWAYS} or {@link #SCROLLBARS_NEVER}
      * @throws IllegalArgumentException on any other value, with AWT's message.
-     *         Thrown out of the peer's constructor (D_awt_label's trick) so it fires
-     *         inside {@code super(...)} and leaves no half-built ScrollPane
+     *         Thrown while evaluating {@code super(...)}'s argument, so it leaves
+     *         no half-built ScrollPane
      */
     public ScrollPane(int scrollbarDisplayPolicy) {
-        super(new com.vaadin.swingbridge.surrogates.SScrollPane(scrollbarDisplayPolicy));
+        super(com.vaadin.swingbridge.surrogates.SScrollPane.class, peerFactory(scrollbarDisplayPolicy));
         this.scrollbarDisplayPolicy = scrollbarDisplayPolicy;
         // Both constructed eagerly, as the JDK does. The JDK also passes its
         // internal PeerFixer as their listener; ours have an empty chain and
         // push through the pane instead.
         this.hAdjustable = new vaadinx.awt.ScrollPaneAdjustable(this, java.awt.Adjustable.HORIZONTAL);
         this.vAdjustable = new vaadinx.awt.ScrollPaneAdjustable(this, java.awt.Adjustable.VERTICAL);
+    }
+
+    /**
+     * Validates the policy now, since the peer — whose ctor validates it too — is built only
+     * once a UI is current.
+     */
+    private static java.util.function.Supplier<com.vaadin.swingbridge.surrogates.SScrollPane> peerFactory(
+            int scrollbarDisplayPolicy) {
+        switch (scrollbarDisplayPolicy) {
+            case SCROLLBARS_AS_NEEDED, SCROLLBARS_ALWAYS, SCROLLBARS_NEVER -> { }
+            default -> throw new IllegalArgumentException("illegal scrollbar display policy");
+        }
+        return () -> new com.vaadin.swingbridge.surrogates.SScrollPane(scrollbarDisplayPolicy);
     }
 
     private com.vaadin.swingbridge.surrogates.SScrollPane surrogate() {
@@ -381,8 +394,8 @@ public class ScrollPane extends vaadinx.awt.Container implements javax.accessibi
     public void addNotify() {
         // JDK allocates the native peer here, and brackets it with the bug-4124460
         // save/restore of both adjustable values (the native peer resets them).
-        // Ours is eternal and built in the ctor, so there is neither a peer to
-        // allocate nor a reset to defend against — but the override is kept
+        // Ours is eternal once built, so there is neither a peer to allocate
+        // here nor a reset to defend against — but the override is kept
         // rather than dropped: overriding addNotify() and chaining to super is a
         // common AWT-era idiom, and Container's implementation is what runs
         // doLayout() on attach.

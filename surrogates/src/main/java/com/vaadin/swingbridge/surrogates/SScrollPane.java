@@ -96,10 +96,7 @@ public class SScrollPane extends Scroller implements ContainerMixin {
     /**
      * @param scrollbarDisplayPolicy one of {@code java.awt.ScrollPane}'s
      *        {@code SCROLLBARS_*} constants
-     * @throws IllegalArgumentException on any other value, with AWT's own
-     *         message. Validating here rather than in the emulator is D_awt_label's
-     *         trick: the throw comes out of the emulator's {@code super(...)}
-     *         call, so no half-built {@code ScrollPane} is left behind.
+     * @throws IllegalArgumentException on any other value, with AWT's own message
      */
     public SScrollPane(int scrollbarDisplayPolicy) {
         super();

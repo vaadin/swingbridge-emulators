@@ -164,6 +164,13 @@ class LazyPeerTest extends AbstractKaribuTest {
             p.add(new vaadinx.awt.Label("inside"));
             return p;
         });
+        m.put("AWT ScrollPane", () -> {
+            vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
+            sp.add(new vaadinx.awt.Label("first"));
+            sp.setScrollPosition(0, 40);
+            sp.add(new vaadinx.awt.Label("replaces the first"));
+            return sp;
+        });
         return m;
     }
 
@@ -192,6 +199,26 @@ class LazyPeerTest extends AbstractKaribuTest {
                 name + " reached its peer on the worker; the WARN's stack names the reach");
         UI.getCurrent().add(built.get().getPeer());
         assertEquals(true, built.get().getPeer().isAttached(), "and it renders once attached");
+    }
+
+    @Test
+    @DisplayName("an AWT ScrollPane whose child was replaced on a worker shows the second child once attached")
+    void scrollPaneChildSwapOnWorker() {
+        AtomicReference<vaadinx.awt.ScrollPane> built = new AtomicReference<>();
+        AtomicReference<vaadinx.awt.Label> second = new AtomicReference<>();
+
+        onBareThread(() -> {
+            vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane();
+            sp.add(new vaadinx.awt.Label("first"));
+            second.set(new vaadinx.awt.Label("second"));
+            sp.add(second.get());
+            built.set(sp);
+        });
+
+        UI.getCurrent().add(built.get().getPeer());
+        com.vaadin.swingbridge.surrogates.SScrollPane peer =
+                assertInstanceOf(com.vaadin.swingbridge.surrogates.SScrollPane.class, built.get().getPeer());
+        assertEquals(second.get().getPeer(), peer.getContent(), "the queued content swaps drained in order");
     }
 
     @Test
