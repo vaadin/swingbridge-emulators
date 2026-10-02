@@ -98,6 +98,20 @@ that file.
    the fields and the reconcile baselines; a model change the JDK's *UI* reacts to (a list's
    selection shift) is the emulator's to do, with an `…ByOwner` flag telling the surrogate to
    stand down (`SJTable.setSorterNotifiedByOwner`, `SJList.setSelectionAdjustedByOwner`).
+9. **One shape per model, and a queued position may be stale** (`Q_model_resync`). A model reaches
+   its surrogate *either* by the surrogate being built from it at drain (it reads the current state,
+   then listens) *or* by the emulator's own listener queuing a write per change into a surrogate that
+   starts empty (`JTable`'s columns) — never both, or every pre-attach change lands twice. And a
+   queued write that carries a model position (`ensureIndexIsVisible`, `scrollToItem`,
+   `setRowHeight(row, …)`) drains against the model as it is *then*, not as it was when queued: it
+   must tolerate an index or node that no longer exists, dropping the effect without throwing
+   (R_decline_effect_only), as `JTree.scrollPathToVisible` does.
+10. **A peer→Swing listener filters on `isFromClient()` first** (`Q_inbound_path`), wherever its
+    event carries it (value-change, click, focus, blur): a server-originated peer event is our own
+    write's echo or the surrogate rendering the emulator's model, never news. `preventPeerEvents`
+    stays behind it as defence in depth, and value equality behind that for the echoes that do come
+    from the client (`JTextPane` / `JEditorPane`'s init handshake). A DOM-event listener has no
+    server origin and keeps the flag alone.
 
 ## The worklist, in order
 
@@ -110,13 +124,28 @@ that file.
 2. **The rest of the non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection)
    — `JLabel`, and `Window` / `Frame` with the windows. Give each a lazy overload for its
    subclasses; the eager one stays for a migrator's own subclass.
+3. **Audit the positional writes against rule 9** across the already-lazy emulators: every
+   `withPeer` body that takes an index, row or node, checked for what it does when that position is
+   gone by drain time. Only `JTree.scrollPathToVisible` is known safe.
+4. **Convert the inbound listeners to rule 10, auditing for Vaadin's own server-side changes.**
+   About a dozen guard on `isFromClient()` today and about a dozen on `preventPeerEvents` alone.
+   Before converting each of the latter, find what server-side state change the peer makes *by
+   itself* that the listener currently hears — e.g. `TabSheet` selecting a neighbour when the
+   selected tab is removed — and make sure the emulator computes it the JDK's way instead, or the
+   filter turns a heard change into a silent emulator/browser disagreement.
 
 ## After the sweep
 
 - **A suite-wide gate**: fail the build when `EHelper.peersBuiltOffUIThread()` is above zero at the end
   of a module's tests, so a new raw reach reddens instead of WARNing. Worth adding as soon as most of
   the surface is lazy; `ModalFromBackgroundThreadTest` and `JTabbedPaneBackgroundModelTest` are the
-  suite's existing off-thread builders.
+  suite's existing off-thread builders. Landing it closes `Q_vaadin_contract` and decides the fate
+  of `DetachedOffUiThreadTest` ([vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "Cheap
+  first steps").
+- **Coalescing, starting with text.** A text component queues a full-text snapshot per Document
+  change, so a never-shown log area appended to N times holds N copies — quadratic. A newer
+  snapshot wholly supersedes an older one, which makes it the easy first case; the general case
+  needs per-setter knowledge. The 1000-entry WARN covers it until then.
 - **Retire the eager ctor** in `Component` once nothing in SB-Emulators calls it.
 - **`getPeer()` leaves the migrator's surface** for `withPeer` (agreed); kept as a test accessor that
   drains and asserts a UI. **An attaching-write API for embedding an emulator in vanilla Vaadin**
@@ -126,7 +155,8 @@ that file.
 - **Open, not yet measured:** a surrogate's own `onAttach` runs before the emulator's drain listener,
   so a nested peer with queued writes meets attach with its pre-drain state.
   `JTable.installEditorComponents` reads `comp.getPeer()` outside a write — browser-driven today.
-- **Docs to change at graduation:** SD_toggle_checkbox_first_cut's Validation paragraph (still says
+- **Docs to change at graduation:** R_swing_is_truth (the `preventPeerEvents` guard is no longer
+  the primary echo filter; `isFromClient()` is, per rule 10); SD_toggle_checkbox_first_cut's Validation paragraph (still says
   the emulator's events come through a bridged surrogate pulse); R_no_vaadin_in_api (names `getPeer` as the sanctioned accessor),
   R_tolerate_off_ui_thread limb 2 (names it as the chokepoint) and limb 3 (`withPeer` is synchronous —
   it now queues), R_match_swing_errors case (7) (writes no longer need a context), D_attach_aware_hop,

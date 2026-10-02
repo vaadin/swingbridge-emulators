@@ -1,7 +1,7 @@
 # Vaadin components touched on the UI thread only — surrogates as a locked renderer
 
-**Status:** open, a direction taken, its mechanism agreed in a brainstorm on 2026-10-01 (§
-"The mechanism") but not built. Opened 2026-09-28. The interim design, decided the same day, is
+**Status:** every question answered (2026-10-02); the mechanism (§ "The mechanism", agreed
+2026-10-01) is built and rolled out to everything but the windows. Opened 2026-09-28. The interim design, decided the same day, is
 *eager peers built on any thread, and a session capture per component to hop through*. This file is
 how SB-Emulators gets from there to **zero Vaadin exposure to background threads**.
 
@@ -66,8 +66,17 @@ kept regardless; each one is a design problem to solve.
    before any hop, which also takes these listeners out from under the session lock
    ([withpeer-shape.md](./withpeer-shape.md) §3 (a)).
 3. **Model listeners.** Surrogates subscribe to the Swing models they are given. A model mutated
-   before the peer exists must still be reflected when it materialises: a full state sync from the
-   models, not a replay. **`Q_model_resync`.**
+   before the peer exists must still be reflected when it materialises. **`Q_model_resync` —
+   answered (2026-10-02) by the mechanism as built, with no resync step of its own.** A model reaches
+   its surrogate in one of two shapes. *Built from the model at drain* (`JList`, `JComboBox`,
+   `JSlider`, `JProgressBar`, `JSpinner`, `JTree`): the lazy factory runs when the queue drains, so
+   the surrogate reads the model's current state and subscribes from then on — the full state sync,
+   for free. *Replayed by the emulator's own model listener* (`JTable`'s column bridge, one delta
+   per change into a surrogate that starts with no columns; text components, one full-text snapshot
+   per Document change): ordered replay, correct because the queue keeps order. The two rules this
+   leaves, one shape per model and stale-position tolerance, are rule 9 of
+   [lazy-peer-sweep.md](./lazy-peer-sweep.md); snapshot replay's memory cost (a never-shown log
+   area holds one full-text copy per append) is coalescing, still later work.
 4. **Attach needs the peers.** `container.add(child)` is `peer.add(childPeer)`, and a tree attaches
    because its root peer joins a UI. Deferred peers mean a subtree materialises at attach, on the UI
    thread, from Swing-side state. **`Q_materialise_at_attach`**: what triggers it, and how deep.
@@ -86,7 +95,18 @@ kept regardless; each one is a design problem to solve.
    selection or a dragged divider arrive as peer events on the UI thread. With emulator-owned state
    the peer listener writes the emulator field under `callSwing`, as today, but now it is the only
    writer path. That needs checking against R_swing_is_truth's `preventPeerEvents` echo guards,
-   whose shape changes when the push is deferred. **`Q_inbound_path`.**
+   whose shape changes when the push is deferred. **`Q_inbound_path` — answered (2026-10-02): the
+   queue and the inbound path never overlap.** A write queues only while the peer is unattached or
+   its UI closed, when no browser event can arrive; while attached with its UI open the queue is
+   empty (drained at build / attach, every later write inline or hopped). The one overlap is the
+   drain, already covered by sweep rule 1 and the drain assertion. What it changed is the guard:
+   **`isFromClient()` becomes the primary echo filter** wherever the event carries it, since under
+   D_emulator_owned_state a server-originated peer event is never news to the emulator, and it does
+   not depend on where a flag is set. `preventPeerEvents` stays as defence in depth, and value
+   equality still catches the client-side echoes (the RTE's init handshake and normalisation). The
+   cost is that a state change Vaadin makes on its own server-side is no longer heard, so each such
+   case must be computed emulator-side — sweep rule 10 and worklist item 4 of
+   [lazy-peer-sweep.md](./lazy-peer-sweep.md).
 8. **`getPeer()` is public API.** Migrators hand it to vanilla Vaadin layouts, as R_no_vaadin_in_api
    sanctions, and Karibu reaches through it. A lazily built peer means `getPeer()` materialises it,
    and on the UI thread only, so it must throw, or hop, when called from a worker.
@@ -96,7 +116,11 @@ kept regardless; each one is a design problem to solve.
    delegating shell" statement in `CLAUDE.md` § Current scope, D_surrogate_first's ordering policy
    and D_emulator_surrogate_split all change, so this lands as decisions, not only as code.
    **`Q_migration_path`**: can it go component by component behind the current seam, and which
-   component proves the shape first? `JLabel` or `JTextField` is the smallest one with real state.
+   component proves the shape first? **Answered (2026-10-02) by the rollout itself:** yes — the queue
+   went in behind `withPeer` with no emulator changing shape (`9733573`), the lazy ctor beside the
+   eager one with `JLabel` first (`5758ead`), then eight batches each green on a clean reactor build
+   while the unconverted emulators kept the eager ctor. `LazyPeerTest` is the gate that grows with
+   each one; the order of what remains is [lazy-peer-sweep.md](./lazy-peer-sweep.md)'s worklist.
 
 ## The mechanism — queue per island, drain at the attaching write
 
@@ -154,16 +178,19 @@ Agreed 2026-10-01; built and partly rolled out — the worklist and the rules th
 
 ## Cheap first steps
 
-- **`Q_vaadin_contract`**: before designing, ask the Flow team, or read the Flow source and
-  changelog, what — if anything — Vaadin guarantees about constructing and mutating detached
-  components off the UI thread. If a guarantee exists, the urgency drops; if it doesn't, write the
-  finding into D_attach_aware_hop as the known dependency it is.
-- The pin exists: `DetachedOffUiThreadTest` in `:surrogates` constructs and mutates every surrogate
-  on a plain thread with no service, session or UI. It goes red on the Vaadin upgrade that breaks the
-  assumption, instead of a migrator finding out. Showing a window is excluded, since that attaches
-  it.
+- **`Q_vaadin_contract`** — what, if anything, Vaadin guarantees about constructing and mutating
+  detached components off the UI thread. **Moot by the sweep (2026-10-02), not to be researched:**
+  once the windows are lazy nothing in SB-Emulators relies on such a guarantee, and the suite-wide
+  `peersBuiltOffUIThread() == 0` gate ([lazy-peer-sweep.md](./lazy-peer-sweep.md) § "After the
+  sweep") turns the last raw off-thread `getPeer()` into a build failure. Closed when that gate lands.
+- The pin: `DetachedOffUiThreadTest` in `:surrogates` constructs and mutates every surrogate on a
+  plain thread with no service, session or UI, and goes red on the Vaadin upgrade that breaks the
+  assumption. Once the gate lands it pins an assumption nothing relies on; shrink it then to what
+  still touches a surrogate unlocked (`SHelper.runOnSession`'s inline fallbacks), or delete it.
 
 ## Graduation
 
-Graduate once the mechanism is built and `Q_model_resync`, `Q_inbound_path` and `Q_migration_path`
-are decided, as decisions superseding the interim session-capture design; then delete this file.
+Every question is answered (2026-10-02). Graduate once the mechanism is fully rolled out — the
+windows lazy and the `peersBuiltOffUIThread()` gate in place, per
+[lazy-peer-sweep.md](./lazy-peer-sweep.md) — as decisions superseding the interim session-capture
+design; then delete this file.
