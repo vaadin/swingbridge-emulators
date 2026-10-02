@@ -135,10 +135,12 @@ class CheckUIThreadTest extends AbstractKaribuTest {
      * shutdown flag at all.
      */
     private static void touchPeerWithLockedSessionAndNoUi() {
+        // Built while the UI is current, so the reach below is a peer access, not a build.
+        JButton button = new JButton("probe");
         UI ui = UI.getCurrent();
         try {
             UI.setCurrent(null);
-            new JButton("probe").getPeer();
+            button.getPeer();
         } finally {
             UI.setCurrent(ui);
         }

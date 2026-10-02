@@ -338,16 +338,31 @@ public final class EHelper {
      * should have been a {@code withPeer} write. Counted for the tests that assert it never happens.
      */
     public static void onPeerBuiltOffUIThread(Class<?> emulatorClass) {
+        Throwable reach = new Throwable(emulatorClass.getName() + "'s peer reached here, on "
+                + Thread.currentThread().getName());
+        lastPeerBuiltOffUIThread = reach;
         if (PEERS_BUILT_OFF_UI_THREAD.getAndIncrement() == 0) {
             log.warn("{} built its Vaadin peer off the UI thread: its peer was reached directly before "
                     + "any write could give it a UI. Reported once per JVM; the stack is the reach.",
-                    emulatorClass.getName(), new Throwable("peer reached here"));
+                    emulatorClass.getName(), reach);
         }
     }
 
     /** How many lazy peers {@link #onPeerBuiltOffUIThread} has seen built with no UI current. */
     public static int peersBuiltOffUIThread() {
         return PEERS_BUILT_OFF_UI_THREAD.get();
+    }
+
+    private static volatile Throwable lastPeerBuiltOffUIThread;
+
+    /**
+     * The stack of the most recent reach {@link #onPeerBuiltOffUIThread} saw, which the WARN logs
+     * only for the first one in the JVM.
+     *
+     * @return {@code null} when no peer was ever built off the UI thread
+     */
+    public static Throwable lastPeerBuiltOffUIThread() {
+        return lastPeerBuiltOffUIThread;
     }
 
     /**

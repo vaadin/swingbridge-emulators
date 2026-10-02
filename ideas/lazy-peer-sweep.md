@@ -146,12 +146,19 @@ that file.
 
 ## After the sweep
 
-- **A suite-wide gate**: fail the build when `EHelper.peersBuiltOffUIThread()` is above zero at the end
-  of a module's tests, so a new raw reach reddens instead of WARNing. Worth adding as soon as most of
-  the surface is lazy; `ModalFromBackgroundThreadTest` and `JTabbedPaneBackgroundModelTest` are the
-  suite's existing off-thread builders. Landing it closes `Q_vaadin_contract` and decides the fate
-  of `DetachedOffUiThreadTest` ([vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "Cheap
-  first steps").
+- **The suite-wide gate — landed in `:emulators` (2026-10-02).** `vaadinx.PeersOnUIThreadGate`, a
+  Jupiter extension autodetected through `junit-platform.properties`, fails every test (and every
+  class, for `@BeforeAll` / `@AfterAll`) during which `EHelper.peersBuiltOffUIThread()` moved, with
+  the reach's stack as the cause (`EHelper.lastPeerBuiltOffUIThread()`). The first run found only
+  `CheckUIThreadTest`'s probe, built with its UI already nulled; `ModalFromBackgroundThreadTest`
+  and `JTabbedPaneBackgroundModelTest` stopped building off-thread when the windows went lazy.
+  **Measured over the whole reactor the same day: zero off-thread builds** in `:sampler`,
+  `:emulators-printing`, `:emulators-spring`, `:migration-guardrails` and both add-ons, so the gate
+  is not installed there yet — `:emulators` has no test-jar, and a per-module copy needs a header
+  per licence lane (the jgoodies fork's tree takes no Vaadin file at all). Open: share it (a
+  test-jar carrying the one class), copy it, or leave `:emulators` as the only gate. Still to
+  decide with it: the fate of `DetachedOffUiThreadTest`
+  ([vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "Cheap first steps").
 - **Coalescing, starting with text.** A text component queues a full-text snapshot per Document
   change, so a never-shown log area appended to N times holds N copies — quadratic. A newer
   snapshot wholly supersedes an older one, which makes it the easy first case; the general case

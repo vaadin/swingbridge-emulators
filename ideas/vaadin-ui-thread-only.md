@@ -180,9 +180,10 @@ Agreed 2026-10-01; built and partly rolled out — the worklist and the rules th
 
 - **`Q_vaadin_contract`** — what, if anything, Vaadin guarantees about constructing and mutating
   detached components off the UI thread. **Moot by the sweep (2026-10-02), not to be researched:**
-  with the windows lazy nothing in SB-Emulators relies on such a guarantee, and the suite-wide
-  `peersBuiltOffUIThread() == 0` gate ([lazy-peer-sweep.md](./lazy-peer-sweep.md) § "After the
-  sweep") turns the last raw off-thread `getPeer()` into a build failure. Closed when that gate lands.
+  with the windows lazy nothing in SB-Emulators relies on such a guarantee, and the
+  `peersBuiltOffUIThread()` gate ([lazy-peer-sweep.md](./lazy-peer-sweep.md) § "After the
+  sweep") turns the last raw off-thread `getPeer()` into a build failure. **Closed (2026-10-02):**
+  the gate is in `:emulators`, and the whole reactor builds no peer off the UI thread.
 - The pin: `DetachedOffUiThreadTest` in `:surrogates` constructs and mutates every surrogate on a
   plain thread with no service, session or UI, and goes red on the Vaadin upgrade that breaks the
   assumption. Once the gate lands it pins an assumption nothing relies on; shrink it then to what
@@ -190,7 +191,7 @@ Agreed 2026-10-01; built and partly rolled out — the worklist and the rules th
 
 ## Graduation
 
-Every question is answered (2026-10-02), and every emulator is lazy (2026-10-02). Graduate once
-the `peersBuiltOffUIThread()` gate is in place, per
-[lazy-peer-sweep.md](./lazy-peer-sweep.md) — as decisions superseding the interim session-capture
-design; then delete this file.
+Every question is answered, every emulator is lazy, and the `peersBuiltOffUIThread()` gate is in
+`:emulators` (all 2026-10-02). Graduate with [lazy-peer-sweep.md](./lazy-peer-sweep.md), once its
+worklist is done — as decisions superseding the interim session-capture design; then delete this
+file.
