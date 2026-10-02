@@ -20,8 +20,8 @@ that file.
   has a UI current. Type checks before it exists answer from the declared type (the protected
   `peerIs`). A raw `getPeer()` with no UI still builds it, off-thread as before, reported once per
   JVM by `EHelper.onPeerBuiltOffUIThread` and counted in `EHelper.peersBuiltOffUIThread()`.
-- **Lazy today — everything but the windows.** `vaadinx.LazyPeerTest` builds and configures each
-  on a bare worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
+- **Lazy today — every emulator.** `vaadinx.LazyPeerTest` builds and configures each on a bare
+  worker and asserts the counter did not move; **add every newly lazy emulator to its map.**
   - AWT: `Container()` (so `Panel`), `Label`, `Button`, `Checkbox`, `Choice`, `List`, `Scrollbar`,
     `ScrollPane`.
   - Structural: `JLabel`, `JPanel`, `JSeparator`, `JScrollBar`, `JViewport`, `JLayeredPane`,
@@ -33,9 +33,14 @@ that file.
     `JEditorPane`, `JTextPane`.
   - Containers and leaves: `JScrollPane`, `JSplitPane`, `JToolBar`, `JTabbedPane`, `JColorChooser`,
     `JDesktopPane`, `JOptionPane`, `JFileChooser`, a standalone `JRootPane`.
+  - Windows: `Window`, `Frame`, `Dialog` (so `FileDialog`), `JWindow`, `JFrame` (both strategies;
+    `FrameStrategy.peerType()` is the declared type), `JDialog`, `JInternalFrame` and its
+    `JDesktopIcon`.
 - **Lazy protected ctors** (D_peer_ctor_injection, the eager one beside each): `Component`,
   `Container`, `JComponent`, `AbstractButton`, `JToggleButton`, `JMenuItem`, `JTextComponent`,
-  `JTextField`, `JEditorPane`.
+  `JTextField`, `JEditorPane`, `JLabel`, `Window` (with and without an owner), `Frame`, `Dialog`.
+  `JRootPane`'s eager protected ctor is gone — a public-hierarchy leaf, and nothing used it once
+  the windows stopped wrapping their surrogate's root pane.
 
 ### Progress log
 
@@ -64,6 +69,20 @@ that file.
     `createDefaultColumnModel` / `createDefaultDataModel` hooks exist and are reached. The selection
     mirror and the renderer install wait for a data model. It also owns its sorter and columns
     (`SJTable.setSorterNotifiedByOwner`).
+- **2026-10-02** — the windows. Beyond "lazy":
+  - **The root pane is built by the emulator and handed down** (D_rootpane_containment):
+    `createRootPane()` returns a fresh `JRootPane`, and `setRootPane` passes its `SJRootPane` peer to
+    the new public `setRootPane` on `SJFrame` / `SJDialog` / `SJWindow` / `SJInternalFrame`
+    (`RootPaneScaffold.setRootPane`). It used to wrap the surrogate's own root pane, which reached
+    the window's peer from the constructor.
+  - Owner surrogates are read inside the peer factory (`unwrapSWindow` / `unwrapSFrame` /
+    `windowOwnerToSFrame`), on the UI thread; the window's `OpenedChangeListener` bridge and
+    `JInternalFrame`'s relay and header handlers are writes (rule 5).
+  - `JFrame` / `JDialog.setDefaultCloseOperation` validate in the emulator, as the JDK does, rather
+    than relying on the surrogate's throw (rule 6). `DialogStrategy.disposePeer` writes through
+    `withPeer`; `InlineStrategy` still touches its `SJPanel` directly, always with a UI current.
+  - The choosers' raw Vaadin buttons are built inside a write on the dialog (rule 3), so a blocking
+    `JColorChooser.showDialog` / `JFileChooser` show from a worker drains them at the show.
 - **Left as found, noticed on the way:** `new JTable(Object[][], Object[])` builds a
   `DefaultTableModel` where the JDK builds an `AbstractTableModel` over the arrays; `JCheckBox` /
   `JRadioButton` skip the JDK ctor's `setBorderPainted(false)` / `setHorizontalAlignment(LEADING)`;
@@ -115,19 +134,10 @@ that file.
 
 ## The worklist, in order
 
-1. **Windows** — `Window`, `Frame`, `Dialog`, `JWindow`, `JFrame`, `JDialog`, and `JInternalFrame`
-   (an overlay `Dialog`): shows go through `EHelper.runInUIThread`, which finds a UI through the
-   `EmulatorContext`; `JFrame` picks its peer by `@MainWindow` (D_frame_strategy), so the declared
-   type is a choice too. Two things ride on it: a window's `JRootPane` shares its surrogate's
-   `SJRootPane` (the eager protected ctor), and the blocking choosers (`JColorChooser.showDialog` /
-   `createDialog`, `JFileChooser`'s open/save) compose raw Vaadin buttons into the dialog's peer.
-2. **The rest of the non-leaf emulators' protected `(Component peer)` ctors** (D_peer_ctor_injection)
-   — `JLabel`, and `Window` / `Frame` with the windows. Give each a lazy overload for its
-   subclasses; the eager one stays for a migrator's own subclass.
-3. **Audit the positional writes against rule 9** across the already-lazy emulators: every
+1. **Audit the positional writes against rule 9** across the already-lazy emulators: every
    `withPeer` body that takes an index, row or node, checked for what it does when that position is
    gone by drain time. Only `JTree.scrollPathToVisible` is known safe.
-4. **Convert the inbound listeners to rule 10, auditing for Vaadin's own server-side changes.**
+2. **Convert the inbound listeners to rule 10, auditing for Vaadin's own server-side changes.**
    About a dozen guard on `isFromClient()` today and about a dozen on `preventPeerEvents` alone.
    Before converting each of the latter, find what server-side state change the peer makes *by
    itself* that the listener currently hears — e.g. `TabSheet` selecting a neighbour when the

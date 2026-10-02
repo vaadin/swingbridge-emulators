@@ -39,8 +39,25 @@
 
 package vaadinx.awt;
 
+import com.github.mvysny.blockingdialogs.UIFibers;
+import com.vaadin.flow.component.ModalityMode;
+import com.vaadin.swingbridge.surrogates.SFrame;
+import com.vaadin.swingbridge.surrogates.SWindow;
+import vaadinx.BrowserSessionClosedError;
+import vaadinx.EHelper;
+import vaadinx.awt.event.WindowEvent;
+import vaadinx.swing.SwingUtilities;
+
+import javax.accessibility.AccessibleContext;
+import java.awt.Color;
+import java.awt.IllegalComponentStateException;
+import java.awt.Shape;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
+
 // Hand-finished emulator for java.awt.Dialog, rendered by
-// com.vaadin.swingbridge.surrogates.SFrame (the same surrogate Window uses) — Dialog adds
+// SFrame (the same surrogate Window uses) — Dialog adds
 // the modal / modalityType / title / resizable surface on top of Window's
 // peer-sync, owner chain, and listener families. It owns that state as the JDK's does:
 // the fields and bodies are the JDK's, and no getter reads the peer
@@ -55,14 +72,14 @@ package vaadinx.awt;
 // (setModal(true) + setVisible(true) returning immediately, listening
 // for windowClosed) parks nothing — that's the CRUD edit-form path.
 
-/** Emulator for {@link java.awt.Dialog}, rendered by {@link com.vaadin.swingbridge.surrogates.SFrame}. */
-public class Dialog extends vaadinx.awt.Window {
+/** Emulator for {@link java.awt.Dialog}, rendered by {@link SFrame}. */
+public class Dialog extends Window {
 
     /**
      * AWT's modality type — controls which other windows the modal Dialog
      * blocks. Mirrors {@link java.awt.Dialog.ModalityType} verbatim;
      * import-swap from {@code java.awt.Dialog.ModalityType} to
-     * {@code vaadinx.awt.Dialog.ModalityType} works because the constant
+     * {@code Dialog.ModalityType} works because the constant
      * names line up.
      *
      * <p>Behavioural mapping under R_vaadin_first: all non-{@code MODELESS} types
@@ -96,7 +113,7 @@ public class Dialog extends vaadinx.awt.Window {
 
     // The JDK's fields, under its names. The constructors assign title directly, so it
     // stays null when a constructor is given null.
-    private java.lang.String title;
+    private String title;
     private boolean resizable = true;
 
     // Non-modal by default — matches AWT's no-arg / owner-only ctors. The
@@ -109,23 +126,23 @@ public class Dialog extends vaadinx.awt.Window {
 
     // Frame-owner ctors -------------------------------------------------
 
-    public Dialog(vaadinx.awt.Frame owner) {
+    public Dialog(Frame owner) {
         this(owner, "", false);
     }
 
-    public Dialog(vaadinx.awt.Frame owner, boolean modal) {
+    public Dialog(Frame owner, boolean modal) {
         this(owner, "", modal);
     }
 
-    public Dialog(vaadinx.awt.Frame owner, java.lang.String title) {
+    public Dialog(Frame owner, String title) {
         this(owner, title, false);
     }
 
-    public Dialog(vaadinx.awt.Frame owner, java.lang.String title, boolean modal) {
+    public Dialog(Frame owner, String title, boolean modal) {
         this(owner, title, modal ? DEFAULT_MODALITY_TYPE : ModalityType.MODELESS);
     }
 
-    public Dialog(vaadinx.awt.Frame owner, java.lang.String title, boolean modal,
+    public Dialog(Frame owner, String title, boolean modal,
                   java.awt.GraphicsConfiguration gc) {
         // GraphicsConfiguration doesn't map onto a browser (R_layouts_close_enough — no pixel
         // geometry / screen devices), so we accept and ignore it.
@@ -134,19 +151,19 @@ public class Dialog extends vaadinx.awt.Window {
 
     // Dialog-owner ctors ------------------------------------------------
 
-    public Dialog(vaadinx.awt.Dialog owner) {
+    public Dialog(Dialog owner) {
         this(owner, "", false);
     }
 
-    public Dialog(vaadinx.awt.Dialog owner, java.lang.String title) {
+    public Dialog(Dialog owner, String title) {
         this(owner, title, false);
     }
 
-    public Dialog(vaadinx.awt.Dialog owner, java.lang.String title, boolean modal) {
+    public Dialog(Dialog owner, String title, boolean modal) {
         this(owner, title, modal ? DEFAULT_MODALITY_TYPE : ModalityType.MODELESS);
     }
 
-    public Dialog(vaadinx.awt.Dialog owner, java.lang.String title, boolean modal,
+    public Dialog(Dialog owner, String title, boolean modal,
                   java.awt.GraphicsConfiguration gc) {
         // GraphicsConfiguration accepted-and-ignored — see Frame ctor.
         this(owner, title, modal);
@@ -154,24 +171,26 @@ public class Dialog extends vaadinx.awt.Window {
 
     // Window-owner ctors (ModalityType-taking) -------------------------
 
-    public Dialog(vaadinx.awt.Window owner) {
+    public Dialog(Window owner) {
         this(owner, "", ModalityType.MODELESS);
     }
 
-    public Dialog(vaadinx.awt.Window owner, ModalityType modalityType) {
+    public Dialog(Window owner, ModalityType modalityType) {
         this(owner, "", modalityType);
     }
 
-    public Dialog(vaadinx.awt.Window owner, java.lang.String title) {
+    public Dialog(Window owner, String title) {
         this(owner, title, ModalityType.MODELESS);
     }
 
     /** @throws IllegalArgumentException if {@code owner} is neither a {@link Frame} nor a {@code Dialog} */
-    public Dialog(vaadinx.awt.Window owner, java.lang.String title, ModalityType modalityType) {
-        this(new com.vaadin.swingbridge.surrogates.SFrame(windowOwnerToSFrame(owner)), owner, title, modalityType);
+    public Dialog(Window owner, String title, ModalityType modalityType) {
+        this(SFrame.class,
+                () -> new SFrame(windowOwnerToSFrame(owner)),
+                owner, title, modalityType);
     }
 
-    public Dialog(vaadinx.awt.Window owner, java.lang.String title, ModalityType modalityType,
+    public Dialog(Window owner, String title, ModalityType modalityType,
                   java.awt.GraphicsConfiguration gc) {
         // GraphicsConfiguration accepted-and-ignored — see Frame ctor.
         this(owner, title, modalityType);
@@ -184,9 +203,26 @@ public class Dialog extends vaadinx.awt.Window {
      *
      * @throws IllegalArgumentException if {@code owner} is neither a {@link Frame} nor a {@code Dialog}
      */
-    protected Dialog(com.vaadin.flow.component.Component peer, vaadinx.awt.Window owner,
-                     java.lang.String title, ModalityType modalityType) {
+    protected Dialog(com.vaadin.flow.component.Component peer, Window owner,
+                     String title, ModalityType modalityType) {
         super(peer);
+        initDialog(owner, title, modalityType);
+    }
+
+    /**
+     * The lazy form of {@link #Dialog(com.vaadin.flow.component.Component, Window, String, ModalityType)}:
+     * see {@link vaadinx.awt.Component#Component(Class, Supplier)}.
+     *
+     * @throws IllegalArgumentException if {@code owner} is neither a {@link Frame} nor a {@code Dialog}
+     */
+    protected <P extends com.vaadin.flow.component.Component> Dialog(Class<P> peerType,
+            Supplier<? extends P> peerFactory, Window owner,
+            String title, ModalityType modalityType) {
+        super(peerType, peerFactory);
+        initDialog(owner, title, modalityType);
+    }
+
+    private void initDialog(Window owner, String title, ModalityType modalityType) {
         this.owner = owner;
         if (owner != null) owner.addOwnedWindow(this);
         // Checked after the owner registration, as the JDK's Window(owner) super ctor has
@@ -208,27 +244,29 @@ public class Dialog extends vaadinx.awt.Window {
      * render with a Vaadin overlay curtain.
      */
     private void syncInitialPeerModality() {
-        if (getPeer() instanceof com.vaadin.flow.component.dialog.Dialog d) {
-            d.setModality(this.modalityType != ModalityType.MODELESS
-                    ? com.vaadin.flow.component.ModalityMode.STRICT
-                    : com.vaadin.flow.component.ModalityMode.MODELESS);
-        }
+        ModalityMode mode = this.modalityType != ModalityType.MODELESS
+                ? ModalityMode.STRICT
+                : ModalityMode.MODELESS;
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.dialog.Dialog d) d.setModality(mode);
+        });
     }
 
-    private static com.vaadin.swingbridge.surrogates.SFrame windowOwnerToSFrame(vaadinx.awt.Window w) {
+    /** Called from a peer factory, so on the UI thread, where reading the owner's peer builds it. */
+    private static SFrame windowOwnerToSFrame(Window w) {
         if (w == null) return null;
-        return w.getPeer() instanceof com.vaadin.swingbridge.surrogates.SFrame sf ? sf : null;
+        return w.getPeer() instanceof SFrame sf ? sf : null;
     }
 
     // Title -------------------------------------------------------------
 
     /** The title, which is {@code null} if the dialog was given none — unlike {@link Frame#getTitle}. */
-    public java.lang.String getTitle() {
+    public String getTitle() {
         return title;
     }
 
-    public void setTitle(java.lang.String title) {
-        java.lang.String oldTitle = this.title;
+    public void setTitle(String title) {
+        String oldTitle = this.title;
         synchronized (this) {
             this.title = title;
         }
@@ -239,9 +277,9 @@ public class Dialog extends vaadinx.awt.Window {
 
     /** SFrame renders a null title as none (SD_sframe); its own "title" event stays on its own layer. */
     private void flushTitle() {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SFrame sf) {
-            withPeer(p -> sf.setTitle(this.title));
-        }
+        withPeer(p -> {
+            if (p instanceof SFrame sf) sf.setTitle(this.title);
+        });
     }
 
     // Modal / modality type --------------------------------------------
@@ -277,11 +315,13 @@ public class Dialog extends vaadinx.awt.Window {
         if (this.modalityType == normalized) return;
         boolean newModal = normalized != ModalityType.MODELESS;
         this.modalityType = normalized;
-        if (getPeer() instanceof com.vaadin.flow.component.dialog.Dialog d) {
-            withPeer(p -> d.setModality(newModal
-                    ? com.vaadin.flow.component.ModalityMode.STRICT
-                    : com.vaadin.flow.component.ModalityMode.MODELESS));
-        }
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.dialog.Dialog d) {
+                d.setModality(newModal
+                        ? ModalityMode.STRICT
+                        : ModalityMode.MODELESS);
+            }
+        });
         // No PropertyChangeEvent: java.awt.Dialog.setModalityType assigns
         // modalityType and derives the modal bit, and setModal is a two-liner
         // that delegates here. Neither is a bound property (D_property_fanout_audit).
@@ -304,9 +344,9 @@ public class Dialog extends vaadinx.awt.Window {
         // Pushed after the monitor is released, reading the field so racing writers leave
         // the peer on the last state. The JDK's invalidateIfValid() is not reproduced
         // (R_layouts_close_enough).
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SFrame sf) {
-            withPeer(p -> sf.setResizable(this.resizable));
-        }
+        withPeer(p -> {
+            if (p instanceof SFrame sf) sf.setResizable(this.resizable);
+        });
     }
 
     /** R_swing_is_truth field shadow — see {@link #setUndecorated(boolean)}. AWT default false. */
@@ -323,12 +363,12 @@ public class Dialog extends vaadinx.awt.Window {
         // SWindow.setUndecoratedChrome), with JDK Dialog's
         // displayable-time throw (R_match_swing_errors; JDK message verbatim).
         if (isDisplayable()) {
-            throw new java.awt.IllegalComponentStateException("The dialog is displayable.");
+            throw new IllegalComponentStateException("The dialog is displayable.");
         }
         this.undecorated = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.setUndecoratedChrome(b));
-        }
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.setUndecoratedChrome(b);
+        });
     }
 
     // setOpacity / setShape / setBackground: same shape as Frame's, and for
@@ -342,23 +382,23 @@ public class Dialog extends vaadinx.awt.Window {
     @Override
     public void setOpacity(float opacity) {
         if (opacity < 1.0f && !isUndecorated()) {
-            throw new java.awt.IllegalComponentStateException("The dialog is decorated");
+            throw new IllegalComponentStateException("The dialog is decorated");
         }
         super.setOpacity(opacity);
     }
 
     @Override
-    public void setShape(java.awt.Shape shape) {
+    public void setShape(Shape shape) {
         if (shape != null && !isUndecorated()) {
-            throw new java.awt.IllegalComponentStateException("The dialog is decorated");
+            throw new IllegalComponentStateException("The dialog is decorated");
         }
         super.setShape(shape);
     }
 
     @Override
-    public void setBackground(java.awt.Color bgColor) {
+    public void setBackground(Color bgColor) {
         if (bgColor != null && bgColor.getAlpha() < 255 && !isUndecorated()) {
-            throw new java.awt.IllegalComponentStateException("The dialog is decorated");
+            throw new IllegalComponentStateException("The dialog is decorated");
         }
         super.setBackground(bgColor);
     }
@@ -376,7 +416,7 @@ public class Dialog extends vaadinx.awt.Window {
     // Surrogate-side stays sync per SD_sframe — SJDialog.setVisible (inherited
     // from SFrame) returns immediately. Modal blocking is emulator-only.
 
-    private java.util.concurrent.CompletableFuture<Void> modalClosed;
+    private CompletableFuture<Void> modalClosed;
 
     /**
      * The blocking-modal park splits across {@link #show()} and {@link #hide()},
@@ -418,7 +458,7 @@ public class Dialog extends vaadinx.awt.Window {
         // Armed before the show, not in parkUntilClose: a background caller's show hops
         // and returns, so a click can land before the park — and would find no future to
         // complete, leaving the worker parked on a close that already happened.
-        java.util.concurrent.CompletableFuture<Void> closed = new java.util.concurrent.CompletableFuture<>();
+        CompletableFuture<Void> closed = new CompletableFuture<>();
         this.modalClosed = closed;
         try {
             super.show();
@@ -431,7 +471,7 @@ public class Dialog extends vaadinx.awt.Window {
     /**
      * A modal show is followed by {@code parkUntilClose}, so its peer write is the one
      * that must not be quietly dropped — see
-     * {@link vaadinx.awt.Window#blocksAfterVisibilityChange(boolean)}.
+     * {@link Window#blocksAfterVisibilityChange(boolean)}.
      */
     @Override
     protected boolean blocksAfterVisibilityChange(boolean b) {
@@ -445,7 +485,7 @@ public class Dialog extends vaadinx.awt.Window {
     }
 
     /**
-     * Override of {@link vaadinx.awt.Window#dispose()} that releases any
+     * Override of {@link Window#dispose()} that releases any
      * modal latch after the standard dispose work — mirrors JDK Dialog's
      * "dispose unblocks a parked modal show" contract.
      */
@@ -457,16 +497,16 @@ public class Dialog extends vaadinx.awt.Window {
 
     /**
      * Release on peer-originated close too. {@code WINDOW_CLOSING} fires
-     * via {@link vaadinx.awt.Window#processWindowEvent(vaadinx.awt.event.WindowEvent)}
+     * via {@link Window#processWindowEvent(WindowEvent)}
      * for ESC / outside-click / header close. JDialog's close-op switch
      * may dispose (which releases too — countDown is idempotent on a
      * 1-count latch), but {@code HIDE_ON_CLOSE} closes the peer without
      * disposing, and that path also needs to release the latch.
      */
     @Override
-    protected void processWindowEvent(vaadinx.awt.event.WindowEvent e) {
+    protected void processWindowEvent(WindowEvent e) {
         super.processWindowEvent(e);
-        if (e != null && e.getID() == vaadinx.awt.event.WindowEvent.WINDOW_CLOSING) {
+        if (e != null && e.getID() == WindowEvent.WINDOW_CLOSING) {
             releaseModalLatch();
         }
     }
@@ -489,26 +529,26 @@ public class Dialog extends vaadinx.awt.Window {
      * The wake is an ordinary Vaadin request either way — click → UI thread → callSwing →
      * {@link #releaseModalLatch()}.
      */
-    private void parkUntilClose(java.util.concurrent.CompletableFuture<Void> closed) {
+    private void parkUntilClose(CompletableFuture<Void> closed) {
         // Shutdown guard (D_shutdown_lifecycle): during the session-destroy → WINDOW_CLOSING
         // dispatch there is no browser to answer a modal, so a park would
         // block forever. Throw an actionable message ahead of the generic
         // checkInUIFiber one (which would also fire, since the dispatch
         // runs outside any UI fiber — but its wording wouldn't tell a
         // migrator that the real cause is shutdown).
-        if (vaadinx.EHelper.isShuttingDown()) {
+        if (EHelper.isShuttingDown()) {
             throw new IllegalStateException(
                     "Application is shutting down — modal dialogs and browser round-trips are "
                             + "unavailable inside WINDOW_CLOSING listeners. Do server-side cleanup only "
                             + "(save state, release resources); ask-the-user-on-exit is not supported.");
         }
-        final boolean onUIThread = vaadinx.swing.SwingUtilities.isEventDispatchThread();
+        final boolean onUIThread = SwingUtilities.isEventDispatchThread();
         if (onUIThread) {
             // A UI-thread caller must be in a UI fiber, or the await below blocks the
             // platform request thread and nothing can ever deliver the close (the loom
             // rescue trigger, D_gap_severity_triage). A background caller has no such
             // constraint — it is precisely the case this guard used to reject.
-            com.github.mvysny.blockingdialogs.UIFibers.checkInUIFiber();
+            UIFibers.checkInUIFiber();
         }
         try {
             if (onUIThread) {
@@ -517,7 +557,7 @@ public class Dialog extends vaadinx.awt.Window {
                 // On resume UI.getCurrent() is the UI the peer was last attached to, so a
                 // chained dialog / post-dialog code lands on the right UI across an F5
                 // @PreserveOnRefresh teleport. See EHelper.awaitModal.
-                vaadinx.EHelper.awaitModal(getPeer(), closed);
+                EHelper.awaitModal(getPeer(), closed);
             } else {
                 // Q_rebind_skip: a plain wait on a background thread. Parking through the UI
                 // fiber would *install* a current UI on a worker that deliberately has none —
@@ -526,7 +566,7 @@ public class Dialog extends vaadinx.awt.Window {
                 // while holding no lock.
                 closed.get();
             }
-        } catch (java.util.concurrent.ExecutionException e) {
+        } catch (ExecutionException e) {
             throw new IllegalStateException("The modal close future never fails", e);
         } catch (InterruptedException ie) {
             // Only the background wait gets here: on the UI thread parkAndAwait turns an
@@ -540,7 +580,7 @@ public class Dialog extends vaadinx.awt.Window {
             // (SwingWorker's session-scoped pool shutdownNow()) or from
             // worker.cancel(true); the message covers both, since the answer is the
             // same either way.
-            throw new vaadinx.BrowserSessionClosedError(
+            throw new BrowserSessionClosedError(
                     "This thread was waiting for an answer from a modal dialog and was "
                             + "interrupted before one arrived — its session is going away, or "
                             + "the work was cancelled. No answer can arrive now.", ie);
@@ -548,20 +588,20 @@ public class Dialog extends vaadinx.awt.Window {
     }
 
     private void releaseModalLatch() {
-        java.util.concurrent.CompletableFuture<Void> closed = this.modalClosed;
+        CompletableFuture<Void> closed = this.modalClosed;
         if (closed != null) {
             closed.complete(null);
         }
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("Dialog", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("Dialog", "getAccessibleContext");
         return null;
     }
 
     @Override
-    protected java.lang.String paramString() {
-        java.lang.String str = super.paramString() + "," + modalityType;
+    protected String paramString() {
+        String str = super.paramString() + "," + modalityType;
         if (title != null) {
             str += ",title=" + title;
         }

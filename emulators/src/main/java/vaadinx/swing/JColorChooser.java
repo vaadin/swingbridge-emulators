@@ -62,13 +62,27 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.swingbridge.surrogates.SJColorChooser;
+import vaadinx.EHelper;
+import vaadinx.awt.Component;
+import vaadinx.awt.Frame;
+import vaadinx.awt.Window;
 
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import javax.swing.WindowConstants;
+import javax.swing.colorchooser.AbstractColorChooserPanel;
+import javax.swing.colorchooser.ColorChooserComponentFactory;
+import javax.swing.colorchooser.ColorSelectionModel;
+import javax.swing.colorchooser.DefaultColorSelectionModel;
+import javax.swing.event.ChangeListener;
+import javax.swing.plaf.ColorChooserUI;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.Arrays;
 
 /** Emulator for {@link javax.swing.JColorChooser}. R_leaf_peer_lockdown-locked peer is {@link SJColorChooser}. */
-public class JColorChooser extends vaadinx.swing.JComponent implements javax.accessibility.Accessible {
+public class JColorChooser extends JComponent implements Accessible {
 
     public static final String SELECTION_MODEL_PROPERTY = "selectionModel";
     public static final String PREVIEW_PANEL_PROPERTY = "previewPanel";
@@ -76,10 +90,10 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
 
     // The JDK's fields, under its names. chooserPanels is seeded with the default five in
     // the constructor, as BasicColorChooserUI.installUI does and every desktop L&F inherits.
-    private javax.swing.colorchooser.ColorSelectionModel selectionModel;
-    private vaadinx.swing.JComponent previewPanel = null;
-    private javax.swing.colorchooser.AbstractColorChooserPanel[] chooserPanels =
-            new javax.swing.colorchooser.AbstractColorChooserPanel[0];
+    private ColorSelectionModel selectionModel;
+    private JComponent previewPanel = null;
+    private AbstractColorChooserPanel[] chooserPanels =
+            new AbstractColorChooserPanel[0];
     private boolean dragEnabled;
 
     // Set while this class pushes a color into the peer, whose value-change listener
@@ -88,23 +102,23 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
 
     // The L&F's model listener (BasicColorChooserUI's previewListener, which repaints):
     // here it flushes the color to the peer. Moves with the model in setSelectionModel.
-    private final javax.swing.event.ChangeListener modelListener = e -> flushColor();
+    private final ChangeListener modelListener = e -> flushColor();
 
     public JColorChooser() {
         this(Color.white);
     }
 
     public JColorChooser(Color initialColor) {
-        this(new javax.swing.colorchooser.DefaultColorSelectionModel(initialColor));
+        this(new DefaultColorSelectionModel(initialColor));
     }
 
     /** @throws NullPointerException if {@code model} is null, as the JDK's L&amp;F install does */
-    public JColorChooser(javax.swing.colorchooser.ColorSelectionModel model) {
+    public JColorChooser(ColorSelectionModel model) {
         // Peer lock-down per R_leaf_peer_lockdown: javax.swing.JColorChooser is a leaf, and
         // the surrogate keeps a private model of its own, which only this class writes.
         super(SJColorChooser.class, SJColorChooser::new);
         selectionModel = model;
-        chooserPanels = javax.swing.colorchooser.ColorChooserComponentFactory.getDefaultChooserPanels();
+        chooserPanels = ColorChooserComponentFactory.getDefaultChooserPanels();
         model.addChangeListener(modelListener);
         flushColor();
         dragEnabled = false;
@@ -114,7 +128,7 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
         withPeer(p -> chooser().addValueChangeListener(e -> {
             if (preventPeerEvents) return;
             Color picked = chooser().getColor();
-            vaadinx.EHelper.callSwing(() -> getSelectionModel().setSelectedColor(picked));
+            EHelper.callSwing(() -> getSelectionModel().setSelectedColor(picked));
         }));
     }
 
@@ -157,7 +171,7 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
 
     // ---- SelectionModel ----
 
-    public javax.swing.colorchooser.ColorSelectionModel getSelectionModel() {
+    public ColorSelectionModel getSelectionModel() {
         return selectionModel;
     }
 
@@ -165,8 +179,8 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
      * @throws NullPointerException if {@code newModel} is null — after storing it and before
      *         the event, as the JDK's L&amp;F listener does when it moves its model listener
      */
-    public void setSelectionModel(javax.swing.colorchooser.ColorSelectionModel newModel) {
-        javax.swing.colorchooser.ColorSelectionModel oldModel = selectionModel;
+    public void setSelectionModel(ColorSelectionModel newModel) {
+        ColorSelectionModel oldModel = selectionModel;
         selectionModel = newModel;
         // BasicColorChooserUI's property listener, which is registered first and so runs
         // before any of the migrator's.
@@ -196,7 +210,7 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
      * {@code null} until one is set: the JDK's L&amp;F installs a {@code DefaultPreviewPanel},
      * a {@code javax.swing} component this type cannot hold.
      */
-    public vaadinx.swing.JComponent getPreviewPanel() {
+    public JComponent getPreviewPanel() {
         return previewPanel;
     }
 
@@ -204,32 +218,32 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
      * Stores the panel and fires {@code previewPanel}; the panel itself is
      * never rendered (the native colour input has no preview slot).
      *
-     * <p>Typed {@code vaadinx.swing.JComponent} per R_no_vaadin_in_api limb 1 — with
+     * <p>Typed {@code JComponent} per R_no_vaadin_in_api limb 1 — with
      * the JDK's type a migrated {@code JPanel} could not be passed at
      * all. R_decline_effect_only owes the state and the event, and declines
      * only the effect.
      */
-    public void setPreviewPanel(vaadinx.swing.JComponent preview) {
+    public void setPreviewPanel(JComponent preview) {
         if (previewPanel != preview) {
-            vaadinx.swing.JComponent oldPreview = previewPanel;
+            JComponent oldPreview = previewPanel;
             previewPanel = preview;
-            vaadinx.EHelper.onUnimplemented("JColorChooser", "setPreviewPanel(render)", preview);
+            EHelper.onUnimplemented("JColorChooser", "setPreviewPanel(render)", preview);
             firePropertyChange(JColorChooser.PREVIEW_PANEL_PROPERTY, oldPreview, preview);
         }
     }
 
-    public void addChooserPanel(javax.swing.colorchooser.AbstractColorChooserPanel panel) {
-        javax.swing.colorchooser.AbstractColorChooserPanel[] oldPanels = getChooserPanels();
-        javax.swing.colorchooser.AbstractColorChooserPanel[] newPanels =
-                new javax.swing.colorchooser.AbstractColorChooserPanel[oldPanels.length + 1];
+    public void addChooserPanel(AbstractColorChooserPanel panel) {
+        AbstractColorChooserPanel[] oldPanels = getChooserPanels();
+        AbstractColorChooserPanel[] newPanels =
+                new AbstractColorChooserPanel[oldPanels.length + 1];
         System.arraycopy(oldPanels, 0, newPanels, 0, oldPanels.length);
         newPanels[newPanels.length - 1] = panel;
         setChooserPanels(newPanels);
     }
 
     /** @throws IllegalArgumentException if {@code panel} is not one of this chooser's */
-    public javax.swing.colorchooser.AbstractColorChooserPanel removeChooserPanel(
-            javax.swing.colorchooser.AbstractColorChooserPanel panel) {
+    public AbstractColorChooserPanel removeChooserPanel(
+            AbstractColorChooserPanel panel) {
         int containedAt = -1;
         for (int i = 0; i < chooserPanels.length; i++) {
             if (chooserPanels[i] == panel) {
@@ -240,8 +254,8 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
         if (containedAt == -1) {
             throw new IllegalArgumentException("chooser panel not in this chooser");
         }
-        javax.swing.colorchooser.AbstractColorChooserPanel[] newArray =
-                new javax.swing.colorchooser.AbstractColorChooserPanel[chooserPanels.length - 1];
+        AbstractColorChooserPanel[] newArray =
+                new AbstractColorChooserPanel[chooserPanels.length - 1];
         System.arraycopy(chooserPanels, 0, newArray, 0, containedAt);
         System.arraycopy(chooserPanels, containedAt + 1, newArray, containedAt, chooserPanels.length - containedAt - 1);
         setChooserPanels(newArray);
@@ -256,19 +270,19 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
      * @throws NullPointerException if {@code panels} or one of its elements is null — an element
      *         after storing the array and before the event, as the JDK's L&amp;F listener does
      */
-    public void setChooserPanels(javax.swing.colorchooser.AbstractColorChooserPanel[] panels) {
-        javax.swing.colorchooser.AbstractColorChooserPanel[] oldValue = chooserPanels;
-        chooserPanels = java.util.Arrays.copyOf(panels, panels.length);
-        for (javax.swing.colorchooser.AbstractColorChooserPanel panel : panels) {
+    public void setChooserPanels(AbstractColorChooserPanel[] panels) {
+        AbstractColorChooserPanel[] oldValue = chooserPanels;
+        chooserPanels = Arrays.copyOf(panels, panels.length);
+        for (AbstractColorChooserPanel panel : panels) {
             // BasicColorChooserUI reads each new panel's display name for its tab.
             panel.getDisplayName();
         }
-        vaadinx.EHelper.onUnimplemented("JColorChooser", "setChooserPanels(render)", (Object) panels);
+        EHelper.onUnimplemented("JColorChooser", "setChooserPanels(render)", (Object) panels);
         firePropertyChange(CHOOSER_PANELS_PROPERTY, oldValue, panels);
     }
 
-    public javax.swing.colorchooser.AbstractColorChooserPanel[] getChooserPanels() {
-        return java.util.Arrays.copyOf(chooserPanels, chooserPanels.length);
+    public AbstractColorChooserPanel[] getChooserPanels() {
+        return Arrays.copyOf(chooserPanels, chooserPanels.length);
     }
 
     // ===========================================================
@@ -280,36 +294,39 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
     // IllegalStateException via UIFibers.checkInUIFiber().
     // ===========================================================
 
-    public static Color showDialog(vaadinx.awt.Component parent, String title, Color initialColor) {
+    public static Color showDialog(Component parent, String title, Color initialColor) {
         return showDialog(parent, title, initialColor, true);
     }
 
-    public static Color showDialog(vaadinx.awt.Component parent, String title, Color initialColor,
+    public static Color showDialog(Component parent, String title, Color initialColor,
                                    boolean colorTransparencySelectionEnabled) {
         JColorChooser pane = new JColorChooser(initialColor != null ? initialColor : Color.white);
         Color[] result = { null };
 
         JDialog dialog = buildOwnedModalDialog(parent, title);
-        Dialog peerDialog = (Dialog) dialog.getPeer();
-        peerDialog.add(pane.getPeer());
+        // A write, so the dialog's lazy peer and these raw Vaadin components are built on the UI thread.
+        dialog.withPeer(p -> {
+            Dialog peerDialog = (Dialog) p;
+            peerDialog.add(pane.getPeer());
 
-        Button ok = new Button("OK");
-        Button cancel = new Button("Cancel");
-        Button reset = new Button("Reset");
-        // Raw Vaadin Buttons: dispose() fires the Swing-side WINDOW_CLOSED, so
-        // the handlers funnel through EHelper.callSwing per R_callswing_envelope.
-        ok.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            result[0] = pane.getColor();
-            dialog.dispose();
-        }));
-        cancel.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            result[0] = null;
-            dialog.dispose();
-        }));
-        // JDK's Reset button restores the initial color without closing.
-        reset.addClickListener(e -> vaadinx.EHelper.callSwing(() -> pane.setColor(initialColor)));
+            Button ok = new Button("OK");
+            Button cancel = new Button("Cancel");
+            Button reset = new Button("Reset");
+            // Raw Vaadin Buttons: dispose() fires the Swing-side WINDOW_CLOSED, so
+            // the handlers funnel through EHelper.callSwing per R_callswing_envelope.
+            ok.addClickListener(e -> EHelper.callSwing(() -> {
+                result[0] = pane.getColor();
+                dialog.dispose();
+            }));
+            cancel.addClickListener(e -> EHelper.callSwing(() -> {
+                result[0] = null;
+                dialog.dispose();
+            }));
+            // JDK's Reset button restores the initial color without closing.
+            reset.addClickListener(e -> EHelper.callSwing(() -> pane.setColor(initialColor)));
 
-        peerDialog.add(new HorizontalLayout(ok, cancel, reset));
+            peerDialog.add(new HorizontalLayout(ok, cancel, reset));
+        });
 
         dialog.setVisible(true); // parks the VT until a button / X disposes
         // null on Cancel / X / ESC — JDK contract.
@@ -321,51 +338,54 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
      * the caller wires and shows itself. The two ActionListeners fire on
      * OK / Cancel respectively (JDK semantics); both dispose the dialog.
      */
-    public static JDialog createDialog(vaadinx.awt.Component parent, String title, boolean modal,
+    public static JDialog createDialog(Component parent, String title, boolean modal,
                                        JColorChooser chooserPane,
                                        ActionListener okListener,
                                        ActionListener cancelListener) {
         JDialog dialog = buildOwnedModalDialog(parent, title);
         dialog.setModal(modal);
-        Dialog peerDialog = (Dialog) dialog.getPeer();
-        peerDialog.add(chooserPane.getPeer());
+        // A write, so the dialog's lazy peer and these raw Vaadin components are built on the UI thread.
+        dialog.withPeer(p -> {
+            Dialog peerDialog = (Dialog) p;
+            peerDialog.add(chooserPane.getPeer());
 
-        Button ok = new Button("OK");
-        Button cancel = new Button("Cancel");
-        ok.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            if (okListener != null) {
-                okListener.actionPerformed(new ActionEvent(chooserPane, ActionEvent.ACTION_PERFORMED, "OK"));
-            }
-            dialog.dispose();
-        }));
-        cancel.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            if (cancelListener != null) {
-                cancelListener.actionPerformed(new ActionEvent(chooserPane, ActionEvent.ACTION_PERFORMED, "Cancel"));
-            }
-            dialog.dispose();
-        }));
-        peerDialog.add(new HorizontalLayout(ok, cancel));
+            Button ok = new Button("OK");
+            Button cancel = new Button("Cancel");
+            ok.addClickListener(e -> EHelper.callSwing(() -> {
+                if (okListener != null) {
+                    okListener.actionPerformed(new ActionEvent(chooserPane, ActionEvent.ACTION_PERFORMED, "OK"));
+                }
+                dialog.dispose();
+            }));
+            cancel.addClickListener(e -> EHelper.callSwing(() -> {
+                if (cancelListener != null) {
+                    cancelListener.actionPerformed(new ActionEvent(chooserPane, ActionEvent.ACTION_PERFORMED, "Cancel"));
+                }
+                dialog.dispose();
+            }));
+            peerDialog.add(new HorizontalLayout(ok, cancel));
+        });
         return dialog; // caller does dialog.setVisible(true)
     }
 
     /** Build the modal JDialog owned by {@code parent}'s window ancestor (JFileChooser shape). */
-    private static JDialog buildOwnedModalDialog(vaadinx.awt.Component parent, String title) {
-        vaadinx.awt.Window owner = windowAncestor(parent);
+    private static JDialog buildOwnedModalDialog(Component parent, String title) {
+        Window owner = windowAncestor(parent);
         JDialog dialog;
-        if (owner instanceof vaadinx.awt.Frame f) {
+        if (owner instanceof Frame f) {
             dialog = new JDialog(f, title, true);
         } else if (owner instanceof vaadinx.awt.Dialog d) {
             dialog = new JDialog(d, title, true);
         } else {
-            dialog = new JDialog((vaadinx.awt.Frame) null, title, true);
+            dialog = new JDialog((Frame) null, title, true);
         }
-        dialog.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         return dialog;
     }
 
-    private static vaadinx.awt.Window windowAncestor(vaadinx.awt.Component c) {
+    private static Window windowAncestor(Component c) {
         while (c != null) {
-            if (c instanceof vaadinx.awt.Window w) return w;
+            if (c instanceof Window w) return w;
             c = c.getParent();
         }
         return null;
@@ -374,7 +394,7 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
     @Override
     protected String paramString() {
         StringBuilder chooserPanelsString = new StringBuilder();
-        for (javax.swing.colorchooser.AbstractColorChooserPanel panel : chooserPanels) {
+        for (AbstractColorChooserPanel panel : chooserPanels) {
             chooserPanelsString.append('[').append(panel).append(']');
         }
         String previewPanelString = (previewPanel != null ? previewPanel.toString() : "");
@@ -394,17 +414,17 @@ public class JColorChooser extends vaadinx.swing.JComponent implements javax.acc
         return "ColorChooserUI";
     }
 
-    public javax.swing.plaf.ColorChooserUI getUI() {
+    public ColorChooserUI getUI() {
         // No pluggable UI delegate; short-circuit rather than bare-cast a null.
         return null;
     }
 
-    public void setUI(javax.swing.plaf.ColorChooserUI ui) {
+    public void setUI(ColorChooserUI ui) {
         // L&F install — no-op per above.
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JColorChooser", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JColorChooser", "getAccessibleContext");
         return null;
     }
 }

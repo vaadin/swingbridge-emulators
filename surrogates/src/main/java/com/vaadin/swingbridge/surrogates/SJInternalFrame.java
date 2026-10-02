@@ -25,6 +25,7 @@ import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent;
 import com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameListener;
 
+import javax.swing.event.EventListenerList;
 import java.util.Collection;
 
 /**
@@ -70,8 +71,8 @@ public class SJInternalFrame extends SWindow {
             new RootPaneScaffold(this, this::createRootPane);
 
     /** Storage for {@link SInternalFrameListener} — server-side-fire-only. */
-    private final javax.swing.event.EventListenerList listenerList =
-            new javax.swing.event.EventListenerList();
+    private final EventListenerList listenerList =
+            new EventListenerList();
 
     private String title = "";
     private boolean selected;
@@ -386,6 +387,18 @@ public class SJInternalFrame extends SWindow {
     @Override
     public SJRootPane getRootPane() {
         return scaffold.getRootPane();
+    }
+
+    /**
+     * Replaces the root pane, as the JDK's protected {@code setRootPane} does: the outgoing
+     * one leaves this window and {@code root} becomes its one child, holding the content pane
+     * from then on. Public so the emulator layer can hand down the peer of the root pane it
+     * built itself, which is how one root pane serves both layers.
+     *
+     * @param root {@code null} leaves the window without a root pane, as the JDK allows
+     */
+    public void setRootPane(SJRootPane root) {
+        scaffold.setRootPane(root);
     }
 
     /** Subclass hook matching JDK JInternalFrame's {@code createRootPane}. */

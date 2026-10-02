@@ -39,8 +39,45 @@
 
 package vaadinx.awt;
 
+import com.vaadin.flow.component.UI;
+import com.vaadin.swingbridge.surrogates.SWindow;
+import vaadinx.EHelper;
+import vaadinx.awt.event.ComponentEvent;
+import vaadinx.awt.event.WindowEvent;
+import vaadinx.awt.event.WindowFocusListener;
+import vaadinx.awt.event.WindowListener;
+import vaadinx.awt.event.WindowStateListener;
+
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import java.awt.AWTEvent;
+import java.awt.AWTException;
+import java.awt.AWTKeyStroke;
+import java.awt.BufferCapabilities;
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Event;
+import java.awt.Graphics;
+import java.awt.IllegalComponentStateException;
+import java.awt.Image;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.Shape;
+import java.awt.im.InputContext;
+import java.awt.image.BufferStrategy;
+import java.beans.PropertyChangeListener;
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Locale;
+import java.util.ResourceBundle;
+import java.util.Set;
+import java.util.function.Supplier;
+
 // Hand-finished emulator for java.awt.Window. Thin shell over
-// com.vaadin.swingbridge.surrogates.SWindow. SWindow carries the peer↔window sync (OpenedChangeListener
+// SWindow. SWindow carries the peer↔window sync (OpenedChangeListener
 // mirror, visible shadow, preventPeerEvents guard, ownedWindow
 // WeakReferences), and this emulator exists to:
 //
@@ -59,8 +96,8 @@ package vaadinx.awt;
 // signature compat (AWT Window listener families, owner chain,
 // getWindows registry) is carried here.
 
-/** Emulator for {@link java.awt.Window}. Thin shell over {@link com.vaadin.swingbridge.surrogates.SWindow}. */
-public class Window extends vaadinx.awt.Container implements javax.accessibility.Accessible {
+/** Emulator for {@link java.awt.Window}. Thin shell over {@link SWindow}. */
+public class Window extends Container implements Accessible {
 
     // The AWT "owner" link: every Window except a top-level Frame has one.
     // Package-private so subclasses (and same-package helpers) can read it;
@@ -68,14 +105,14 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // owner chain runs in parallel to SWindow's — both populated at ctor
     // time from their respective layers (emulator.Window for migrated
     // code, SWindow for surrogate-level usage).
-    vaadinx.awt.Window owner;
+    Window owner;
 
     // Swing's owner→children link: each Window keeps WeakReferences to the
     // Windows it owns. See getOwnedWindows for the GC-prunes-dead-entries
     // contract. Parallel to SWindow.ownedWindowList; each layer's list
     // carries its own Window / SWindow references.
-    private final java.util.List<java.lang.ref.WeakReference<vaadinx.awt.Window>>
-            ownedWindowList = new java.util.ArrayList<>();
+    private final java.util.List<WeakReference<Window>>
+            ownedWindowList = new ArrayList<>();
 
     // First-show latch: WINDOW_OPENED fires once on the emulator's
     // listenerList per "shown-from-dispose" cycle. Independent of
@@ -91,8 +128,8 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // bounds stay R_layouts_close_enough-out-of-scope (layout is browser-driven); a
     // top-level Window maps 1:1 onto the Dialog overlay's native
     // top/left/width/height, no layout manager involved.
-    private java.awt.Point location;
-    private java.awt.Dimension size;
+    private Point location;
+    private Dimension size;
 
     // Emulator-side R_swing_is_truth feedback-loop guard. Set to true around our calls
     // into SWindow.setVisible / SWindow.dispose so our own Dialog
@@ -103,41 +140,64 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // listeners fire, mirroring into both layers' state in parallel.
     private boolean preventPeerEvents;
 
-    public Window(vaadinx.awt.Frame arg0) {
-        this(new com.vaadin.swingbridge.surrogates.SWindow(unwrapSWindow(arg0)));
-        this.owner = arg0;
-        if (arg0 != null) arg0.addOwnedWindow(this);
+    public Window(Frame arg0) {
+        this(SWindow.class,
+                () -> new SWindow(unwrapSWindow(arg0)), arg0);
     }
 
-    public Window(vaadinx.awt.Window arg0) {
-        this(new com.vaadin.swingbridge.surrogates.SWindow(unwrapSWindow(arg0)));
-        this.owner = arg0;
-        if (arg0 != null) arg0.addOwnedWindow(this);
+    public Window(Window arg0) {
+        this(SWindow.class,
+                () -> new SWindow(unwrapSWindow(arg0)), arg0);
     }
 
-    public Window(vaadinx.awt.Window arg0, vaadinx.awt.GraphicsConfiguration arg1) {
+    public Window(Window arg0, GraphicsConfiguration arg1) {
         // Accepted and ignored: one viewport, one configuration — see Frame(String, GC).
-        this(new com.vaadin.swingbridge.surrogates.SWindow(unwrapSWindow(arg0)));
-        this.owner = arg0;
-        if (arg0 != null) arg0.addOwnedWindow(this);
+        this(arg0);
     }
 
     /**
      * Owner-aware peer-injection seam, mirroring
-     * {@link Dialog#Dialog(com.vaadin.flow.component.Component, vaadinx.awt.Window, String, Dialog.ModalityType)}.
+     * {@link Dialog#Dialog(com.vaadin.flow.component.Component, Window, String, Dialog.ModalityType)}.
      * {@code vaadinx.swing.JWindow} threads its {@code SJWindow} peer plus
      * an emulator-side owner through in one step — the public owner-taking
      * ctors here can't be reused because they hardcode {@code SWindow} as
      * the peer.
      */
-    protected Window(com.vaadin.flow.component.Component peer, vaadinx.awt.Window owner) {
+    protected Window(com.vaadin.flow.component.Component peer, Window owner) {
         this(peer);
-        this.owner = owner;
-        if (owner != null) owner.addOwnedWindow(this);
+        setOwner(owner);
     }
 
     protected Window(com.vaadin.flow.component.Component peer) {
         super(peer);
+        initWindow();
+    }
+
+    /**
+     * The lazy form of {@link #Window(com.vaadin.flow.component.Component, Window)}: see
+     * {@link Component#Component(Class, Supplier)}. A factory
+     * that reads the owner's peer reads it when it runs, on the UI thread.
+     */
+    protected <P extends com.vaadin.flow.component.Component> Window(Class<P> peerType,
+            Supplier<? extends P> peerFactory, Window owner) {
+        this(peerType, peerFactory);
+        setOwner(owner);
+    }
+
+    /** The lazy form: see {@link Component#Component(Class, Supplier)}. */
+    protected <P extends com.vaadin.flow.component.Component> Window(Class<P> peerType,
+            Supplier<? extends P> peerFactory) {
+        super(peerType, peerFactory);
+        initWindow();
+    }
+
+    /** The owner link, both halves, as the JDK's {@code Window(Window owner)} sets it. */
+    private void setOwner(Window owner) {
+        this.owner = owner;
+        if (owner != null) owner.addOwnedWindow(this);
+    }
+
+    private void initWindow() {
         // AWT's Window default is invisible until show()/setVisible(true);
         // Component's member-initializer defaults to true for leaf components
         // that are visible from the moment they exist. Flip here — the field
@@ -151,15 +211,17 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // (once each on their respective layers). Under emulator-driven
         // setVisible/dispose, our preventPeerEvents flag bails here while
         // SWindow's own flag bails its listener, keeping each layer to
-        // one fire (SD_sframe shape).
-        if (peer instanceof com.vaadin.flow.component.dialog.Dialog dialog) {
-            dialog.addOpenedChangeListener(this::onPeerOpenedChanged);
-        }
+        // one fire (SD_sframe shape). A write, so a lazy peer gets it once built.
+        withPeer(p -> {
+            if (p instanceof com.vaadin.flow.component.dialog.Dialog dialog) {
+                dialog.addOpenedChangeListener(this::onPeerOpenedChanged);
+            }
+        });
         // The JDK's Window.init() ends with addToWindowList(), so a Window is
         // enumerable from inside its own constructor — `new Frame() {{
         // assert getFrames().contains(this); }}` passes on the desktop
         // (measured), and the anonymous subclass's initializer runs after this.
-        vaadinx.EHelper.onWindowCreated(this);
+        EHelper.onWindowCreated(this);
     }
 
     /**
@@ -177,10 +239,10 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * empty keeps {@code doLayout} and {@code getPreferredSize} on their
      * no-manager path, so this field costs no rendering change.
      */
-    private vaadinx.awt.LayoutManager windowLayout = new vaadinx.awt.BorderLayout();
+    private LayoutManager windowLayout = new BorderLayout();
 
     @Override
-    public vaadinx.awt.LayoutManager getLayout() {
+    public LayoutManager getLayout() {
         return windowLayout;
     }
 
@@ -191,7 +253,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * @param mgr may be {@code null}, as AWT allows
      */
     @Override
-    public void setLayout(vaadinx.awt.LayoutManager mgr) {
+    public void setLayout(LayoutManager mgr) {
         windowLayout = mgr;
         invalidate();
     }
@@ -221,14 +283,14 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // before closing?" dialog — which needs a virtual thread to park on.
         // Nested calls run inline (D_callswing_loom); during app shutdown there is no current
         // UI and callSwing runs the callback inline per the D_shutdown_lifecycle carve-out.
-        vaadinx.EHelper.callSwing(() -> {
+        EHelper.callSwing(() -> {
             // No "visible" PropertyChangeEvent: AWT signals visibility with a
             // ComponentEvent and nothing else. JPopupMenu is the one class in
             // all of java.awt/javax.swing that fires a "visible" bound
             // property, and it is not in this hierarchy (R_decline_effect_only).
             fireComponentEvent(opened
-                    ? vaadinx.awt.event.ComponentEvent.COMPONENT_SHOWN
-                    : vaadinx.awt.event.ComponentEvent.COMPONENT_HIDDEN);
+                    ? ComponentEvent.COMPONENT_SHOWN
+                    : ComponentEvent.COMPONENT_HIDDEN);
             if (!opened) {
                 // AWT maps "user asks to close" to WINDOW_CLOSING, distinct
                 // from WINDOW_CLOSED (programmatic dispose). Whether to
@@ -238,22 +300,23 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
                 // JFrame.processWindowEvent's close-op switch applies even
                 // when no WindowListener is registered — DISPOSE_ON_CLOSE
                 // must still detach, EXIT_ON_CLOSE must still throw per D_gap_severity_triage.
-                processWindowEvent(new vaadinx.awt.event.WindowEvent(
-                        this, vaadinx.awt.event.WindowEvent.WINDOW_CLOSING));
+                processWindowEvent(new WindowEvent(
+                        this, WindowEvent.WINDOW_CLOSING));
             }
         });
     }
 
     /**
-     * Helper for the Frame / Window / Dialog-owner ctors: unwrap the
+     * Helper for the Frame / Window / Dialog-owner ctors' peer factories: unwrap the
      * emulator owner's surrogate-side SWindow peer, or null. Frame's peer
      * is SFrame (an SWindow subclass), Dialog's peer is SFrame too,
      * Window's peer is SWindow — all three pass the {@code instanceof SWindow}
-     * check so a single helper covers every owner type.
+     * check so a single helper covers every owner type. Called from a factory, so on
+     * the UI thread, where reading the owner's peer builds it.
      */
-    private static com.vaadin.swingbridge.surrogates.SWindow unwrapSWindow(vaadinx.awt.Window w) {
+    private static SWindow unwrapSWindow(Window w) {
         if (w == null) return null;
-        return w.getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw ? sw : null;
+        return w.getPeer() instanceof SWindow sw ? sw : null;
     }
 
     public boolean isOpaque() {
@@ -274,13 +337,13 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return false;
     }
 
-    public vaadinx.awt.Window getOwner() {
+    public Window getOwner() {
         // AWT: the Window passed to the (Window) / (Frame) constructors,
         // null for an owner-less Window. Field is set by those ctors.
         return owner;
     }
 
-    public java.util.Locale getLocale() {
+    public Locale getLocale() {
         // AWT's Window overrides Component.getLocale to fall back to
         // Locale.getDefault() instead of throwing IllegalComponentStateException
         // on an orphan — a Window is normally the top of the tree, so the
@@ -297,9 +360,9 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // JComponent.getDefaultLocale during construction and returns above.
         try {
             return super.getLocale();
-        } catch (java.awt.IllegalComponentStateException orphan) {
-            com.vaadin.flow.component.UI ui = com.vaadin.flow.component.UI.getCurrent();
-            return ui != null ? ui.getLocale() : java.util.Locale.getDefault();
+        } catch (IllegalComponentStateException orphan) {
+            UI ui = UI.getCurrent();
+            return ui != null ? ui.getLocale() : Locale.getDefault();
         }
     }
 
@@ -312,18 +375,18 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * happen so user code sees consistent Swing state.
      */
     public void setSize(int width, int height) {
-        java.awt.Dimension old = this.size;
+        Dimension old = this.size;
         boolean resized = old == null || old.width != width || old.height != height;
-        this.size = new java.awt.Dimension(width, height);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.setSize(width, height));
-        }
+        this.size = new Dimension(width, height);
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.setSize(width, height);
+        });
         if (resized) {
-            fireComponentEvent(vaadinx.awt.event.ComponentEvent.COMPONENT_RESIZED);
+            fireComponentEvent(ComponentEvent.COMPONENT_RESIZED);
         }
     }
 
-    public void setSize(java.awt.Dimension d) {
+    public void setSize(Dimension d) {
         // AWT NPEs on null here (d.width dereference) — same for us.
         setSize(d.width, d.height);
     }
@@ -349,7 +412,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // Children before self, as the JDK does (doDispose -> child.disposeImpl()).
         // Iterate the snapshot getOwnedWindows() hands back — a child's dispose
         // does not touch the owner link, but nothing here should depend on that.
-        for (vaadinx.awt.Window child : getOwnedWindows()) {
+        for (Window child : getOwnedWindows()) {
             child.dispose();
         }
         // hide() rather than an inlined field write: it is the JDK's own call
@@ -360,13 +423,13 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         everShown = false;
         removeNotify();
         if (fireWindowClosedEvent) {
-            fireWindowEvent(vaadinx.awt.event.WindowEvent.WINDOW_CLOSED);
+            fireWindowEvent(WindowEvent.WINDOW_CLOSED);
         }
     }
 
     /**
      * Tear down the peer in response to {@link #dispose()}. Default
-     * delegates to {@link com.vaadin.swingbridge.surrogates.SWindow#dispose()} when the peer
+     * delegates to {@link SWindow#dispose()} when the peer
      * is an SWindow (the standard SFrame / SJFrame / SDialog path).
      * Subclasses with non-SWindow peers — notably JFrame's InlineStrategy
      * with an SJPanel peer — override to detach from the route's div.
@@ -374,12 +437,12 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * peer-originated OpenedChangeEvent doesn't double-fire WINDOW_CLOSING.
      */
     protected void disposePeer() {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.dispose());
-        }
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.dispose();
+        });
     }
 
-    public java.awt.Shape getShape() {
+    public Shape getShape() {
         // AWT default is null until setShape installs a non-rectangular
         // outline. We can't render non-rectangular windows (DOM is
         // rectangular), so the setter is a stub and the shape stays null.
@@ -402,24 +465,24 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * setSize.
      */
     public void setLocation(int x, int y) {
-        java.awt.Point old = this.location;
+        Point old = this.location;
         boolean moved = old == null || old.x != x || old.y != y;
-        this.location = new java.awt.Point(x, y);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.setLocation(x, y));
-        }
+        this.location = new Point(x, y);
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.setLocation(x, y);
+        });
         if (moved) {
-            fireComponentEvent(vaadinx.awt.event.ComponentEvent.COMPONENT_MOVED);
+            fireComponentEvent(ComponentEvent.COMPONENT_MOVED);
         }
     }
 
-    public void setLocation(java.awt.Point p) {
+    public void setLocation(Point p) {
         // AWT NPEs on null here (p.x dereference) — same for us.
         setLocation(p.x, p.y);
     }
 
     /**
-     * @throws java.awt.IllegalComponentStateException if {@code b} and the window is
+     * @throws IllegalComponentStateException if {@code b} and the window is
      *         already showing, as AWT's own body does before it stores
      */
     public void setLocationByPlatform(boolean b) {
@@ -427,10 +490,10 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // (R_match_swing_errors), so it is reproduced; only the placement is declined,
         // browsers having no say in tab positioning (D_pixel_layout_not_planned).
         if (b && isShowing()) {
-            throw new java.awt.IllegalComponentStateException("The window is showing on screen.");
+            throw new IllegalComponentStateException("The window is showing on screen.");
         }
         if (b) {
-            vaadinx.EHelper.onUnimplemented("Window", "setLocationByPlatform", b);
+            EHelper.onUnimplemented("Window", "setLocationByPlatform", b);
         }
         this.locationByPlatform = b;
     }
@@ -466,9 +529,9 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         if (oldAlwaysOnTop != b) {
             if (isAlwaysOnTopSupported()) {
                 // Where the JDK calls peer.updateAlwaysOnTopState().
-                vaadinx.EHelper.onNoop("Window", "setAlwaysOnTop/peer");
+                EHelper.onNoop("Window", "setAlwaysOnTop/peer");
             } else if (b) {
-                vaadinx.EHelper.onUnimplemented("Window", "setAlwaysOnTop", b);
+                EHelper.onUnimplemented("Window", "setAlwaysOnTop", b);
             }
             firePropertyChange("alwaysOnTop", oldAlwaysOnTop, b);
         }
@@ -477,7 +540,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
 
     /** JDK private helper: every owned Window inherits the flag. */
     private void setOwnedWindowsAlwaysOnTop(boolean b) {
-        for (vaadinx.awt.Window w : getOwnedWindows()) {
+        for (Window w : getOwnedWindows()) {
             w.setAlwaysOnTop(b);
         }
     }
@@ -487,9 +550,9 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * and {@link #setIconImages} normalises {@code null} to empty exactly as
      * the JDK does.
      */
-    private java.util.List<java.awt.Image> icons = new java.util.ArrayList<>();
+    private java.util.List<Image> icons = new ArrayList<>();
 
-    public synchronized void setIconImages(java.util.List<? extends java.awt.Image> icons) {
+    public synchronized void setIconImages(java.util.List<? extends Image> icons) {
         // JDK body. The undeliverable limb is the peer's updateIconImages() —
         // a browser's window icon is the route-level favicon, not a per-Window
         // property — and it stays silent rather than WARNing, because migrated
@@ -498,8 +561,8 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // this line reads "Always send a property change event", and it passes
         // (null, null) precisely so no equality check can suppress it (R_decline_effect_only).
         this.icons = (icons == null)
-                ? new java.util.ArrayList<>()
-                : new java.util.ArrayList<>(icons);
+                ? new ArrayList<>()
+                : new ArrayList<>(icons);
         firePropertyChange("iconImage", null, null);
     }
 
@@ -513,7 +576,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // `if (peer == null)`, so a redundant call (pack() then show(), or a
         // Vaadin re-attach) is a no-op.
         if (displayable) return;
-        vaadinx.EHelper.onWindowDisplayable(this);
+        EHelper.onWindowDisplayable(this);
         super.addNotify();
     }
 
@@ -523,7 +586,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * Only {@link #dispose()} undisplayables a Window, which is the JDK's rule
      * too ({@code doDispose} calls {@code removeNotify}; {@code hide()} never
      * does). This is the one place a Window departs from
-     * {@link vaadinx.awt.Component#onPeerDetached()}'s realisation-root rule,
+     * {@link Component#onPeerDetached()}'s realisation-root rule,
      * and the reason is that a Window is the only emulator with a
      * <em>separate</em> unrealisation trigger to preserve. Attach needs no such
      * carve-out and is inherited, so a Window realised by a route rather than
@@ -543,7 +606,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // Guarded on the flag, so the JDK's dispose() -> removeNotify() edge
         // and any stray call collapse to one teardown.
         if (!displayable) return;
-        vaadinx.EHelper.onWindowUndisplayable(this);
+        EHelper.onWindowUndisplayable(this);
         preventPeerEvents = true;
         try {
             disposePeer();
@@ -553,7 +616,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         super.removeNotify();
     }
 
-    public void setMinimumSize(java.awt.Dimension arg0) {
+    public void setMinimumSize(Dimension arg0) {
         // AWT's Window override also nudges the current size up if it's
         // below the new minimum. We don't model window sizing (R_layouts_close_enough — the
         // browser picks viewport geometry), so Component.setMinimumSize's
@@ -580,7 +643,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         setSize(width, height);
     }
 
-    public void setBounds(java.awt.Rectangle r) {
+    public void setBounds(Rectangle r) {
         // AWT NPEs on null here (r.x dereference) — same for us.
         setBounds(r.x, r.y, r.width, r.height);
     }
@@ -591,44 +654,44 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // without a prior write would be a silent lie). The (rv) variants
     // honor AWT's fill-or-allocate contract.
 
-    public java.awt.Point getLocation() {
+    public Point getLocation() {
         if (location == null) return super.getLocation();
-        return new java.awt.Point(location);
+        return new Point(location);
     }
 
-    public java.awt.Point getLocation(java.awt.Point rv) {
+    public Point getLocation(Point rv) {
         if (location == null) return super.getLocation(rv);
-        if (rv == null) return new java.awt.Point(location);
+        if (rv == null) return new Point(location);
         rv.setLocation(location);
         return rv;
     }
 
-    public java.awt.Dimension getSize() {
+    public Dimension getSize() {
         if (size == null) return super.getSize();
-        return new java.awt.Dimension(size);
+        return new Dimension(size);
     }
 
-    public java.awt.Dimension getSize(java.awt.Dimension rv) {
+    public Dimension getSize(Dimension rv) {
         if (size == null) return super.getSize(rv);
-        if (rv == null) return new java.awt.Dimension(size);
+        if (rv == null) return new Dimension(size);
         rv.setSize(size);
         return rv;
     }
 
-    public java.awt.Rectangle getBounds() {
+    public Rectangle getBounds() {
         if (location == null && size == null) return super.getBounds();
         // Partial knowledge: the unset half reads 0 — AWT's own
         // pre-layout default — rather than WARN-nulling the half we do know.
-        return new java.awt.Rectangle(
+        return new Rectangle(
                 location != null ? location.x : 0,
                 location != null ? location.y : 0,
                 size != null ? size.width : 0,
                 size != null ? size.height : 0);
     }
 
-    public java.awt.Rectangle getBounds(java.awt.Rectangle rv) {
+    public Rectangle getBounds(Rectangle rv) {
         if (location == null && size == null) return super.getBounds(rv);
-        java.awt.Rectangle r = getBounds();
+        Rectangle r = getBounds();
         if (rv == null) return r;
         rv.setBounds(r);
         return rv;
@@ -692,7 +755,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
             // WINDOW_OPENED fires exactly once per "shown-from-dispose" cycle.
             // dispose() resets everShown so a post-dispose show refires it —
             // AWT's contract for heavyweight-peer recreation.
-            fireWindowEvent(vaadinx.awt.event.WindowEvent.WINDOW_OPENED);
+            fireWindowEvent(WindowEvent.WINDOW_OPENED);
         }
     }
 
@@ -703,7 +766,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // reproduce the hide half; the showWithParent restore is not modelled,
         // because a browser overlay has no "raise the family with the parent"
         // behaviour to restore it into.
-        for (vaadinx.awt.Window child : getOwnedWindows()) {
+        for (Window child : getOwnedWindows()) {
             if (child.isVisible()) {
                 child.hide();
             }
@@ -713,7 +776,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
 
     /**
      * Apply visibility to the peer in response to {@link #setVisible(boolean)}.
-     * Default delegates to {@link com.vaadin.swingbridge.surrogates.SWindow#setVisible(boolean)}
+     * Default delegates to {@link SWindow#setVisible(boolean)}
      * when the peer is an SWindow (standard Dialog-backed shape); falls
      * through to {@link com.vaadin.flow.component.Component#setVisible(boolean)}
      * for non-SWindow peers as defensive coverage. Subclasses with bespoke
@@ -732,7 +795,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // becoming a hang, since a modal show is followed by a park and so throws instead
         // (R_match_swing_errors case (8), D_modal_from_background). On the UI thread the
         // body runs inline, so nothing that already worked changes.
-        vaadinx.EHelper.runInUIThread(blocksAfterVisibilityChange(b), () -> {
+        EHelper.runInUIThread(blocksAfterVisibilityChange(b), () -> {
             // The preventPeerEvents envelope lives with the peer write it guards,
             // rather than around the whole state machine as it once did — a
             // peer-originated OpenedChangeEvent can only arrive from this line.
@@ -765,7 +828,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * guard cannot be bypassed by forgetting to call {@code super}.
      */
     protected void applyVisibleToPeerImpl(boolean b) {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
+        if (getPeer() instanceof SWindow sw) {
             sw.setVisible(b);
         } else {
             // Defensive: no standard ctor picks a non-SWindow peer
@@ -780,7 +843,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // already rendered above page content when opened. Silent no-op
         // rather than WARN because apps routinely pair setVisible(true)
         // with toFront() — logging each call would swamp real warnings.
-        vaadinx.EHelper.onNoop("Window", "toFront");
+        EHelper.onNoop("Window", "toFront");
     }
 
     // isShowing() is inherited from Component, whose parent walk bottoms out
@@ -794,7 +857,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // direction. See Component's visibility block for why.
 
     @Deprecated
-    public boolean postEvent(java.awt.Event arg0) {
+    public boolean postEvent(Event arg0) {
         // Deprecated AWT 1.0 — Component.postEvent already returns false
         // ("nobody handled it"). AWT's Window override forwarded to an owner
         // if present; we don't track owners (see getOwner), so super's
@@ -806,37 +869,37 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // Mirror of toFront — no z-order, silent no-op. Apps that want a
         // Window "behind" others are expressing OS-window-manager intent
         // that doesn't translate to a single-tab Vaadin UI.
-        vaadinx.EHelper.onNoop("Window", "toBack");
+        EHelper.onNoop("Window", "toBack");
     }
 
-    public void setCursor(java.awt.Cursor arg0) {
+    public void setCursor(Cursor arg0) {
         // AWT's Window override updates a native cursor struct. Our DOM
         // peer accepts CSS cursor via Component.setCursor — that's all we
         // need. Keeping the override so the rationale lives here.
         super.setCursor(arg0);
     }
 
-    public static vaadinx.awt.Window[] getWindows() {
+    public static Window[] getWindows() {
         // Every Window this app instance constructed and still holds, in
         // construction order — AWT's contract, leak included, bounded to the
         // browser tab rather than the JVM. See vaadinx.WindowRegistry.
-        java.util.List<vaadinx.awt.Window> all = vaadinx.EHelper.getWindows();
-        return all.toArray(new vaadinx.awt.Window[0]);
+        java.util.List<Window> all = EHelper.getWindows();
+        return all.toArray(new Window[0]);
     }
 
-    public vaadinx.awt.Window[] getOwnedWindows() {
+    public Window[] getOwnedWindows() {
         // Swing's approach: dereference each WeakReference, keep the ones
         // whose Window is still reachable, opportunistically drop the
         // cleared entries so the list doesn't grow unbounded for long-lived
         // owners. Logically independent of peer attachment state — AWT's
         // owner link persists whether the owned Window is displayed or not,
         // so we report it even if its Dialog peer isn't opened.
-        java.util.List<vaadinx.awt.Window> live = new java.util.ArrayList<>();
+        java.util.List<Window> live = new ArrayList<>();
         synchronized (ownedWindowList) {
-            java.util.Iterator<java.lang.ref.WeakReference<vaadinx.awt.Window>> it =
+            Iterator<WeakReference<Window>> it =
                     ownedWindowList.iterator();
             while (it.hasNext()) {
-                vaadinx.awt.Window w = it.next().get();
+                Window w = it.next().get();
                 if (w == null) {
                     it.remove();
                 } else {
@@ -844,7 +907,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
                 }
             }
         }
-        return live.toArray(new vaadinx.awt.Window[0]);
+        return live.toArray(new Window[0]);
     }
 
     /**
@@ -853,9 +916,9 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
      * AWT's {@code Window.addOwnedWindow}. Package-private because it's an
      * internal invariant — only Window's own ctors should be calling it.
      */
-    void addOwnedWindow(vaadinx.awt.Window child) {
+    void addOwnedWindow(Window child) {
         synchronized (ownedWindowList) {
-            ownedWindowList.add(new java.lang.ref.WeakReference<>(child));
+            ownedWindowList.add(new WeakReference<>(child));
         }
     }
 
@@ -864,7 +927,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // result; our shared listenerList already stores them where Component's
     // impl reads from, so no override is needed.
 
-    protected void processWindowEvent(vaadinx.awt.event.WindowEvent e) {
+    protected void processWindowEvent(WindowEvent e) {
         // AWT's processWindowEvent handles the non-focus, non-state subset —
         // opened/closing/closed/iconified/deiconified/activated/deactivated.
         // Focus ids go to processWindowFocusEvent, state-changed to
@@ -874,62 +937,62 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // probe shouldn't crash on a trivial empty answer).
         if (e == null) return;
         int id = e.getID();
-        for (vaadinx.awt.event.WindowListener l : awtListeners(vaadinx.awt.event.WindowListener.class)) {
+        for (WindowListener l : awtListeners(WindowListener.class)) {
             switch (id) {
-                case vaadinx.awt.event.WindowEvent.WINDOW_OPENED -> l.windowOpened(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_CLOSING -> l.windowClosing(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_CLOSED -> l.windowClosed(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_ICONIFIED -> l.windowIconified(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_DEICONIFIED -> l.windowDeiconified(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_ACTIVATED -> l.windowActivated(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_DEACTIVATED -> l.windowDeactivated(e);
+                case WindowEvent.WINDOW_OPENED -> l.windowOpened(e);
+                case WindowEvent.WINDOW_CLOSING -> l.windowClosing(e);
+                case WindowEvent.WINDOW_CLOSED -> l.windowClosed(e);
+                case WindowEvent.WINDOW_ICONIFIED -> l.windowIconified(e);
+                case WindowEvent.WINDOW_DEICONIFIED -> l.windowDeiconified(e);
+                case WindowEvent.WINDOW_ACTIVATED -> l.windowActivated(e);
+                case WindowEvent.WINDOW_DEACTIVATED -> l.windowDeactivated(e);
                 default -> { /* focus/state ids route to their own process methods */ }
             }
         }
     }
 
-    protected void processWindowFocusEvent(vaadinx.awt.event.WindowEvent e) {
+    protected void processWindowFocusEvent(WindowEvent e) {
         if (e == null) return;
         int id = e.getID();
-        for (vaadinx.awt.event.WindowFocusListener l : awtListeners(vaadinx.awt.event.WindowFocusListener.class)) {
+        for (WindowFocusListener l : awtListeners(WindowFocusListener.class)) {
             switch (id) {
-                case vaadinx.awt.event.WindowEvent.WINDOW_GAINED_FOCUS -> l.windowGainedFocus(e);
-                case vaadinx.awt.event.WindowEvent.WINDOW_LOST_FOCUS -> l.windowLostFocus(e);
+                case WindowEvent.WINDOW_GAINED_FOCUS -> l.windowGainedFocus(e);
+                case WindowEvent.WINDOW_LOST_FOCUS -> l.windowLostFocus(e);
                 default -> { /* out-of-range id, drop */ }
             }
         }
     }
 
-    protected void processWindowStateEvent(vaadinx.awt.event.WindowEvent e) {
+    protected void processWindowStateEvent(WindowEvent e) {
         // Only one id routes here (WINDOW_STATE_CHANGED), one callback —
         // still id-check so a mis-routed event silently drops instead of
         // firing a bogus state-changed.
         if (e == null) return;
-        if (e.getID() != vaadinx.awt.event.WindowEvent.WINDOW_STATE_CHANGED) return;
-        for (vaadinx.awt.event.WindowStateListener l : awtListeners(vaadinx.awt.event.WindowStateListener.class)) {
+        if (e.getID() != WindowEvent.WINDOW_STATE_CHANGED) return;
+        for (WindowStateListener l : awtListeners(WindowStateListener.class)) {
             l.windowStateChanged(e);
         }
     }
 
-    protected void processEvent(java.awt.AWTEvent e) {
+    protected void processEvent(AWTEvent e) {
         // AWT's Window.processEvent routes WindowEvent by id to one of the
         // three process*Event methods; everything else delegates up the
         // chain (Container → Component) so ContainerEvent / ComponentEvent
         // / mouse / key / … land in the right sinks.
-        if (e instanceof vaadinx.awt.event.WindowEvent we) {
+        if (e instanceof WindowEvent we) {
             switch (we.getID()) {
-                case vaadinx.awt.event.WindowEvent.WINDOW_OPENED,
-                     vaadinx.awt.event.WindowEvent.WINDOW_CLOSING,
-                     vaadinx.awt.event.WindowEvent.WINDOW_CLOSED,
-                     vaadinx.awt.event.WindowEvent.WINDOW_ICONIFIED,
-                     vaadinx.awt.event.WindowEvent.WINDOW_DEICONIFIED,
-                     vaadinx.awt.event.WindowEvent.WINDOW_ACTIVATED,
-                     vaadinx.awt.event.WindowEvent.WINDOW_DEACTIVATED
+                case WindowEvent.WINDOW_OPENED,
+                     WindowEvent.WINDOW_CLOSING,
+                     WindowEvent.WINDOW_CLOSED,
+                     WindowEvent.WINDOW_ICONIFIED,
+                     WindowEvent.WINDOW_DEICONIFIED,
+                     WindowEvent.WINDOW_ACTIVATED,
+                     WindowEvent.WINDOW_DEACTIVATED
                         -> processWindowEvent(we);
-                case vaadinx.awt.event.WindowEvent.WINDOW_GAINED_FOCUS,
-                     vaadinx.awt.event.WindowEvent.WINDOW_LOST_FOCUS
+                case WindowEvent.WINDOW_GAINED_FOCUS,
+                     WindowEvent.WINDOW_LOST_FOCUS
                         -> processWindowFocusEvent(we);
-                case vaadinx.awt.event.WindowEvent.WINDOW_STATE_CHANGED
+                case WindowEvent.WINDOW_STATE_CHANGED
                         -> processWindowStateEvent(we);
                 default -> { /* out-of-range WindowEvent id, drop — matches AWT */ }
             }
@@ -945,21 +1008,21 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // routing table — they just say what happened.
 
     protected void fireWindowEvent(int id) {
-        if (listenerList.getListenerCount(vaadinx.awt.event.WindowListener.class) == 0) return;
-        processWindowEvent(new vaadinx.awt.event.WindowEvent(this, id));
+        if (listenerList.getListenerCount(WindowListener.class) == 0) return;
+        processWindowEvent(new WindowEvent(this, id));
     }
 
-    protected void fireWindowFocusEvent(int id, vaadinx.awt.Window opposite) {
-        if (listenerList.getListenerCount(vaadinx.awt.event.WindowFocusListener.class) == 0) return;
-        processWindowFocusEvent(new vaadinx.awt.event.WindowEvent(this, id, opposite));
+    protected void fireWindowFocusEvent(int id, Window opposite) {
+        if (listenerList.getListenerCount(WindowFocusListener.class) == 0) return;
+        processWindowFocusEvent(new WindowEvent(this, id, opposite));
     }
 
     protected void fireWindowStateEvent(int oldState, int newState) {
         // WINDOW_STATE_CHANGED is the only id this method fires — old and new
         // state carry the transition, opposite isn't meaningful here.
-        if (listenerList.getListenerCount(vaadinx.awt.event.WindowStateListener.class) == 0) return;
-        processWindowStateEvent(new vaadinx.awt.event.WindowEvent(
-                this, vaadinx.awt.event.WindowEvent.WINDOW_STATE_CHANGED, oldState, newState));
+        if (listenerList.getListenerCount(WindowStateListener.class) == 0) return;
+        processWindowStateEvent(new WindowEvent(
+                this, WindowEvent.WINDOW_STATE_CHANGED, oldState, newState));
     }
 
     public boolean isAlwaysOnTopSupported() {
@@ -977,7 +1040,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return false;
     }
 
-    public vaadinx.awt.Component getFocusOwner() {
+    public Component getFocusOwner() {
         // AWT: returns the focused child if this Window is the active one,
         // null otherwise. We never report isFocused=true (browser focus
         // isn't tracked), so null is consistent — no one can own focus on
@@ -985,7 +1048,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return null;
     }
 
-    public vaadinx.awt.Component getMostRecentFocusOwner() {
+    public Component getMostRecentFocusOwner() {
         // AWT tracks this across activation cycles. We don't track focus
         // at all (R_infra_not_surface), so the "last child to have focus" is always null.
         // Paired with getFocusOwner silently.
@@ -1023,29 +1086,29 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         boolean oldFocusableWindowState = this.focusableWindowState;
         this.focusableWindowState = focusableWindowState;
         if (!focusableWindowState) {
-            vaadinx.EHelper.onUnimplemented("Window", "setFocusableWindowState", focusableWindowState);
+            EHelper.onUnimplemented("Window", "setFocusableWindowState", focusableWindowState);
         }
         firePropertyChange("focusableWindowState", oldFocusableWindowState, focusableWindowState);
     }
 
-    public void addPropertyChangeListener(java.lang.String arg0, java.beans.PropertyChangeListener arg1) {
+    public void addPropertyChangeListener(String arg0, PropertyChangeListener arg1) {
         // AWT's Window overrides this for alwaysOnTop/focusable-window bookkeeping.
         // We don't track those, so this is a pass-through — kept as an override so
         // the reason is visible here instead of hidden in an ancestor.
         super.addPropertyChangeListener(arg0, arg1);
     }
 
-    public void addPropertyChangeListener(java.beans.PropertyChangeListener arg0) {
+    public void addPropertyChangeListener(PropertyChangeListener arg0) {
         // See addPropertyChangeListener(String, PropertyChangeListener) above.
         super.addPropertyChangeListener(arg0);
     }
 
-    public void applyResourceBundle(java.util.ResourceBundle arg0) {
-        vaadinx.EHelper.onUnimplemented("Window", "applyResourceBundle", arg0);
+    public void applyResourceBundle(ResourceBundle arg0) {
+        EHelper.onUnimplemented("Window", "applyResourceBundle", arg0);
     }
 
-    public void applyResourceBundle(java.lang.String arg0) {
-        vaadinx.EHelper.onUnimplemented("Window", "applyResourceBundle", arg0);
+    public void applyResourceBundle(String arg0) {
+        EHelper.onUnimplemented("Window", "applyResourceBundle", arg0);
     }
 
     // WindowListener, WindowFocusListener, and WindowStateListener all share
@@ -1054,28 +1117,28 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
     // the `synchronized` here is for signature parity with AWT — the list's
     // own add/remove are already synchronized internally.
 
-    public synchronized void addWindowListener(vaadinx.awt.event.WindowListener l) {
-        listenerList.add(vaadinx.awt.event.WindowListener.class, l);
+    public synchronized void addWindowListener(WindowListener l) {
+        listenerList.add(WindowListener.class, l);
     }
 
-    public synchronized void addWindowFocusListener(vaadinx.awt.event.WindowFocusListener l) {
-        listenerList.add(vaadinx.awt.event.WindowFocusListener.class, l);
+    public synchronized void addWindowFocusListener(WindowFocusListener l) {
+        listenerList.add(WindowFocusListener.class, l);
     }
 
-    public synchronized void addWindowStateListener(vaadinx.awt.event.WindowStateListener l) {
-        listenerList.add(vaadinx.awt.event.WindowStateListener.class, l);
+    public synchronized void addWindowStateListener(WindowStateListener l) {
+        listenerList.add(WindowStateListener.class, l);
     }
 
-    public void createBufferStrategy(int arg0, java.awt.BufferCapabilities arg1) throws java.awt.AWTException {
-        vaadinx.EHelper.onUnimplemented("Window", "createBufferStrategy", arg0, arg1);
+    public void createBufferStrategy(int arg0, BufferCapabilities arg1) throws AWTException {
+        EHelper.onUnimplemented("Window", "createBufferStrategy", arg0, arg1);
     }
 
     public void createBufferStrategy(int arg0) {
-        vaadinx.EHelper.onUnimplemented("Window", "createBufferStrategy", arg0);
+        EHelper.onUnimplemented("Window", "createBufferStrategy", arg0);
     }
 
-    public java.awt.image.BufferStrategy getBufferStrategy() {
-        vaadinx.EHelper.onUnimplemented("Window", "getBufferStrategy");
+    public BufferStrategy getBufferStrategy() {
+        EHelper.onUnimplemented("Window", "getBufferStrategy");
         return null;
     }
 
@@ -1093,12 +1156,12 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
             throw new IllegalArgumentException("The value of opacity should be in the range [0.0f .. 1.0f].");
         }
         if (arg0 < 1.0f) {
-            vaadinx.EHelper.onUnimplemented("Window", "setOpacity", arg0);
+            EHelper.onUnimplemented("Window", "setOpacity", arg0);
         }
         this.opacity = arg0;
     }
 
-    public java.awt.Color getBackground() {
+    public Color getBackground() {
         // AWT's Window override forces opaque if the color has alpha<255
         // unless the window is translucent-capable; we don't model
         // transparency (see getOpacity), so the plain Component walk-up
@@ -1106,14 +1169,14 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return super.getBackground();
     }
 
-    public void setBackground(java.awt.Color arg0) {
+    public void setBackground(Color arg0) {
         // AWT's Window override rejects alpha<255 when translucency isn't
         // supported. We let the base setter write CSS background-color as
         // usual; alpha round-trips through com.vaadin.swingbridge.surrogates.util.CssConvert.toCss's rgba() branch.
         super.setBackground(arg0);
     }
 
-    public void paint(java.awt.Graphics arg0) {
+    public void paint(Graphics arg0) {
         // AWT's Window override blits an off-screen buffer if one exists;
         // we don't double-buffer (R_layouts_close_enough — browser composes frames). Deferring
         // to Container.paint preserves the self-paint + recurse-children
@@ -1121,16 +1184,16 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         super.paint(arg0);
     }
 
-    public java.util.List<java.awt.Image> getIconImages() {
+    public java.util.List<Image> getIconImages() {
         // Defensive copy, as the JDK's does — the caller must not be able to
         // mutate our list. Empty until setIconImages installs one; never null.
-        return new java.util.ArrayList<>(icons);
+        return new ArrayList<>(icons);
     }
 
-    public void setIconImage(java.awt.Image image) {
+    public void setIconImage(Image image) {
         // JDK body: wrap and delegate, so setIconImages is the single writer
         // and an override of it catches this entry point too (R_no_vaadin_in_api limb 2).
-        java.util.List<java.awt.Image> imageList = new java.util.ArrayList<>();
+        java.util.List<Image> imageList = new ArrayList<>();
         if (image != null) {
             imageList.add(image);
         }
@@ -1150,10 +1213,10 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // browser already does under R_layouts_close_enough. Joined the layout-invalidation
         // no-op family rather than left as WARN: apps call pack() routinely
         // and the log noise would swamp real warnings.
-        vaadinx.EHelper.onNoop("Window", "pack");
+        EHelper.onNoop("Window", "pack");
     }
 
-    public final java.lang.String getWarningString() {
+    public final String getWarningString() {
         // AWT returns the "Java Applet Window" banner text for applets
         // without AWTPermission; returns null for trusted code. We're
         // always trusted (no SecurityManager in a Vaadin server), so null
@@ -1161,55 +1224,55 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return null;
     }
 
-    public java.awt.im.InputContext getInputContext() {
-        vaadinx.EHelper.onUnimplemented("Window", "getInputContext");
+    public InputContext getInputContext() {
+        EHelper.onUnimplemented("Window", "getInputContext");
         return null;
     }
 
-    public static vaadinx.awt.Window[] getOwnerlessWindows() {
+    public static Window[] getOwnerlessWindows() {
         // Subset of getWindows() with owner == null.
-        java.util.List<vaadinx.awt.Window> out = new java.util.ArrayList<>();
-        for (vaadinx.awt.Window w : vaadinx.EHelper.getWindows()) {
+        java.util.List<Window> out = new ArrayList<>();
+        for (Window w : EHelper.getWindows()) {
             if (w.owner == null) out.add(w);
         }
-        return out.toArray(new vaadinx.awt.Window[0]);
+        return out.toArray(new Window[0]);
     }
 
     // EventListenerList.remove is null-safe and no-ops on an unregistered
     // listener — matches AWT's remove*Listener contract.
 
-    public synchronized void removeWindowListener(vaadinx.awt.event.WindowListener l) {
-        listenerList.remove(vaadinx.awt.event.WindowListener.class, l);
+    public synchronized void removeWindowListener(WindowListener l) {
+        listenerList.remove(WindowListener.class, l);
     }
 
-    public synchronized void removeWindowStateListener(vaadinx.awt.event.WindowStateListener l) {
-        listenerList.remove(vaadinx.awt.event.WindowStateListener.class, l);
+    public synchronized void removeWindowStateListener(WindowStateListener l) {
+        listenerList.remove(WindowStateListener.class, l);
     }
 
-    public synchronized void removeWindowFocusListener(vaadinx.awt.event.WindowFocusListener l) {
-        listenerList.remove(vaadinx.awt.event.WindowFocusListener.class, l);
+    public synchronized void removeWindowFocusListener(WindowFocusListener l) {
+        listenerList.remove(WindowFocusListener.class, l);
     }
 
     // Getters return an empty array rather than null when no listeners are
     // registered — AWT contract, honored by EventListenerList.getListeners.
 
-    public synchronized vaadinx.awt.event.WindowListener[] getWindowListeners() {
-        return awtListeners(vaadinx.awt.event.WindowListener.class);
+    public synchronized WindowListener[] getWindowListeners() {
+        return awtListeners(WindowListener.class);
     }
 
-    public synchronized vaadinx.awt.event.WindowFocusListener[] getWindowFocusListeners() {
-        return awtListeners(vaadinx.awt.event.WindowFocusListener.class);
+    public synchronized WindowFocusListener[] getWindowFocusListeners() {
+        return awtListeners(WindowFocusListener.class);
     }
 
-    public synchronized vaadinx.awt.event.WindowStateListener[] getWindowStateListeners() {
-        return awtListeners(vaadinx.awt.event.WindowStateListener.class);
+    public synchronized WindowStateListener[] getWindowStateListeners() {
+        return awtListeners(WindowStateListener.class);
     }
 
-    public java.util.Set<java.awt.AWTKeyStroke> getFocusTraversalKeys(int arg0) {
+    public Set<AWTKeyStroke> getFocusTraversalKeys(int arg0) {
         // Same rationale as Container.getFocusTraversalKeys — we don't model
         // focus traversal (R_infra_not_surface). AWT's Window adds extra forward/backward down
         // cycle keys on top of Container's; still empty here for the same reason.
-        return java.util.Collections.emptySet();
+        return Collections.emptySet();
     }
 
     public final void setFocusCycleRoot(boolean b) {
@@ -1229,7 +1292,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return true;
     }
 
-    public final vaadinx.awt.Container getFocusCycleRootAncestor() {
+    public final Container getFocusCycleRootAncestor() {
         // AWT's Window has no focus-cycle-root ancestor (it IS the root on
         // the real JDK). Whether isFocusCycleRoot returns true or false
         // here, the ancestor lookup walks *up* and a Window has no parent
@@ -1242,7 +1305,7 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         // honour is the *change*, the default being what we do anyway. Same precedent
         // as setFocusableWindowState.
         if (!b) {
-            vaadinx.EHelper.onUnimplemented("Window", "setAutoRequestFocus", b);
+            EHelper.onUnimplemented("Window", "setAutoRequestFocus", b);
         }
         this.autoRequestFocus = b;
     }
@@ -1258,28 +1321,28 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return true;
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("Window", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("Window", "getAccessibleContext");
         return null;
     }
 
     /**
      * AWT: {@code null} centers on screen, a visible component centers
      * over that component. Both map to viewport-centering here — see
-     * {@link com.vaadin.swingbridge.surrogates.SWindow#setLocationRelativeTo} for the R_layouts_close_enough
+     * {@link SWindow#setLocationRelativeTo} for the R_layouts_close_enough
      * close-enough rationale. Clears the explicit-location shadow (the
      * window is centered again, not at the last set coordinates);
      * fires COMPONENT_MOVED only if an explicit placement was in effect,
      * since a still-centered window didn't move.
      */
-    public void setLocationRelativeTo(vaadinx.awt.Component c) {
+    public void setLocationRelativeTo(Component c) {
         boolean moved = this.location != null;
         this.location = null;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.centerOnScreen());
-        }
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.centerOnScreen();
+        });
         if (moved) {
-            fireComponentEvent(vaadinx.awt.event.ComponentEvent.COMPONENT_MOVED);
+            fireComponentEvent(ComponentEvent.COMPONENT_MOVED);
         }
     }
 
@@ -1291,9 +1354,9 @@ public class Window extends vaadinx.awt.Container implements javax.accessibility
         return opacity;
     }
 
-    public void setShape(java.awt.Shape arg0) {
+    public void setShape(Shape arg0) {
         if (arg0 != null) {
-            vaadinx.EHelper.onUnimplemented("Window", "setShape", arg0);
+            EHelper.onUnimplemented("Window", "setShape", arg0);
         }
     }
 }

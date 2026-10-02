@@ -58,6 +58,11 @@ final class DialogStrategy implements FrameStrategy {
     private DialogStrategy() { }
 
     @Override
+    public Class<SJFrame> peerType() {
+        return SJFrame.class;
+    }
+
+    @Override
     public Component createPeer() {
         return new SJFrame();
     }
@@ -74,9 +79,9 @@ final class DialogStrategy implements FrameStrategy {
 
     @Override
     public void disposePeer(JFrame f) {
-        if (f.peer() instanceof SWindow sw) {
-            sw.dispose();
-        }
+        f.withPeer(p -> {
+            if (p instanceof SWindow sw) sw.dispose();
+        });
     }
 
     @Override

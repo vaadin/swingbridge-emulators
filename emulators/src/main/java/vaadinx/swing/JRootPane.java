@@ -39,9 +39,20 @@
 
 package vaadinx.swing;
 
+import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.swingbridge.surrogates.SJMenuBar;
+import com.vaadin.swingbridge.surrogates.SJRootPane;
+import vaadinx.EHelper;
+import vaadinx.awt.Container;
+
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import java.awt.IllegalComponentStateException;
+
 /**
  * Emulator for {@link javax.swing.JRootPane} — a thin shell over
- * {@link com.vaadin.swingbridge.surrogates.SJRootPane} (SD_sjframe): the surrogate carries the Enter-
+ * {@link SJRootPane} (SD_sjframe): the surrogate carries the Enter-
  * shortcut install and its own {@code "defaultButton"} PCE; the
  * emulator keeps its AWT-typed content / layered / glass pane holders
  * and its own listener chain so migrated code registered at the
@@ -75,14 +86,14 @@ package vaadinx.swing;
  * constants round-trip but reorder nothing, since Vaadin renders in DOM order
  * and {@code JInternalFrame} renders as a Dialog overlay instead (D_internal_frames).
  */
-public class JRootPane extends JComponent implements javax.accessibility.Accessible {
+public class JRootPane extends JComponent implements Accessible {
 
     // AWT-typed panes. Emulator users see AWT types; pure-surrogate users see
     // the Vaadin-typed ones on SJRootPane. The typed-holder split matches the
     // SJSlider BoundedRangeModel precedent — but unlike a holder these are real
     // children of this container, so the DOM chain builds itself out of their
     // peers via Container.addImpl.
-    protected vaadinx.awt.Container contentPane;
+    protected Container contentPane;
     protected JLayeredPane layeredPane;
     protected vaadinx.awt.Component glassPane;
     protected JMenuBar menuBar;
@@ -95,27 +106,13 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
     // surrogate's PCE; migrated listeners register on one layer.
     protected JButton defaultButton;
 
-    public JRootPane() {
-        // Pair with a fresh SJRootPane for standalone-emulator use.
-        // JFrame.createRootPane uses the ctor below to share the
-        // surrogate with its SJFrame peer.
-        super(com.vaadin.swingbridge.surrogates.SJRootPane.class, com.vaadin.swingbridge.surrogates.SJRootPane::new);
-        initRootPane();
-    }
-
     /**
-     * Package-private ctor used by {@link JFrame#createRootPane()} to
-     * share the SJRootPane with the frame's SJFrame peer. Wiring both
-     * sides to the same surrogate means the Enter shortcut installed
-     * via {@code setDefaultButton} follows the frame's lifetime
-     * through a single listener, not two.
+     * Peers on its own {@code SJRootPane}. A window's {@code setRootPane} hands that same
+     * surrogate to the window's surrogate, so both layers share one root pane and the Enter
+     * shortcut {@code setDefaultButton} installs follows the window through a single listener.
      */
-    protected JRootPane(com.vaadin.swingbridge.surrogates.SJRootPane peer) {
-        super(peer);
-        initRootPane();
-    }
-
-    private void initRootPane() {
+    public JRootPane() {
+        super(SJRootPane.class, SJRootPane::new);
         // The JDK's own constructor body, hooks and order (JRootPane.java:328).
         // Each setter plants the pane as a child of this container, so the DOM
         // chain falls out of Container.addImpl nesting the peers.
@@ -138,7 +135,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
     private static boolean claimsEnter(com.vaadin.flow.component.Component peer) {
         // Not EHelper.getEmulator: the walk also visits peer-less components, such
         // as a spinner's inner field, where that one throws.
-        return com.vaadin.flow.component.ComponentUtil.getData(peer, vaadinx.awt.Component.class)
+        return ComponentUtil.getData(peer, vaadinx.awt.Component.class)
                         instanceof JTextField field
                 && !(field instanceof JFormattedTextField)
                 && field.getActionListeners().length > 0;
@@ -148,11 +145,11 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      * Factory for the default content pane, called from the constructor. Real
      * Swing returns a {@code JPanel} with a {@code BorderLayout}; the built-in
      * BorderLayout writes its CSS onto
-     * {@link vaadinx.awt.Container#peerContentElement()} either way, so a plain
+     * {@link Container#peerContentElement()} either way, so a plain
      * Div-backed Container is equivalent here.
      */
-    protected vaadinx.awt.Container createContentPane() {
-        return new vaadinx.awt.Container();
+    protected Container createContentPane() {
+        return new Container();
     }
 
     /** Factory for the default layered pane, called from the constructor. */
@@ -172,11 +169,11 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
     }
 
     /** Narrow the peer to its SJRootPane type. */
-    private com.vaadin.swingbridge.surrogates.SJRootPane surrogate() {
-        return (com.vaadin.swingbridge.surrogates.SJRootPane) getPeer();
+    private SJRootPane surrogate() {
+        return (SJRootPane) getPeer();
     }
 
-    public vaadinx.awt.Container getContentPane() {
+    public Container getContentPane() {
         return contentPane;
     }
 
@@ -185,10 +182,10 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      * the incoming one there. Children are not migrated — callers that want to
      * keep content must re-add to the new pane.
      */
-    public void setContentPane(vaadinx.awt.Container content) {
+    public void setContentPane(Container content) {
         if (content == null) {
             // JDK throws IllegalComponentStateException — match per D_never_fail_on_gaps.
-            throw new java.awt.IllegalComponentStateException("contentPane cannot be set to null");
+            throw new IllegalComponentStateException("contentPane cannot be set to null");
         }
         if (content == this.contentPane) return;
         JLayeredPane layered = getLayeredPane();
@@ -216,7 +213,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      */
     public void setLayeredPane(JLayeredPane layered) {
         if (layered == null) {
-            throw new java.awt.IllegalComponentStateException("layeredPane cannot be set to null");
+            throw new IllegalComponentStateException("layeredPane cannot be set to null");
         }
         if (layered == this.layeredPane) return;
         if (layeredPane != null && layeredPane.getParent() == this) {
@@ -239,7 +236,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      */
     public void setGlassPane(vaadinx.awt.Component glass) {
         if (glass == null) {
-            throw new java.awt.IllegalComponentStateException("glassPane cannot be set to null");
+            throw new IllegalComponentStateException("glassPane cannot be set to null");
         }
         if (glass == this.glassPane) return;
         if (glassPane != null && glassPane.getParent() == this) {
@@ -282,7 +279,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
         // Push the slot down so the surrogate tags the bar and orders it above
         // the content pane in the layered pane's DOM — DOM order is what the CSS
         // column reads, where RootLayout reads the menuBar field.
-        withPeer(p -> surrogate().setJMenuBar(bar == null ? null : (com.vaadin.swingbridge.surrogates.SJMenuBar) bar.getPeer()));
+        withPeer(p -> surrogate().setJMenuBar(bar == null ? null : (SJMenuBar) bar.getPeer()));
     }
 
     /** JDK alias for {@link #setJMenuBar}, deprecated there since 1.1. */
@@ -300,7 +297,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
      * {@code rootPaneCheckingEnabled} lives; {@code JRootPane} has no such flag.
      */
     @Override
-    protected void addImpl(vaadinx.awt.Component comp, java.lang.Object constraints, int index) {
+    protected void addImpl(vaadinx.awt.Component comp, Object constraints, int index) {
         super.addImpl(comp, constraints, index);
         if (glassPane != null
                 && glassPane.getParent() == this
@@ -317,7 +314,7 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
     /**
      * Install {@code button} as the root pane's default button — Enter
      * anywhere inside the enclosing window triggers its click.
-     * Browser-side shortcut install is delegated to the {@link com.vaadin.swingbridge.surrogates.SJRootPane}
+     * Browser-side shortcut install is delegated to the {@link SJRootPane}
      * peer (which owns the {@code ShortcutRegistration} and its
      * button-tied lifecycle). The emulator fires its own
      * {@code "defaultButton"} PCE on this layer — the surrogate fires
@@ -332,11 +329,11 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
         // only bookkeeping we owe here); no local ShortcutRegistration
         // field to tear down.
         withPeer(p -> surrogate().setDefaultButton(
-                button == null ? null : (com.vaadin.flow.component.button.Button) button.getPeer()));
+                button == null ? null : (Button) button.getPeer()));
         firePropertyChange("defaultButton", old, button);
     }
 
-    public java.lang.String getUIClassID() {
+    public String getUIClassID() {
         return "RootPaneUI";
     }
 
@@ -353,8 +350,8 @@ public class JRootPane extends JComponent implements javax.accessibility.Accessi
     public static final int QUESTION_DIALOG = 7;
     public static final int WARNING_DIALOG = 8;
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JRootPane", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JRootPane", "getAccessibleContext");
         return null;
     }
 }

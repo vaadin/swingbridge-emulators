@@ -35,10 +35,12 @@ package vaadinx.swing;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.UI;
+import com.vaadin.flow.dom.Style;
 import com.vaadin.swingbridge.surrogates.SJPanel;
 import vaadinx.swing.app.MainWindowRoute;
 
 import javax.swing.WindowConstants;
+import java.awt.Dimension;
 
 /**
  * The {@code @MainWindow} shape: peer is a {@link SJPanel} (extends
@@ -64,6 +66,11 @@ final class InlineStrategy implements FrameStrategy {
     static final InlineStrategy INSTANCE = new InlineStrategy();
 
     private InlineStrategy() { }
+
+    @Override
+    public Class<SJPanel> peerType() {
+        return SJPanel.class;
+    }
 
     @Override
     public Component createPeer() {
@@ -152,7 +159,7 @@ final class InlineStrategy implements FrameStrategy {
      * Swing API surface.
      */
     void applyInlineSizingOnFrameInit(JFrame f) {
-        com.vaadin.flow.dom.Style sjpStyle = f.peer().getElement().getStyle();
+        Style sjpStyle = f.peer().getElement().getStyle();
         sjpStyle.set("width", "100%");
         sjpStyle.set("height", "100%");
         // Override the FlowLayout CSS the SJPanel ctor wrote so the
@@ -181,7 +188,7 @@ final class InlineStrategy implements FrameStrategy {
         // down. Basis 0 rather than `.emul-rootpane`'s `auto` is safe here and is
         // what D_inline_route_sizing measured: the SJPanel parent has a definite height, so there
         // is no auto-height container for a zero basis to collapse.
-        com.vaadin.flow.dom.Style rpStyle = f.getRootPane().peerContentElement().getStyle();
+        Style rpStyle = f.getRootPane().peerContentElement().getStyle();
         rpStyle.set("flex", "1 1 0");
         rpStyle.set("min-height", "0");
         rpStyle.set("min-width", "0");
@@ -223,8 +230,8 @@ final class InlineStrategy implements FrameStrategy {
                 route.getElement().getStyle().remove("width");
                 route.getElement().getStyle().remove("height");
             }
-            java.awt.Dimension p = f.getPreferredSize();
-            com.vaadin.flow.dom.Style s = f.peer().getElement().getStyle();
+            Dimension p = f.getPreferredSize();
+            Style s = f.peer().getElement().getStyle();
             if (p.width > 0) {
                 s.set("width", p.width + "px");
             }

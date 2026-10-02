@@ -51,9 +51,12 @@ import com.vaadin.flow.component.Component;
  * the strategy's seam outside this package.
  */
 interface FrameStrategy {
+    /** What {@link #createPeer()} returns, which answers the frame's peer type checks before it exists. */
+    Class<? extends Component> peerType();
+
     /**
-     * Vaadin peer to host the JFrame instance. Called once from JFrame's
-     * private ctor, result is passed up the {@code super(peer)} chain.
+     * Vaadin peer to host the JFrame instance: the factory JFrame's private ctor passes up
+     * the lazy {@code super(peerType, peerFactory)} chain, so it runs once, on the UI thread.
      */
     Component createPeer();
 

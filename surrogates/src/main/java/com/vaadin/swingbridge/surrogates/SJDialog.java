@@ -18,6 +18,7 @@
 package com.vaadin.swingbridge.surrogates;
 
 import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.swingbridge.surrogates.awt.event.SWindowEvent;
 
@@ -277,6 +278,18 @@ public class SJDialog extends SFrame {
     }
 
     /**
+     * Replaces the root pane, as the JDK's protected {@code setRootPane} does: the outgoing
+     * one leaves this window and {@code root} becomes its one child, holding the content pane
+     * from then on. Public so the emulator layer can hand down the peer of the root pane it
+     * built itself, which is how one root pane serves both layers.
+     *
+     * @param root {@code null} leaves the window without a root pane, as the JDK allows
+     */
+    public void setRootPane(SJRootPane root) {
+        scaffold.setRootPane(root);
+    }
+
+    /**
      * Subclass hook matching JDK JDialog's {@code createRootPane}.
      * Called once on first {@link #getRootPane()} read.
      */
@@ -302,7 +315,7 @@ public class SJDialog extends SFrame {
         getRootPane().setGlassPane(glass);
     }
 
-    public com.vaadin.flow.component.button.Button getDefaultButton() {
+    public Button getDefaultButton() {
         return getRootPane().getDefaultButton();
     }
 

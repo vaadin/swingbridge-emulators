@@ -39,12 +39,34 @@
 
 package vaadinx.swing;
 
+import com.vaadin.flow.component.html.Div;
+import com.vaadin.swingbridge.surrogates.SJInternalFrame;
+import com.vaadin.swingbridge.surrogates.SJRootPane;
+import com.vaadin.swingbridge.surrogates.SWindow;
+import com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent;
+import com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameListener;
+import vaadinx.EHelper;
+import vaadinx.FieldReconciler;
+import vaadinx.awt.Component;
+import vaadinx.awt.Container;
+import vaadinx.awt.LayoutManager;
+import vaadinx.awt.event.ComponentEvent;
 import vaadinx.swing.event.InternalFrameEvent;
 import vaadinx.swing.event.InternalFrameListener;
 
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import javax.swing.WindowConstants;
+import java.awt.Dimension;
+import java.awt.IllegalComponentStateException;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.beans.PropertyVetoException;
+import java.util.Objects;
+
 // Hand-finished emulator for javax.swing.JInternalFrame (D_internal_frames). A
 // JInternalFrame is a JComponent (NOT a Window) in the JDK, so this
-// extends vaadinx.swing.JComponent — but its peer is an SJInternalFrame,
+// extends JComponent — but its peer is an SJInternalFrame,
 // a Dialog-backed overlay (SD_sjinternalframe). The frame therefore renders as a
 // decorated non-modal Vaadin Dialog: draggable/resizable/titled with a
 // close-X, escaping the desktop-pane bounds and stacking in Vaadin's
@@ -52,7 +74,7 @@ import vaadinx.swing.event.InternalFrameListener;
 // D_glasspane_structural/SD_sjframe structural layered-pane deferral.
 //
 // R_leaf_peer_lockdown leaf lock-down: javax.swing.JInternalFrame is a public-hierarchy
-// leaf, so the peer is hardcoded to com.vaadin.swingbridge.surrogates.SJInternalFrame; no
+// leaf, so the peer is hardcoded to SJInternalFrame; no
 // protected (Component peer) ctor.
 //
 // Two-layer event bridge: the SJInternalFrame peer is the fire authority
@@ -65,20 +87,21 @@ import vaadinx.swing.event.InternalFrameListener;
 // (D_internalframe_minimize): setIcon models the full state machine here and drives the peer
 // overlay hidden/shown directly.
 
-/** Emulator for {@link javax.swing.JInternalFrame}. R_leaf_peer_lockdown-locked peer is {@link com.vaadin.swingbridge.surrogates.SJInternalFrame}. */
-public class JInternalFrame extends vaadinx.swing.JComponent
-        implements javax.accessibility.Accessible, javax.swing.WindowConstants,
-                   vaadinx.FieldReconciler.Reconcilable, vaadinx.swing.RootPaneContainer {
+/** Emulator for {@link javax.swing.JInternalFrame}. R_leaf_peer_lockdown-locked peer is {@link SJInternalFrame}. */
+public class JInternalFrame extends JComponent
+        implements Accessible, WindowConstants,
+                   FieldReconciler.Reconcilable, RootPaneContainer {
 
     /** D_field_write_reconcile repair hook — see {@link JSlider#reconcileFields()}. */
     @Override
     public final void reconcileFields() {
-        if (!java.util.Objects.equals(title, pushedTitle)) {
-            if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-                sif.setTitle(title);
-            }
+        if (!Objects.equals(title, pushedTitle)) {
+            String t = title;
+            withPeer(p -> {
+                if (p instanceof SJInternalFrame sif) sif.setTitle(t);
+            });
             pushedTitle = title;
-            vaadinx.FieldReconciler.reportDirectWrite(this, "title", "setTitle");
+            FieldReconciler.reportDirectWrite(this, "title", "setTitle");
         }
     }
 
@@ -101,7 +124,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
 
     // ---- Content pane / root pane (mirrors JDialog) --------------------
 
-    private vaadinx.awt.Container contentPane;
+    private Container contentPane;
     protected JRootPane rootPane;
     protected boolean rootPaneCheckingEnabled;
 
@@ -136,7 +159,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     protected boolean iconable;
 
     protected JDesktopIcon desktopIcon;
-    protected vaadinx.swing.Icon frameIcon;
+    protected Icon frameIcon;
 
     // JDK protected field, Swing-side truth per D_field_write_reconcile (see JSlider for the
     // canonical commentary); write-throughs to the peer Dialog's header text.
@@ -170,7 +193,8 @@ public class JInternalFrame extends vaadinx.swing.JComponent
 
     public JInternalFrame(String title, boolean resizable, boolean closable,
                           boolean maximizable, boolean iconifiable) {
-        super(new com.vaadin.swingbridge.surrogates.SJInternalFrame(title));
+        super(SJInternalFrame.class,
+                () -> new SJInternalFrame(title));
         this.title = pushedTitle = title;
         this.resizable = resizable;
         this.closable = closable;
@@ -178,26 +202,28 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         this.iconable = iconifiable;
         this.desktopIcon = new JDesktopIcon(this);
         frameInit();
-        vaadinx.FieldReconciler.register(this);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            // Drive the peer's native resize affordance + title-bar controls
-            // from the ctor flags, and wire the header minimize / maximize
-            // buttons to our vetoable setIcon / setMaximum (so a header click
-            // honours the JInternalFrame constrained properties).
-            sif.setResizable(resizable);
-            sif.setClosable(closable);
-            sif.setIconifiable(iconifiable);
-            sif.setMaximizable(maximizable);
-            sif.setIconifyHandler(this::iconifyFromHeader);
-            sif.setMaximizeHandler(this::toggleMaximumFromHeader);
-        }
+        FieldReconciler.register(this);
+        // Drive the peer's native resize affordance + title-bar controls
+        // from the ctor flags, and wire the header minimize / maximize
+        // buttons to our vetoable setIcon / setMaximum (so a header click
+        // honours the JInternalFrame constrained properties).
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) {
+                sif.setResizable(resizable);
+                sif.setClosable(closable);
+                sif.setIconifiable(iconifiable);
+                sif.setMaximizable(maximizable);
+                sif.setIconifyHandler(this::iconifyFromHeader);
+                sif.setMaximizeHandler(this::toggleMaximumFromHeader);
+            }
+        });
     }
 
     /** Header minimize button → vetoable {@code setIcon(true)} (veto swallowed). */
     private void iconifyFromHeader() {
         try {
             setIcon(true);
-        } catch (java.beans.PropertyVetoException vetoed) {
+        } catch (PropertyVetoException vetoed) {
             // A listener refused the iconify — leave the frame shown.
         }
     }
@@ -206,7 +232,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     private void toggleMaximumFromHeader() {
         try {
             setMaximum(!isMaximum);
-        } catch (java.beans.PropertyVetoException vetoed) {
+        } catch (PropertyVetoException vetoed) {
             // A listener refused the maximize — leave the frame as-is.
         }
     }
@@ -226,55 +252,60 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         installPeerRelay();
     }
 
-    protected vaadinx.awt.Container createContentPane() {
-        return new vaadinx.awt.Container();
+    protected Container createContentPane() {
+        return new Container();
     }
 
     /**
-     * Register the single {@link com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameListener}
+     * Register the single {@link SInternalFrameListener}
      * that relays the peer's lifecycle fires onto this emulator's own
      * {@link InternalFrameListener} list (source = this) and applies the
      * default-close-operation on CLOSING.
      */
     private void installPeerRelay() {
-        if (!(getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif)) return;
-        sif.addInternalFrameListener(new com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameListener() {
-            @Override public void internalFrameOpened(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) installPeerRelay(sif);
+        });
+    }
+
+    private void installPeerRelay(SJInternalFrame sif) {
+        sif.addInternalFrameListener(new SInternalFrameListener() {
+            @Override public void internalFrameOpened(SInternalFrameEvent e) {
                 fireInternalFrameEvent(InternalFrameEvent.INTERNAL_FRAME_OPENED);
             }
-            @Override public void internalFrameClosing(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameClosing(SInternalFrameEvent e) {
                 // No fire here: doDefaultCloseAction fires CLOSING itself, as
                 // the JDK's does — see its javadoc (D_owed_events).
                 doDefaultCloseAction();
             }
-            @Override public void internalFrameClosed(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameClosed(SInternalFrameEvent e) {
                 fireInternalFrameEvent(InternalFrameEvent.INTERNAL_FRAME_CLOSED);
             }
-            @Override public void internalFrameIconified(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameIconified(SInternalFrameEvent e) {
                 // Never fires — minimize is emulator-only (D_internalframe_minimize).
             }
-            @Override public void internalFrameDeiconified(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameDeiconified(SInternalFrameEvent e) {
                 // Never fires — see internalFrameIconified.
             }
-            @Override public void internalFrameActivated(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameActivated(SInternalFrameEvent e) {
                 fireInternalFrameEvent(InternalFrameEvent.INTERNAL_FRAME_ACTIVATED);
             }
-            @Override public void internalFrameDeactivated(com.vaadin.swingbridge.surrogates.swing.event.SInternalFrameEvent e) {
+            @Override public void internalFrameDeactivated(SInternalFrameEvent e) {
                 fireInternalFrameEvent(InternalFrameEvent.INTERNAL_FRAME_DEACTIVATED);
             }
         });
     }
 
-    public vaadinx.awt.Container getContentPane() {
+    public Container getContentPane() {
         return contentPane;
     }
 
-    public void setContentPane(vaadinx.awt.Container newPane) {
+    public void setContentPane(Container newPane) {
         if (newPane == null) {
-            throw new java.awt.IllegalComponentStateException("contentPane cannot be set to null");
+            throw new IllegalComponentStateException("contentPane cannot be set to null");
         }
         if (newPane == this.contentPane) return;
-        vaadinx.awt.Container old = this.contentPane;
+        Container old = this.contentPane;
         // Suspend the redirect through the accessors, not the field: the JDK's
         // own setRootPane brackets its re-parent with
         // isRootPaneCheckingEnabled() / setRootPaneCheckingEnabled(), so a
@@ -295,7 +326,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     // ---- add/remove/setLayout redirect (mirrors JDialog) ----------------
 
     @Override
-    protected void addImpl(vaadinx.awt.Component comp, Object constraints, int index) {
+    protected void addImpl(Component comp, Object constraints, int index) {
         if (isRootPaneCheckingEnabled()) {
             contentPane.add(comp, constraints, index);
         } else {
@@ -304,7 +335,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     }
 
     @Override
-    public void setLayout(vaadinx.awt.LayoutManager manager) {
+    public void setLayout(LayoutManager manager) {
         if (isRootPaneCheckingEnabled()) {
             contentPane.setLayout(manager);
         } else {
@@ -313,7 +344,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     }
 
     @Override
-    public void remove(vaadinx.awt.Component comp) {
+    public void remove(Component comp) {
         if (isRootPaneCheckingEnabled()) {
             contentPane.remove(comp);
         } else {
@@ -344,6 +375,14 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public JRootPane getRootPane() {
         if (rootPane == null) {
             rootPane = createRootPane();
+            // The surrogate holds the same root pane, so both layers share its glass/layered
+            // pane and default-button state — see JFrame.setRootPane.
+            JRootPane rp = rootPane;
+            withPeer(p -> {
+                if (p instanceof SJInternalFrame sif) {
+                    sif.setRootPane((SJRootPane) rp.getPeer());
+                }
+            });
             rootPane.setContentPane(contentPane);
         }
         return rootPane;
@@ -360,13 +399,8 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         firePropertyChange(ROOT_PANE_PROPERTY, old, newRootPane);
     }
 
+    /** A fresh {@code JRootPane}, which {@link #getRootPane()} hands to the surrogate. */
     protected JRootPane createRootPane() {
-        // Share the SJRootPane surrogate with the peer so glass/layered pane
-        // and default-button state unify across layers — same idiom as
-        // JDialog.createRootPane.
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            return new JRootPane(sif.getRootPane());
-        }
         return new JRootPane();
     }
 
@@ -380,12 +414,12 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         firePropertyChange(LAYERED_PANE_PROPERTY, old, layered);
     }
 
-    public vaadinx.awt.Component getGlassPane() {
+    public Component getGlassPane() {
         return getRootPane().getGlassPane();
     }
 
-    public void setGlassPane(vaadinx.awt.Component glass) {
-        vaadinx.awt.Component old = getGlassPane();
+    public void setGlassPane(Component glass) {
+        Component old = getGlassPane();
         getRootPane().setGlassPane(glass);
         firePropertyChange(GLASS_PANE_PROPERTY, old, glass);
     }
@@ -395,7 +429,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     /**
      * A JInternalFrame's peer is a Dialog overlay, so visibility means
      * open/close, not display toggling. Drive the peer's
-     * {@link com.vaadin.swingbridge.surrogates.SWindow#setVisible(boolean)} (which attaches +
+     * {@link SWindow#setVisible(boolean)} (which attaches +
      * opens the overlay and fires INTERNAL_FRAME_OPENED via the relay on
      * first show) and track our own field, since JComponent's
      * {@code visible} field lives in another package and defaults to true.
@@ -405,17 +439,17 @@ public class JInternalFrame extends vaadinx.swing.JComponent
         boolean old = this.frameVisible;
         if (old == b) return;
         this.frameVisible = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            // Live-UI hop, not withPeer: showing attaches the overlay, which needs a
-            // current UI even while the peer is still detached.
-            withPeerOnLiveUI(false, p -> sw.setVisible(b));
-        }
+        // Live-UI hop, not withPeer: showing attaches the overlay, which needs a
+        // current UI even while the peer is still detached.
+        withPeerOnLiveUI(false, p -> {
+            if (p instanceof SWindow sw) sw.setVisible(b);
+        });
         // No "visible" bound property — see Component.setVisible (R_decline_effect_only).
         // JInternalFrame's own bound properties are the JDK's IS_*_PROPERTY
         // constants ("closed", "selected", "maximum", "icon"), not this one.
         fireComponentEvent(b
-                ? vaadinx.awt.event.ComponentEvent.COMPONENT_SHOWN
-                : vaadinx.awt.event.ComponentEvent.COMPONENT_HIDDEN);
+                ? ComponentEvent.COMPONENT_SHOWN
+                : ComponentEvent.COMPONENT_HIDDEN);
     }
 
     @Override
@@ -467,28 +501,32 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     // Window takes. Component's setBounds/setSize/setLocation WARN (R_layouts_close_enough); we
     // override to drive the peer and serve R_swing_is_truth shadows on read.
 
-    private java.awt.Point location;
-    private java.awt.Dimension size;
+    private Point location;
+    private Dimension size;
 
     @Override
     public void setLocation(int x, int y) {
-        this.location = new java.awt.Point(x, y);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) withPeer(p -> sw.setLocation(x, y));
+        this.location = new Point(x, y);
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.setLocation(x, y);
+        });
     }
 
     @Override
-    public void setLocation(java.awt.Point p) {
+    public void setLocation(Point p) {
         setLocation(p.x, p.y);
     }
 
     @Override
     public void setSize(int width, int height) {
-        this.size = new java.awt.Dimension(width, height);
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) withPeer(p -> sw.setSize(width, height));
+        this.size = new Dimension(width, height);
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.setSize(width, height);
+        });
     }
 
     @Override
-    public void setSize(java.awt.Dimension d) {
+    public void setSize(Dimension d) {
         setSize(d.width, d.height);
     }
 
@@ -499,18 +537,18 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     }
 
     @Override
-    public void setBounds(java.awt.Rectangle r) {
+    public void setBounds(Rectangle r) {
         setBounds(r.x, r.y, r.width, r.height);
     }
 
     @Override
-    public java.awt.Point getLocation() {
-        return location != null ? new java.awt.Point(location) : super.getLocation();
+    public Point getLocation() {
+        return location != null ? new Point(location) : super.getLocation();
     }
 
     @Override
-    public java.awt.Dimension getSize() {
-        return size != null ? new java.awt.Dimension(size) : super.getSize();
+    public Dimension getSize() {
+        return size != null ? new Dimension(size) : super.getSize();
     }
 
     // ---- Constrained (vetoable) properties ------------------------------
@@ -524,13 +562,15 @@ public class JInternalFrame extends vaadinx.swing.JComponent
      * first (a veto aborts with no state change), then closes the frame by
      * disposing the peer — which fires INTERNAL_FRAME_CLOSED via the relay.
      */
-    public void setClosed(boolean b) throws java.beans.PropertyVetoException {
+    public void setClosed(boolean b) throws PropertyVetoException {
         if (isClosed == b) return;
         fireVetoableChange(IS_CLOSED_PROPERTY, isClosed, b);
         boolean old = isClosed;
         isClosed = b;
-        if (b && getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.dispose());
+        if (b) {
+            withPeer(p -> {
+                if (p instanceof SWindow sw) sw.dispose();
+            });
         }
         firePropertyChange(IS_CLOSED_PROPERTY, old, b);
     }
@@ -557,16 +597,18 @@ public class JInternalFrame extends vaadinx.swing.JComponent
      * created so the icon can be placed on the desktop. Reproduced as written
      * (D_owed_events).
      */
-    public void setIcon(boolean b) throws java.beans.PropertyVetoException {
+    public void setIcon(boolean b) throws PropertyVetoException {
         if (isIcon == b) return;
         firePropertyChange("ancestor", null, getParent());
         fireVetoableChange(IS_ICON_PROPERTY, isIcon, b);
         boolean old = isIcon;
         isIcon = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw && frameVisible) {
+        if (frameVisible) {
             // Hide the overlay while iconified; restore on deiconify. Live-UI hop for
             // setVisible's reason: a restore re-attaches the overlay.
-            withPeerOnLiveUI(false, p -> sw.setVisible(!b));
+            withPeerOnLiveUI(false, p -> {
+                if (p instanceof SWindow sw) sw.setVisible(!b);
+            });
         }
         firePropertyChange(IS_ICON_PROPERTY, old, b);
         fireInternalFrameEvent(b
@@ -582,14 +624,14 @@ public class JInternalFrame extends vaadinx.swing.JComponent
      * Constrained property — maximize to viewport-fill (D_internalframe_maximize). Honors the
      * vetoable change, then drives the peer geometry.
      */
-    public void setMaximum(boolean b) throws java.beans.PropertyVetoException {
+    public void setMaximum(boolean b) throws PropertyVetoException {
         if (isMaximum == b) return;
         fireVetoableChange(IS_MAXIMUM_PROPERTY, isMaximum, b);
         boolean old = isMaximum;
         isMaximum = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            withPeer(p -> sif.setMaximum(b));
-        }
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setMaximum(b);
+        });
         firePropertyChange(IS_MAXIMUM_PROPERTY, old, b);
     }
 
@@ -619,19 +661,19 @@ public class JInternalFrame extends vaadinx.swing.JComponent
      * one level down. That also costs the JDK's redundant-select branch,
      * whose whole purpose is that focus restore.
      *
-     * @throws java.beans.PropertyVetoException if a
+     * @throws PropertyVetoException if a
      *         {@code VetoableChangeListener} refuses the change
      */
-    public void setSelected(boolean b) throws java.beans.PropertyVetoException {
+    public void setSelected(boolean b) throws PropertyVetoException {
         if ((isSelected == b) || (b && (isIcon ? !desktopIcon.isShowing() : !isShowing()))) {
             return;
         }
         fireVetoableChange(IS_SELECTED_PROPERTY, isSelected, b);
         boolean old = isSelected;
         isSelected = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            withPeer(p -> sif.setSelected(b));
-        }
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setSelected(b);
+        });
         firePropertyChange(IS_SELECTED_PROPERTY, old, b);
     }
 
@@ -639,9 +681,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
 
     /** Close and release the frame; fires INTERNAL_FRAME_CLOSED via the relay. */
     public void dispose() {
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw) {
-            withPeer(p -> sw.dispose());
-        }
+        withPeer(p -> {
+            if (p instanceof SWindow sw) sw.dispose();
+        });
         if (!isClosed) {
             isClosed = true;
             firePropertyChange(IS_CLOSED_PROPERTY, false, true);
@@ -664,7 +706,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
             case DISPOSE_ON_CLOSE -> {
                 try {
                     setClosed(true);
-                } catch (java.beans.PropertyVetoException vetoed) {
+                } catch (PropertyVetoException vetoed) {
                     // A listener refused the close — leave the frame open,
                     // exactly as JDK's doDefaultCloseAction swallows the veto.
                 }
@@ -675,7 +717,7 @@ public class JInternalFrame extends vaadinx.swing.JComponent
                 if (isSelected()) {
                     try {
                         setSelected(false);
-                    } catch (java.beans.PropertyVetoException vetoed) {
+                    } catch (PropertyVetoException vetoed) {
                         // Same swallow as the JDK's.
                     }
                 }
@@ -707,9 +749,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public void setTitle(String title) {
         String old = this.title;
         this.title = title;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            withPeer(p -> sif.setTitle(title));
-        }
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setTitle(title);
+        });
         pushedTitle = title;
         firePropertyChange(TITLE_PROPERTY, old, title);
     }
@@ -721,9 +763,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public void setResizable(boolean b) {
         boolean old = this.resizable;
         this.resizable = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) {
-            withPeer(p -> sif.setResizable(b));
-        }
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setResizable(b);
+        });
         firePropertyChange("resizable", old, b);
     }
 
@@ -732,7 +774,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public void setClosable(boolean b) {
         boolean old = this.closable;
         this.closable = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) withPeer(p -> sif.setClosable(b));
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setClosable(b);
+        });
         firePropertyChange("closable", old, b);
     }
 
@@ -741,7 +785,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public void setMaximizable(boolean b) {
         boolean old = this.maximizable;
         this.maximizable = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) withPeer(p -> sif.setMaximizable(b));
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setMaximizable(b);
+        });
         firePropertyChange("maximizable", old, b);
     }
 
@@ -750,7 +796,9 @@ public class JInternalFrame extends vaadinx.swing.JComponent
     public void setIconifiable(boolean b) {
         boolean old = this.iconable;
         this.iconable = b;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJInternalFrame sif) withPeer(p -> sif.setIconifiable(b));
+        withPeer(p -> {
+            if (p instanceof SJInternalFrame sif) sif.setIconifiable(b);
+        });
         // Property name is "iconable", not "iconifiable" — JInternalFrame's
         // setter and its field disagree in the JDK, and the event carries the
         // field's name. Boxed Booleans because the JDK boxes explicitly here
@@ -760,14 +808,14 @@ public class JInternalFrame extends vaadinx.swing.JComponent
 
     // ---- Frame icon + desktop icon --------------------------------------
 
-    public vaadinx.swing.Icon getFrameIcon() {
+    public Icon getFrameIcon() {
         return frameIcon;
     }
 
-    public void setFrameIcon(vaadinx.swing.Icon icon) {
+    public void setFrameIcon(Icon icon) {
         // No title-bar icon slot on the Vaadin Dialog header (R_vaadin_first drop); store
         // for round-trip + PCE so migrated code that reads it back is happy.
-        vaadinx.swing.Icon old = this.frameIcon;
+        Icon old = this.frameIcon;
         this.frameIcon = icon;
         firePropertyChange(FRAME_ICON_PROPERTY, old, icon);
     }
@@ -820,27 +868,27 @@ public class JInternalFrame extends vaadinx.swing.JComponent
 
     /** Select + best-effort front-raise (overlay order is Vaadin's, R_layouts_close_enough). */
     public void moveToFront() {
-        vaadinx.EHelper.onNoop("JInternalFrame", "moveToFront");
+        EHelper.onNoop("JInternalFrame", "moveToFront");
     }
 
     public void moveToBack() {
-        vaadinx.EHelper.onNoop("JInternalFrame", "moveToBack");
+        EHelper.onNoop("JInternalFrame", "moveToBack");
     }
 
     public void toFront() {
-        vaadinx.EHelper.onNoop("JInternalFrame", "toFront");
+        EHelper.onNoop("JInternalFrame", "toFront");
     }
 
     public void toBack() {
-        vaadinx.EHelper.onNoop("JInternalFrame", "toBack");
+        EHelper.onNoop("JInternalFrame", "toBack");
     }
 
     public String getUIClassID() {
         return "InternalFrameUI";
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JInternalFrame", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JInternalFrame", "getAccessibleContext");
         return null;
     }
 
@@ -853,13 +901,13 @@ public class JInternalFrame extends vaadinx.swing.JComponent
      * minimal holder that exists for API completeness — {@code getDesktopIcon}
      * returns a real instance and migrated code can read its frame back.
      */
-    public static class JDesktopIcon extends vaadinx.swing.JComponent
-            implements javax.accessibility.Accessible {
+    public static class JDesktopIcon extends JComponent
+            implements Accessible {
 
         private JInternalFrame internalFrame;
 
         public JDesktopIcon(JInternalFrame f) {
-            super(new com.vaadin.flow.component.html.Div());
+            super(Div.class, Div::new);
             this.internalFrame = f;
             // The desktop icon is invisible until the frame is iconified; we
             // never render it (no desktop strip), so it stays non-displaying.
@@ -878,8 +926,8 @@ public class JInternalFrame extends vaadinx.swing.JComponent
             return "DesktopIconUI";
         }
 
-        public javax.accessibility.AccessibleContext getAccessibleContext() {
-            vaadinx.EHelper.onUnimplemented("JInternalFrame.JDesktopIcon", "getAccessibleContext");
+        public AccessibleContext getAccessibleContext() {
+            EHelper.onUnimplemented("JInternalFrame.JDesktopIcon", "getAccessibleContext");
             return null;
         }
     }

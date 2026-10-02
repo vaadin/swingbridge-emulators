@@ -45,7 +45,7 @@ package vaadinx.swing;
 // Upload directly — there is no Swing dir-tree to reproduce in a browser.
 //
 // The upload->temp-File (LOAD) and temp-File->download (SAVE) transfer
-// mechanics live in vaadinx.BrowserFileTransfer; JFileChooser reuses them,
+// mechanics live in BrowserFileTransfer; JFileChooser reuses them,
 // adding the richer surface (int show*Dialog return, file-selection mode,
 // javax.swing FileFilter, approve-button text). It can't share by inheritance
 // (FileDialog is-a Dialog; JFileChooser is-a JComponent), so park + buttons +
@@ -70,14 +70,29 @@ package vaadinx.swing;
 // time. WarnInventoryTests cannot catch this one — a throw is not a WARN.
 // ============================================================================
 
-import java.io.File;
-import java.util.List;
-import java.util.function.BiPredicate;
-
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.TextField;
+import vaadinx.BrowserFileTransfer;
+import vaadinx.EHelper;
+import vaadinx.awt.Component;
+import vaadinx.awt.Frame;
+import vaadinx.awt.Window;
+
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import javax.swing.WindowConstants;
+import javax.swing.filechooser.FileFilter;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.filechooser.FileView;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.BiPredicate;
 
 /**
  * Emulator for {@link javax.swing.JFileChooser}. Emulator-only host (no
@@ -89,9 +104,9 @@ import com.vaadin.flow.component.textfield.TextField;
  * {@link #getSelectedFile()}, and opens the synthetic download affordance.
  * Selection getters return {@code java.io.File}s pointing at per-session temp
  * files. Transfer mechanics are shared with {@link vaadinx.awt.FileDialog} via
- * {@link vaadinx.BrowserFileTransfer}.
+ * {@link BrowserFileTransfer}.
  */
-public class JFileChooser extends vaadinx.swing.JComponent implements javax.accessibility.Accessible {
+public class JFileChooser extends JComponent implements Accessible {
 
     // --- show*Dialog return values --------------------------------------------
     public static final int CANCEL_OPTION = 1;
@@ -157,13 +172,13 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
     private String approveButtonText;
     private String approveButtonToolTipText;
     private int approveButtonMnemonic;
-    private vaadinx.swing.JComponent accessory;
-    private javax.swing.filechooser.FileView fileView;
+    private JComponent accessory;
+    private FileView fileView;
     private boolean controlsShown = true;
     private boolean useFileHiding = true;
-    private javax.swing.filechooser.FileFilter fileFilter;
-    private final java.util.List<javax.swing.filechooser.FileFilter> choosableFilters =
-            new java.util.ArrayList<>();
+    private FileFilter fileFilter;
+    private final List<FileFilter> choosableFilters =
+            new ArrayList<>();
     private boolean acceptAllFileFilterUsed = true;
 
     // Per-show scratch: staged is the list BrowserFileTransfer grows as accepted
@@ -175,7 +190,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
     // real UI is the internal JDialog built at show* time) ---------------------
 
     public JFileChooser() {
-        super(com.vaadin.flow.component.html.Div.class, com.vaadin.flow.component.html.Div::new);
+        super(Div.class, Div::new);
         // JDK's JFileChooser defaults the current directory to the platform
         // "home" via FileSystemView; we have no server FS to browse, but a
         // non-null getCurrentDirectory() keeps the common
@@ -199,7 +214,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
 
     // --- Blocking show --------------------------------------------------------
 
-    public int showOpenDialog(vaadinx.awt.Component parent) {
+    public int showOpenDialog(Component parent) {
         // Through the setter, as the JDK's showOpenDialog goes, so the type change
         // is announced. Note what setDialogType's guard-first order buys here: on a
         // chooser already OPEN_DIALOG (the default) it returns early and the
@@ -209,7 +224,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         return doLoad(parent, approveButtonText != null ? approveButtonText : "Open");
     }
 
-    public int showSaveDialog(vaadinx.awt.Component parent) {
+    public int showSaveDialog(Component parent) {
         setDialogType(SAVE_DIALOG);
         return doSave(parent, approveButtonText != null ? approveButtonText : "Save");
     }
@@ -235,7 +250,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
      * @throws IllegalStateException always, carrying the triage rule.
      */
     @Deprecated
-    public int showDialog(vaadinx.awt.Component parent, String approveButtonText) {
+    public int showDialog(Component parent, String approveButtonText) {
         throw new IllegalStateException(SHOW_DIALOG_UNSUPPORTED);
     }
 
@@ -259,7 +274,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
      * LOAD: build a modal JDialog hosting an {@code Upload}, park on it, and
      * promote the staged temp uploads to the selection on approve.
      */
-    private int doLoad(vaadinx.awt.Component parent, String approveLabel) {
+    private int doLoad(Component parent, String approveLabel) {
         approved = false;
         // No pre-show clear of the selection: the JDK leaves the previous pick in
         // place until the user commits, and both exits below commit through
@@ -267,27 +282,30 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         // here would mutate an observable property with nothing announcing it.
 
         JDialog dialog = createJDialog(parent);
-        Dialog peerDialog = (Dialog) dialog.getPeer();
+        // A write, so the dialog's lazy peer and these raw Vaadin components are built on the UI thread.
+        dialog.withPeer(p -> {
+            Dialog peerDialog = (Dialog) p;
 
-        Button approve = new Button(approveLabel);
-        approve.setEnabled(false); // nothing to approve until an upload lands
-        Button cancel = new Button("Cancel");
+            Button approve = new Button(approveLabel);
+            approve.setEnabled(false); // nothing to approve until an upload lands
+            Button cancel = new Button("Cancel");
 
-        staged = vaadinx.BrowserFileTransfer.wireUpload(
-                peerDialog, multiSelectionEnabled, buildAccept(), extensionHint(), approve);
+            staged = BrowserFileTransfer.wireUpload(
+                    peerDialog, multiSelectionEnabled, buildAccept(), extensionHint(), approve);
 
-        // Raw Vaadin Buttons: dispose() fires the Swing-side WINDOW_CLOSED, so
-        // the handlers funnel through EHelper.callSwing per R_callswing_envelope.
-        approve.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            approved = true;
-            dialog.dispose();
-        }));
-        cancel.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            approved = false;
-            dialog.dispose();
-        }));
+            // Raw Vaadin Buttons: dispose() fires the Swing-side WINDOW_CLOSED, so
+            // the handlers funnel through EHelper.callSwing per R_callswing_envelope.
+            approve.addClickListener(e -> EHelper.callSwing(() -> {
+                approved = true;
+                dialog.dispose();
+            }));
+            cancel.addClickListener(e -> EHelper.callSwing(() -> {
+                approved = false;
+                dialog.dispose();
+            }));
 
-        peerDialog.add(new HorizontalLayout(approve, cancel));
+            peerDialog.add(new HorizontalLayout(approve, cancel));
+        });
 
         dialog.setVisible(true); // parks the VT until a button / X disposes
         fireDialogIsClosing(dialog);
@@ -322,32 +340,36 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
      * {@link vaadinx.awt.FileDialog}'s class header for why a "block until
      * written" SAVE would deadlock.
      */
-    private int doSave(vaadinx.awt.Component parent, String approveLabel) {
+    private int doSave(Component parent, String approveLabel) {
         approved = false;
 
         JDialog dialog = createJDialog(parent);
-        Dialog peerDialog = (Dialog) dialog.getPeer();
-
-        TextField nameField = new TextField("File name");
         // setSelectedFile supplies the initial name; default to "untitled".
-        nameField.setValue(selectedFile != null && !selectedFile.getName().isBlank()
-                ? selectedFile.getName() : "untitled");
-
-        Button save = new Button(approveLabel);
-        Button cancel = new Button("Cancel");
-
+        String initialName = selectedFile != null && !selectedFile.getName().isBlank()
+                ? selectedFile.getName() : "untitled";
         final String[] chosenName = { null };
-        save.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            approved = true;
-            chosenName[0] = nameField.getValue();
-            dialog.dispose();
-        }));
-        cancel.addClickListener(e -> vaadinx.EHelper.callSwing(() -> {
-            approved = false;
-            dialog.dispose();
-        }));
+        // A write, so the dialog's lazy peer and these raw Vaadin components are built on the UI thread.
+        dialog.withPeer(p -> {
+            Dialog peerDialog = (Dialog) p;
 
-        peerDialog.add(nameField, new HorizontalLayout(save, cancel));
+            TextField nameField = new TextField("File name");
+            nameField.setValue(initialName);
+
+            Button save = new Button(approveLabel);
+            Button cancel = new Button("Cancel");
+
+            save.addClickListener(e -> EHelper.callSwing(() -> {
+                approved = true;
+                chosenName[0] = nameField.getValue();
+                dialog.dispose();
+            }));
+            cancel.addClickListener(e -> EHelper.callSwing(() -> {
+                approved = false;
+                dialog.dispose();
+            }));
+
+            peerDialog.add(nameField, new HorizontalLayout(save, cancel));
+        });
 
         dialog.setVisible(true); // parks the VT for the name pick only
         fireDialogIsClosing(dialog);
@@ -356,25 +378,25 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
             setSelectedFiles(null);
             return CANCEL_OPTION;
         }
-        File target = vaadinx.BrowserFileTransfer.newSaveTarget(chosenName[0]);
+        File target = BrowserFileTransfer.newSaveTarget(chosenName[0]);
         setSelectedFiles(new File[] { target });
-        vaadinx.BrowserFileTransfer.openDownloadDialog(target, target.getName());
+        BrowserFileTransfer.openDownloadDialog(target, target.getName());
         return APPROVE_OPTION;
     }
 
     /** Build the modal JDialog owned by {@code parent}'s window ancestor. */
-    private JDialog createJDialog(vaadinx.awt.Component parent) {
+    private JDialog createJDialog(Component parent) {
         String title = dialogTitle != null ? dialogTitle : defaultTitle();
-        vaadinx.awt.Window owner = windowAncestor(parent);
+        Window owner = windowAncestor(parent);
         JDialog dialog;
-        if (owner instanceof vaadinx.awt.Frame f) {
+        if (owner instanceof Frame f) {
             dialog = new JDialog(f, title, true);
         } else if (owner instanceof vaadinx.awt.Dialog d) {
             dialog = new JDialog(d, title, true);
         } else {
-            dialog = new JDialog((vaadinx.awt.Frame) null, title, true);
+            dialog = new JDialog((Frame) null, title, true);
         }
-        dialog.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
         return dialog;
     }
 
@@ -389,9 +411,9 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         };
     }
 
-    private static vaadinx.awt.Window windowAncestor(vaadinx.awt.Component c) {
+    private static Window windowAncestor(Component c) {
         while (c != null) {
-            if (c instanceof vaadinx.awt.Window w) return w;
+            if (c instanceof Window w) return w;
             c = c.getParent();
         }
         return null;
@@ -400,7 +422,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
     // Adapt javax.swing FileFilter (File -> boolean) to the shared wiring's
     // (dir, name) -> boolean predicate; null filter accepts all.
     private BiPredicate<File, String> buildAccept() {
-        javax.swing.filechooser.FileFilter f = fileFilter;
+        FileFilter f = fileFilter;
         return f == null ? null : (dir, name) -> f.accept(new File(dir, name));
     }
 
@@ -408,8 +430,8 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
     // browser picker; opaque filters can't, so the picker shows everything and
     // the server-side accept() is the only gate.
     private List<String> extensionHint() {
-        if (fileFilter instanceof javax.swing.filechooser.FileNameExtensionFilter ef) {
-            return java.util.Arrays.asList(ef.getExtensions());
+        if (fileFilter instanceof FileNameExtensionFilter ef) {
+            return Arrays.asList(ef.getExtensions());
         }
         return null;
     }
@@ -425,7 +447,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         selectedFile = file;
         if (selectedFile != null
                 && file.isAbsolute()
-                && !java.util.Objects.equals(file.getParentFile(), currentDirectory)) {
+                && !Objects.equals(file.getParentFile(), currentDirectory)) {
             // The JDK reparents to the file's directory here, asking its
             // FileSystemView whether the current directory is already the parent.
             // We have no FileSystemView (no server FS to browse), so the test is a
@@ -517,7 +539,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
             // No browser equivalent of picking a bare directory handle — the
             // upload path can only deliver files. Stored for round-trip, but the
             // show* path always behaves as a file pick.
-            vaadinx.EHelper.onUnimplemented("JFileChooser", "setFileSelectionMode(DIRECTORIES_ONLY pick)", mode);
+            EHelper.onUnimplemented("JFileChooser", "setFileSelectionMode(DIRECTORIES_ONLY pick)", mode);
         }
         firePropertyChange(FILE_SELECTION_MODE_CHANGED_PROPERTY, oldValue, fileSelectionMode);
     }
@@ -566,18 +588,18 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
 
     // --- File filter ----------------------------------------------------------
 
-    public javax.swing.filechooser.FileFilter getFileFilter() {
+    public FileFilter getFileFilter() {
         return fileFilter;
     }
 
-    public void setFileFilter(javax.swing.filechooser.FileFilter filter) {
-        javax.swing.filechooser.FileFilter oldValue = fileFilter;
+    public void setFileFilter(FileFilter filter) {
+        FileFilter oldValue = fileFilter;
         fileFilter = filter;
         // The JDK prunes an existing selection the new filter rejects, cascading
         // setSelectedFile(s). Pure Java over File objects, so it survives here.
         if (filter != null) {
             if (isMultiSelectionEnabled() && selectedFiles != null && selectedFiles.length > 0) {
-                java.util.List<File> kept = new java.util.ArrayList<>();
+                List<File> kept = new ArrayList<>();
                 boolean failed = false;
                 for (File file : selectedFiles) {
                     if (filter.accept(file)) {
@@ -596,11 +618,11 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         firePropertyChange(FILE_FILTER_CHANGED_PROPERTY, oldValue, fileFilter);
     }
 
-    public void addChoosableFileFilter(javax.swing.filechooser.FileFilter filter) {
+    public void addChoosableFileFilter(FileFilter filter) {
         // The whole body sits inside the guard, as the JDK's does: adding a filter
         // that is already choosable fires nothing.
         if (filter != null && !choosableFilters.contains(filter)) {
-            javax.swing.filechooser.FileFilter[] oldValue = getChoosableFileFilters();
+            FileFilter[] oldValue = getChoosableFileFilters();
             choosableFilters.add(filter);
             firePropertyChange(CHOOSABLE_FILE_FILTER_CHANGED_PROPERTY, oldValue, getChoosableFileFilters());
             // Adopted as the active filter only when it is the *first* one — the
@@ -611,7 +633,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         }
     }
 
-    public boolean removeChoosableFileFilter(javax.swing.filechooser.FileFilter f) {
+    public boolean removeChoosableFileFilter(FileFilter f) {
         int index = choosableFilters.indexOf(f);
         if (index < 0) {
             return false;
@@ -628,14 +650,14 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
                 setFileFilter(null);
             }
         }
-        javax.swing.filechooser.FileFilter[] oldValue = getChoosableFileFilters();
+        FileFilter[] oldValue = getChoosableFileFilters();
         choosableFilters.remove(index);
         firePropertyChange(CHOOSABLE_FILE_FILTER_CHANGED_PROPERTY, oldValue, getChoosableFileFilters());
         return true;
     }
 
     public void resetChoosableFileFilters() {
-        javax.swing.filechooser.FileFilter[] oldValue = getChoosableFileFilters();
+        FileFilter[] oldValue = getChoosableFileFilters();
         setFileFilter(null);
         choosableFilters.clear();
         // The JDK re-adds the accept-all filter when it is in use. There is no
@@ -644,8 +666,8 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         firePropertyChange(CHOOSABLE_FILE_FILTER_CHANGED_PROPERTY, oldValue, getChoosableFileFilters());
     }
 
-    public javax.swing.filechooser.FileFilter[] getChoosableFileFilters() {
-        return choosableFilters.toArray(new javax.swing.filechooser.FileFilter[0]);
+    public FileFilter[] getChoosableFileFilters() {
+        return choosableFilters.toArray(new FileFilter[0]);
     }
 
     public boolean isAcceptAllFileFilterUsed() {
@@ -674,13 +696,13 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         // file dialog's. Unguarded fire, as the JDK leaves it.
         boolean oldValue = useFileHiding;
         useFileHiding = b;
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setFileHidingEnabled(listing)", b);
+        EHelper.onUnimplemented("JFileChooser", "setFileHidingEnabled(listing)", b);
         firePropertyChange(FILE_HIDING_CHANGED_PROPERTY, oldValue, useFileHiding);
     }
 
     // --- Accessory / FileView / control buttons (state + event; effect declined) --
 
-    public vaadinx.swing.JComponent getAccessory() {
+    public JComponent getAccessory() {
         return accessory;
     }
 
@@ -691,23 +713,23 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
      *     made the method impossible to call from import-swapped code at all — a
      *     migrator's {@code JPanel} is a {@code vaadinx.swing.JPanel}.
      */
-    public void setAccessory(vaadinx.swing.JComponent newAccessory) {
-        vaadinx.swing.JComponent oldValue = accessory;
+    public void setAccessory(JComponent newAccessory) {
+        JComponent oldValue = accessory;
         accessory = newAccessory;
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setAccessory(render)", newAccessory);
+        EHelper.onUnimplemented("JFileChooser", "setAccessory(render)", newAccessory);
         firePropertyChange(ACCESSORY_CHANGED_PROPERTY, oldValue, accessory);
     }
 
-    public javax.swing.filechooser.FileView getFileView() {
+    public FileView getFileView() {
         return fileView;
     }
 
-    public void setFileView(javax.swing.filechooser.FileView fileView) {
-        javax.swing.filechooser.FileView oldValue = this.fileView;
+    public void setFileView(FileView fileView) {
+        FileView oldValue = this.fileView;
         this.fileView = fileView;
         // A FileView supplies icons and type descriptions to the chooser's own file
         // list. The browser renders that list, so nothing consults this.
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setFileView(render)", fileView);
+        EHelper.onUnimplemented("JFileChooser", "setFileView(render)", fileView);
         firePropertyChange(FILE_VIEW_CHANGED_PROPERTY, oldValue, fileView);
     }
 
@@ -723,7 +745,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         controlsShown = b;
         // Our approve/cancel buttons are the dialog's only way out; hiding them
         // would strand the parked virtual thread.
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setControlButtonsAreShown(hide)", b);
+        EHelper.onUnimplemented("JFileChooser", "setControlButtonsAreShown(hide)", b);
         firePropertyChange(CONTROL_BUTTONS_ARE_SHOWN_CHANGED_PROPERTY, oldValue, controlsShown);
     }
 
@@ -754,7 +776,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         }
         String oldValue = approveButtonToolTipText;
         approveButtonToolTipText = toolTipText;
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setApproveButtonToolTipText(tooltip)", toolTipText);
+        EHelper.onUnimplemented("JFileChooser", "setApproveButtonToolTipText(tooltip)", toolTipText);
         firePropertyChange(APPROVE_BUTTON_TOOL_TIP_TEXT_CHANGED_PROPERTY, oldValue, approveButtonToolTipText);
     }
 
@@ -768,7 +790,7 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         }
         int oldValue = approveButtonMnemonic;
         approveButtonMnemonic = mnemonic;
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "setApproveButtonMnemonic(accelerator)", mnemonic);
+        EHelper.onUnimplemented("JFileChooser", "setApproveButtonMnemonic(accelerator)", mnemonic);
         firePropertyChange(APPROVE_BUTTON_MNEMONIC_CHANGED_PROPERTY, oldValue, approveButtonMnemonic);
     }
 
@@ -782,8 +804,8 @@ public class JFileChooser extends vaadinx.swing.JComponent implements javax.acce
         setApproveButtonMnemonic(vk);
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JFileChooser", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JFileChooser", "getAccessibleContext");
         return null;
     }
 }

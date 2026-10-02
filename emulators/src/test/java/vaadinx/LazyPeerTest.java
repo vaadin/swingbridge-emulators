@@ -33,20 +33,98 @@
 
 package vaadinx;
 
+import com.github.mvysny.kaributesting.v10.GridKt;
+import com.github.mvysny.kaributesting.v10.LocatorJ;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.html.Image;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.swingbridge.surrogates.SJCheckBox;
+import com.vaadin.swingbridge.surrogates.SJDialog;
 import com.vaadin.swingbridge.surrogates.SJLabel;
+import com.vaadin.swingbridge.surrogates.SJTable;
+import com.vaadin.swingbridge.surrogates.SScrollPane;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
+import vaadinx.awt.BorderLayout;
+import vaadinx.awt.Button;
+import vaadinx.awt.Checkbox;
+import vaadinx.awt.CheckboxGroup;
+import vaadinx.awt.Choice;
+import vaadinx.awt.Component;
+import vaadinx.awt.Dialog;
+import vaadinx.awt.Frame;
+import vaadinx.awt.Label;
+import vaadinx.awt.Panel;
+import vaadinx.awt.ScrollPane;
+import vaadinx.awt.Scrollbar;
+import vaadinx.awt.Window;
+import vaadinx.swing.Box;
+import vaadinx.swing.ButtonGroup;
 import vaadinx.swing.ImageIcon;
+import vaadinx.swing.JButton;
+import vaadinx.swing.JCheckBox;
+import vaadinx.swing.JCheckBoxMenuItem;
+import vaadinx.swing.JColorChooser;
+import vaadinx.swing.JComboBox;
+import vaadinx.swing.JComponent;
+import vaadinx.swing.JDesktopPane;
+import vaadinx.swing.JDialog;
+import vaadinx.swing.JEditorPane;
+import vaadinx.swing.JFileChooser;
+import vaadinx.swing.JFormattedTextField;
+import vaadinx.swing.JFrame;
+import vaadinx.swing.JInternalFrame;
 import vaadinx.swing.JLabel;
+import vaadinx.swing.JLayeredPane;
+import vaadinx.swing.JList;
+import vaadinx.swing.JMenu;
+import vaadinx.swing.JMenuBar;
+import vaadinx.swing.JMenuItem;
+import vaadinx.swing.JOptionPane;
 import vaadinx.swing.JPanel;
-import javax.swing.SwingConstants;
+import vaadinx.swing.JPasswordField;
+import vaadinx.swing.JPopupMenu;
+import vaadinx.swing.JProgressBar;
+import vaadinx.swing.JRadioButton;
+import vaadinx.swing.JRadioButtonMenuItem;
+import vaadinx.swing.JRootPane;
+import vaadinx.swing.JScrollBar;
+import vaadinx.swing.JScrollPane;
+import vaadinx.swing.JSeparator;
+import vaadinx.swing.JSlider;
+import vaadinx.swing.JSpinner;
+import vaadinx.swing.JSplitPane;
+import vaadinx.swing.JTabbedPane;
+import vaadinx.swing.JTable;
+import vaadinx.swing.JTextArea;
+import vaadinx.swing.JTextField;
+import vaadinx.swing.JTextPane;
+import vaadinx.swing.JToggleButton;
+import vaadinx.swing.JToolBar;
+import vaadinx.swing.JTree;
+import vaadinx.swing.JViewport;
+import vaadinx.swing.JWindow;
+import vaadinx.swing.table.JTableHeader;
 
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.Color;
+import java.awt.event.ItemEvent;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -113,35 +191,35 @@ class LazyPeerTest extends AbstractKaribuTest {
     }
 
     /** Every lazy emulator, constructed and configured the way a worker typically leaves one. */
-    private static java.util.Map<String, java.util.function.Supplier<? extends vaadinx.awt.Component>> lazyEmulators() {
-        java.util.Map<String, java.util.function.Supplier<? extends vaadinx.awt.Component>> m = new java.util.LinkedHashMap<>();
+    private static Map<String, Supplier<? extends Component>> lazyEmulators() {
+        Map<String, Supplier<? extends Component>> m = new LinkedHashMap<>();
         m.put("JLabel", () -> new JLabel("x"));
         m.put("JPanel", JPanel::new);
         m.put("JPanel(BorderLayout)", () -> {
-            JPanel p = new JPanel(new vaadinx.awt.BorderLayout());
-            p.add(new JLabel("north"), vaadinx.awt.BorderLayout.NORTH);
+            JPanel p = new JPanel(new BorderLayout());
+            p.add(new JLabel("north"), BorderLayout.NORTH);
             return p;
         });
-        m.put("JSeparator", vaadinx.swing.JSeparator::new);
-        m.put("JScrollBar", vaadinx.swing.JScrollBar::new);
-        m.put("JViewport", vaadinx.swing.JViewport::new);
-        m.put("JLayeredPane", vaadinx.swing.JLayeredPane::new);
-        m.put("JTableHeader", vaadinx.swing.table.JTableHeader::new);
+        m.put("JSeparator", JSeparator::new);
+        m.put("JScrollBar", JScrollBar::new);
+        m.put("JViewport", JViewport::new);
+        m.put("JLayeredPane", JLayeredPane::new);
+        m.put("JTableHeader", JTableHeader::new);
         m.put("Box", () -> {
-            vaadinx.swing.Box box = vaadinx.swing.Box.createHorizontalBox();
-            box.add(vaadinx.swing.Box.createHorizontalStrut(5));
+            Box box = Box.createHorizontalBox();
+            box.add(Box.createHorizontalStrut(5));
             box.add(new JLabel("after the strut"));
             return box;
         });
-        m.put("AWT Label", () -> new vaadinx.awt.Label("x", vaadinx.awt.Label.RIGHT));
+        m.put("AWT Label", () -> new Label("x", Label.RIGHT));
         m.put("AWT Button", () -> {
-            vaadinx.awt.Button b = new vaadinx.awt.Button("go");
+            Button b = new Button("go");
             b.setActionCommand("cmd");
             return b;
         });
-        m.put("AWT Checkbox", () -> new vaadinx.awt.Checkbox("check", true, new vaadinx.awt.CheckboxGroup()));
+        m.put("AWT Checkbox", () -> new Checkbox("check", true, new CheckboxGroup()));
         m.put("AWT Choice", () -> {
-            vaadinx.awt.Choice c = new vaadinx.awt.Choice();
+            Choice c = new Choice();
             c.add("one");
             c.add("two");
             c.select(1);
@@ -155,172 +233,218 @@ class LazyPeerTest extends AbstractKaribuTest {
             return l;
         });
         m.put("AWT Scrollbar", () -> {
-            vaadinx.awt.Scrollbar s = new vaadinx.awt.Scrollbar(vaadinx.awt.Scrollbar.HORIZONTAL, 10, 5, 0, 100);
+            Scrollbar s = new Scrollbar(Scrollbar.HORIZONTAL, 10, 5, 0, 100);
             s.setValue(20);
             return s;
         });
         m.put("AWT Panel", () -> {
-            vaadinx.awt.Panel p = new vaadinx.awt.Panel();
-            p.add(new vaadinx.awt.Label("inside"));
+            Panel p = new Panel();
+            p.add(new Label("inside"));
             return p;
         });
         m.put("JButton", () -> {
-            vaadinx.swing.JButton b = new vaadinx.swing.JButton("go");
+            JButton b = new JButton("go");
             b.setActionCommand("cmd");
             b.setMnemonic('G');
             b.doClick();
             return b;
         });
-        m.put("JToggleButton", () -> new vaadinx.swing.JToggleButton("t", true));
+        m.put("JToggleButton", () -> new JToggleButton("t", true));
         m.put("JCheckBox", () -> {
-            vaadinx.swing.JCheckBox c = new vaadinx.swing.JCheckBox("c");
+            JCheckBox c = new JCheckBox("c");
             c.doClick();
             return c;
         });
         m.put("JRadioButton", () -> {
-            vaadinx.swing.ButtonGroup g = new vaadinx.swing.ButtonGroup();
-            vaadinx.swing.JRadioButton r = new vaadinx.swing.JRadioButton("r", true);
+            ButtonGroup g = new ButtonGroup();
+            JRadioButton r = new JRadioButton("r", true);
             g.add(r);
-            g.add(new vaadinx.swing.JRadioButton("other"));
+            g.add(new JRadioButton("other"));
             return r;
         });
-        m.put("JMenuItem", () -> new vaadinx.swing.JMenuItem("item"));
-        m.put("JCheckBoxMenuItem", () -> new vaadinx.swing.JCheckBoxMenuItem("check", true));
-        m.put("JRadioButtonMenuItem", () -> new vaadinx.swing.JRadioButtonMenuItem("radio", true));
+        m.put("JMenuItem", () -> new JMenuItem("item"));
+        m.put("JCheckBoxMenuItem", () -> new JCheckBoxMenuItem("check", true));
+        m.put("JRadioButtonMenuItem", () -> new JRadioButtonMenuItem("radio", true));
         m.put("JSlider", () -> {
-            vaadinx.swing.JSlider sl = new vaadinx.swing.JSlider(vaadinx.swing.JSlider.VERTICAL, 0, 10, 3);
+            JSlider sl = new JSlider(JSlider.VERTICAL, 0, 10, 3);
             sl.setMajorTickSpacing(5);
             sl.setValue(7);
             return sl;
         });
         m.put("JProgressBar", () -> {
-            vaadinx.swing.JProgressBar pb = new vaadinx.swing.JProgressBar(0, 10);
+            JProgressBar pb = new JProgressBar(0, 10);
             pb.setValue(4);
             pb.setStringPainted(true);
             return pb;
         });
         m.put("JSpinner", () -> {
-            vaadinx.swing.JSpinner sp = new vaadinx.swing.JSpinner(new javax.swing.SpinnerNumberModel(1, 0, 9, 1));
+            JSpinner sp = new JSpinner(new SpinnerNumberModel(1, 0, 9, 1));
             sp.setValue(2);
             return sp;
         });
         m.put("JComboBox", () -> {
-            vaadinx.swing.JComboBox<String> cb = new vaadinx.swing.JComboBox<>(new String[] {"a", "b"});
+            JComboBox<String> cb = new JComboBox<>(new String[] {"a", "b"});
             cb.setSelectedIndex(1);
             cb.setMaximumRowCount(4);
             return cb;
         });
         m.put("JList", () -> {
-            vaadinx.swing.JList<String> l = new vaadinx.swing.JList<>(new String[] {"a", "b", "c"});
+            JList<String> l = new JList<>(new String[] {"a", "b", "c"});
             l.setSelectedIndex(2);
             return l;
         });
         m.put("JTree", () -> {
-            javax.swing.tree.DefaultMutableTreeNode root = new javax.swing.tree.DefaultMutableTreeNode("root");
-            root.add(new javax.swing.tree.DefaultMutableTreeNode("child"));
-            vaadinx.swing.JTree t = new vaadinx.swing.JTree(root);
+            DefaultMutableTreeNode root = new DefaultMutableTreeNode("root");
+            root.add(new DefaultMutableTreeNode("child"));
+            JTree t = new JTree(root);
             t.setSelectionRow(1);
             t.setRootVisible(false);
             return t;
         });
         m.put("JTextField", () -> {
-            vaadinx.swing.JTextField tf = new vaadinx.swing.JTextField("abc", 10);
+            JTextField tf = new JTextField("abc", 10);
             tf.setEditable(false);
             tf.setCaretPosition(1);
             return tf;
         });
-        m.put("JPasswordField", () -> new vaadinx.swing.JPasswordField("secret", 8));
+        m.put("JPasswordField", () -> new JPasswordField("secret", 8));
         m.put("JTextArea", () -> {
-            vaadinx.swing.JTextArea ta = new vaadinx.swing.JTextArea("one\ntwo", 3, 20);
+            JTextArea ta = new JTextArea("one\ntwo", 3, 20);
             ta.append("\nthree");
             return ta;
         });
         m.put("JFormattedTextField", () -> {
-            vaadinx.swing.JFormattedTextField f = new vaadinx.swing.JFormattedTextField("text");
+            JFormattedTextField f = new JFormattedTextField("text");
             f.setValue("other");
             return f;
         });
-        m.put("JFormattedTextField(Integer)", () -> new vaadinx.swing.JFormattedTextField(42));
-        m.put("JEditorPane", () -> new vaadinx.swing.JEditorPane("text/html", "<b>bold</b>"));
+        m.put("JFormattedTextField(Integer)", () -> new JFormattedTextField(42));
+        m.put("JEditorPane", () -> new JEditorPane("text/html", "<b>bold</b>"));
         m.put("JTextPane", () -> {
-            vaadinx.swing.JTextPane tp = new vaadinx.swing.JTextPane();
+            JTextPane tp = new JTextPane();
             tp.setText("styled");
             return tp;
         });
-        m.put("JScrollPane", () -> new vaadinx.swing.JScrollPane(new JLabel("view"),
-                vaadinx.swing.JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, vaadinx.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
+        m.put("JScrollPane", () -> new JScrollPane(new JLabel("view"),
+                JScrollPane.VERTICAL_SCROLLBAR_ALWAYS, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER));
         m.put("JSplitPane", () -> {
-            vaadinx.swing.JSplitPane sp = new vaadinx.swing.JSplitPane(vaadinx.swing.JSplitPane.VERTICAL_SPLIT,
+            JSplitPane sp = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
                     new JLabel("top"), new JLabel("bottom"));
             sp.setDividerLocation(40);
             return sp;
         });
         m.put("JToolBar", () -> {
-            vaadinx.swing.JToolBar tb = new vaadinx.swing.JToolBar("tools", vaadinx.swing.JToolBar.VERTICAL);
-            tb.add(new vaadinx.swing.JButton("go"));
+            JToolBar tb = new JToolBar("tools", JToolBar.VERTICAL);
+            tb.add(new JButton("go"));
             tb.addSeparator();
             return tb;
         });
         m.put("JTabbedPane", () -> {
-            vaadinx.swing.JTabbedPane tp = new vaadinx.swing.JTabbedPane();
+            JTabbedPane tp = new JTabbedPane();
             tp.addTab("one", new JLabel("1"));
             tp.addTab("two", new JLabel("2"));
             tp.setSelectedIndex(1);
             return tp;
         });
-        m.put("JColorChooser", () -> new vaadinx.swing.JColorChooser(Color.RED));
+        m.put("JColorChooser", () -> new JColorChooser(Color.RED));
         m.put("JMenuBar", () -> {
-            vaadinx.swing.JMenuBar bar = new vaadinx.swing.JMenuBar();
-            vaadinx.swing.JMenu menu = new vaadinx.swing.JMenu("File");
-            menu.add(new vaadinx.swing.JMenuItem("Open"));
-            menu.add(new vaadinx.swing.JCheckBoxMenuItem("Wrap", true));
+            JMenuBar bar = new JMenuBar();
+            JMenu menu = new JMenu("File");
+            menu.add(new JMenuItem("Open"));
+            menu.add(new JCheckBoxMenuItem("Wrap", true));
             bar.add(menu);
             return bar;
         });
         m.put("JPopupMenu", () -> {
-            vaadinx.swing.JPopupMenu popup = new vaadinx.swing.JPopupMenu();
-            popup.add(new vaadinx.swing.JMenuItem("Cut"));
+            JPopupMenu popup = new JPopupMenu();
+            popup.add(new JMenuItem("Cut"));
             popup.setInvoker(new JLabel("target"));
             return popup;
         });
-        m.put("JDesktopPane", vaadinx.swing.JDesktopPane::new);
-        m.put("JOptionPane", () -> new vaadinx.swing.JOptionPane("message"));
-        m.put("JFileChooser", vaadinx.swing.JFileChooser::new);
-        m.put("JRootPane", vaadinx.swing.JRootPane::new);
+        m.put("JDesktopPane", JDesktopPane::new);
+        m.put("JOptionPane", () -> new JOptionPane("message"));
+        m.put("JFileChooser", JFileChooser::new);
+        m.put("JRootPane", JRootPane::new);
         m.put("JTable", () -> {
-            vaadinx.swing.JTable t = new vaadinx.swing.JTable(new Object[][] {{"a", 1}, {"b", 2}}, new Object[] {"name", "n"});
+            JTable t = new JTable(new Object[][] {{"a", 1}, {"b", 2}}, new Object[] {"name", "n"});
             t.setRowSelectionInterval(1, 1);
             t.setAutoCreateRowSorter(true);
             return t;
         });
+        m.put("AWT Window", () -> {
+            Window w = new Window((Frame) null);
+            w.setBounds(10, 20, 300, 200);
+            return w;
+        });
+        m.put("AWT Frame", () -> {
+            Frame f = new Frame("title");
+            f.setResizable(false);
+            f.setUndecorated(true);
+            return f;
+        });
+        m.put("AWT Dialog", () -> {
+            Dialog d = new Dialog(new Frame("owner"), "title", true);
+            d.setResizable(false);
+            d.setModal(false);
+            return d;
+        });
+        m.put("JWindow", () -> {
+            JWindow w = new JWindow(new JFrame("owner"));
+            w.add(new JLabel("inside"));
+            return w;
+        });
+        m.put("JFrame", () -> {
+            JFrame f = new JFrame("title");
+            f.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            f.setJMenuBar(new JMenuBar());
+            f.add(new JLabel("inside"), BorderLayout.CENTER);
+            f.setLocation(5, 5);
+            return f;
+        });
+        m.put("JDialog", () -> {
+            JDialog d = new JDialog(new JFrame("owner"), "title", true);
+            JButton ok = new JButton("OK");
+            d.add(ok);
+            d.getRootPane().setDefaultButton(ok);
+            d.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+            return d;
+        });
+        m.put("JInternalFrame", () -> {
+            JInternalFrame f = new JInternalFrame("title", true, true, true, true);
+            f.add(new JLabel("inside"));
+            f.setSize(200, 100);
+            f.setTitle("other");
+            f.getRootPane();
+            return f;
+        });
         m.put("AWT ScrollPane", () -> {
-            vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane(vaadinx.awt.ScrollPane.SCROLLBARS_NEVER);
-            sp.add(new vaadinx.awt.Label("first"));
+            ScrollPane sp = new ScrollPane(ScrollPane.SCROLLBARS_NEVER);
+            sp.add(new Label("first"));
             sp.setScrollPosition(0, 40);
-            sp.add(new vaadinx.awt.Label("replaces the first"));
+            sp.add(new Label("replaces the first"));
             return sp;
         });
         return m;
     }
 
-    @org.junit.jupiter.api.TestFactory
+    @TestFactory
     @DisplayName("a lazy emulator configured on a worker builds no Vaadin component there")
-    java.util.stream.Stream<org.junit.jupiter.api.DynamicTest> builtOnWorker() {
-        return lazyEmulators().entrySet().stream().map(e -> org.junit.jupiter.api.DynamicTest.dynamicTest(
+    Stream<DynamicTest> builtOnWorker() {
+        return lazyEmulators().entrySet().stream().map(e -> DynamicTest.dynamicTest(
                 e.getKey(), () -> assertBuiltOnWorkerWithoutVaadin(e.getKey(), e.getValue())));
     }
 
     private static void assertBuiltOnWorkerWithoutVaadin(String name,
-            java.util.function.Supplier<? extends vaadinx.awt.Component> factory) {
+            Supplier<? extends Component> factory) {
         int builtOffThreadBefore = EHelper.peersBuiltOffUIThread();
-        AtomicReference<vaadinx.awt.Component> built = new AtomicReference<>();
+        AtomicReference<Component> built = new AtomicReference<>();
 
         onBareThread(() -> {
-            vaadinx.awt.Component c = factory.get();
+            Component c = factory.get();
             c.setName("named");
             c.setEnabled(false);
             c.setBackground(Color.YELLOW);
-            if (c instanceof vaadinx.swing.JComponent jc) jc.setToolTipText("tip");
+            if (c instanceof JComponent jc) jc.setToolTipText("tip");
             built.set(c);
         });
 
@@ -331,40 +455,84 @@ class LazyPeerTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("a JDialog built and filled on a worker shows its title, content and shared root pane once shown")
+    void jDialogBuiltOnWorker() {
+        int builtOffThreadBefore = EHelper.peersBuiltOffUIThread();
+        AtomicReference<JDialog> built = new AtomicReference<>();
+        AtomicReference<JLabel> label = new AtomicReference<>();
+        onBareThread(() -> {
+            JDialog d = new JDialog((Frame) null, "first", false);
+            label.set(new JLabel("content"));
+            d.add(label.get());
+            d.setTitle("second");
+            d.setResizable(false);
+            built.set(d);
+        });
+        assertEquals(builtOffThreadBefore, EHelper.peersBuiltOffUIThread(),
+                "no window peer was built on the worker");
+
+        JDialog dialog = built.get();
+        dialog.setVisible(true);
+        SJDialog peer =
+                assertInstanceOf(SJDialog.class, dialog.getPeer());
+        assertEquals(true, peer.isOpened(), "the show attached and opened the overlay");
+        assertEquals("second", peer.getTitle(), "the queued title writes drained in order");
+        assertEquals(false, peer.isResizable());
+        assertEquals(dialog.getRootPane().getPeer(), peer.getRootPane(),
+                "the surrogate holds the emulator's root pane, not a second one");
+        assertEquals(true, label.get().getPeer().isAttached(), "and the content rendered inside it");
+    }
+
+    @Test
+    @DisplayName("a JDialog's invalid close operation throws at the call, before any peer exists")
+    void jDialogCloseOperationThrowsEagerly() {
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        onBareThread(() -> {
+            JDialog d = new JDialog();
+            try {
+                d.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            } catch (IllegalArgumentException e) {
+                thrown.set(e);
+            }
+        });
+        assertInstanceOf(IllegalArgumentException.class, thrown.get());
+    }
+
+    @Test
     @DisplayName("a JCheckBox selected on a worker shows checked once attached, and a click reaches its listeners")
     void jCheckBoxSelectedOnWorker() {
-        AtomicReference<vaadinx.swing.JCheckBox> built = new AtomicReference<>();
+        AtomicReference<JCheckBox> built = new AtomicReference<>();
         onBareThread(() -> {
-            vaadinx.swing.JCheckBox c = new vaadinx.swing.JCheckBox("c");
+            JCheckBox c = new JCheckBox("c");
             c.setSelected(true);
             built.set(c);
         });
 
-        vaadinx.swing.JCheckBox box = built.get();
-        java.util.List<String> events = new java.util.ArrayList<>();
+        JCheckBox box = built.get();
+        java.util.List<String> events = new ArrayList<>();
         box.addItemListener(e -> events.add("item " + e.getStateChange()));
         box.addActionListener(e -> events.add("action " + e.getActionCommand()));
         UI.getCurrent().add(box.getPeer());
-        com.vaadin.swingbridge.surrogates.SJCheckBox peer =
-                assertInstanceOf(com.vaadin.swingbridge.surrogates.SJCheckBox.class, box.getPeer());
+        SJCheckBox peer =
+                assertInstanceOf(SJCheckBox.class, box.getPeer());
         assertEquals(true, peer.getValue(), "the surrogate renders the emulator's model");
 
-        com.github.mvysny.kaributesting.v10.LocatorJ._setValue(peer, false);
+        LocatorJ._setValue(peer, false);
         assertEquals(false, box.isSelected());
-        assertEquals(java.util.List.of("item " + java.awt.event.ItemEvent.DESELECTED, "action c"), events);
+        assertEquals(java.util.List.of("item " + ItemEvent.DESELECTED, "action c"), events);
     }
 
     @Test
     @DisplayName("a JFormattedTextField given a value on a worker shows its text once attached")
     void jFormattedTextFieldValueOnWorker() {
-        AtomicReference<vaadinx.swing.JFormattedTextField> built = new AtomicReference<>();
-        java.util.List<String> documentEvents = new java.util.concurrent.CopyOnWriteArrayList<>();
+        AtomicReference<JFormattedTextField> built = new AtomicReference<>();
+        java.util.List<String> documentEvents = new CopyOnWriteArrayList<>();
         onBareThread(() -> {
-            vaadinx.swing.JFormattedTextField f = new vaadinx.swing.JFormattedTextField("first");
-            f.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-                public void insertUpdate(javax.swing.event.DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
-                public void removeUpdate(javax.swing.event.DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
-                public void changedUpdate(javax.swing.event.DocumentEvent e) { }
+            JFormattedTextField f = new JFormattedTextField("first");
+            f.getDocument().addDocumentListener(new DocumentListener() {
+                public void insertUpdate(DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
+                public void removeUpdate(DocumentEvent e) { documentEvents.add(Thread.currentThread().getName()); }
+                public void changedUpdate(DocumentEvent e) { }
             });
             f.setValue("second");
             built.set(f);
@@ -373,8 +541,8 @@ class LazyPeerTest extends AbstractKaribuTest {
         assertEquals("second", built.get().getText(), "the Document took the text on the worker, as the JDK's formatter sets it");
         assertEquals(java.util.List.of("lazy-peer", "lazy-peer"), documentEvents, "remove then insert, both on the worker");
         UI.getCurrent().add(built.get().getPeer());
-        com.vaadin.flow.component.textfield.TextField peer =
-                assertInstanceOf(com.vaadin.flow.component.textfield.TextField.class, built.get().getPeer());
+        TextField peer =
+                assertInstanceOf(TextField.class, built.get().getPeer());
         assertEquals("second", peer.getValue());
         assertEquals(2, documentEvents.size(), "the drained writes did not echo into the Document");
     }
@@ -382,44 +550,44 @@ class LazyPeerTest extends AbstractKaribuTest {
     @Test
     @DisplayName("an AWT ScrollPane whose child was replaced on a worker shows the second child once attached")
     void scrollPaneChildSwapOnWorker() {
-        AtomicReference<vaadinx.awt.ScrollPane> built = new AtomicReference<>();
-        AtomicReference<vaadinx.awt.Label> second = new AtomicReference<>();
+        AtomicReference<ScrollPane> built = new AtomicReference<>();
+        AtomicReference<Label> second = new AtomicReference<>();
 
         onBareThread(() -> {
-            vaadinx.awt.ScrollPane sp = new vaadinx.awt.ScrollPane();
-            sp.add(new vaadinx.awt.Label("first"));
-            second.set(new vaadinx.awt.Label("second"));
+            ScrollPane sp = new ScrollPane();
+            sp.add(new Label("first"));
+            second.set(new Label("second"));
             sp.add(second.get());
             built.set(sp);
         });
 
         UI.getCurrent().add(built.get().getPeer());
-        com.vaadin.swingbridge.surrogates.SScrollPane peer =
-                assertInstanceOf(com.vaadin.swingbridge.surrogates.SScrollPane.class, built.get().getPeer());
+        SScrollPane peer =
+                assertInstanceOf(SScrollPane.class, built.get().getPeer());
         assertEquals(second.get().getPeer(), peer.getContent(), "the queued content swaps drained in order");
     }
 
     @Test
     @DisplayName("a JTable built and filled on a worker shows its columns and rows once attached")
     void jTableBuiltOnWorker() {
-        AtomicReference<vaadinx.swing.JTable> built = new AtomicReference<>();
+        AtomicReference<JTable> built = new AtomicReference<>();
         onBareThread(() -> {
-            javax.swing.table.DefaultTableModel model = new javax.swing.table.DefaultTableModel(
+            DefaultTableModel model = new DefaultTableModel(
                     new Object[][] {{"a", 1}}, new Object[] {"name", "n"});
-            vaadinx.swing.JTable t = new vaadinx.swing.JTable(model);
+            JTable t = new JTable(model);
             model.addRow(new Object[] {"b", 2});
             t.getColumnModel().getColumn(0).setHeaderValue("Name");
             built.set(t);
         });
 
-        vaadinx.swing.JTable table = built.get();
+        JTable table = built.get();
         assertEquals(2, table.getColumnCount(), "the table created its own columns on the worker");
         assertEquals(2, table.getRowCount());
         UI.getCurrent().add(table.getPeer());
-        com.vaadin.swingbridge.surrogates.SJTable peer =
-                assertInstanceOf(com.vaadin.swingbridge.surrogates.SJTable.class, table.getPeer());
+        SJTable peer =
+                assertInstanceOf(SJTable.class, table.getPeer());
         assertEquals(2, peer.getColumnModel().getColumnCount(), "the queued column writes reached the surrogate, once each");
-        assertEquals(2, com.github.mvysny.kaributesting.v10.GridKt._size(peer));
+        assertEquals(2, GridKt._size(peer));
     }
 
     @Test

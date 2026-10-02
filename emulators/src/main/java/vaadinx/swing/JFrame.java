@@ -39,8 +39,32 @@
 
 package vaadinx.swing;
 
+import com.vaadin.flow.component.UI;
+import com.vaadin.flow.dom.Style;
+import com.vaadin.flow.server.VaadinService;
+import com.vaadin.flow.server.VaadinSession;
+import com.vaadin.flow.shared.Registration;
+import com.vaadin.swingbridge.surrogates.SHelper;
+import com.vaadin.swingbridge.surrogates.SJFrame;
+import com.vaadin.swingbridge.surrogates.SJRootPane;
+import vaadinx.AutoShutdown;
+import vaadinx.EHelper;
+import vaadinx.awt.Container;
+import vaadinx.awt.Frame;
+import vaadinx.awt.GraphicsConfiguration;
+import vaadinx.awt.LayoutManager;
+import vaadinx.awt.event.WindowEvent;
 import vaadinx.swing.app.MainWindowRoute;
 
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import javax.swing.WindowConstants;
+import java.awt.AWTEvent;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.HeadlessException;
+import java.awt.IllegalComponentStateException;
+import java.awt.Image;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -48,7 +72,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <a href="../../../emulators/decisions.md#D_jframe_as_route">D_jframe_as_route</a>,
  * a JFrame's rendering shape is selected at construction via
  * {@link FrameStrategy}: {@link DialogStrategy} (regular JFrame, peer is
- * {@link com.vaadin.swingbridge.surrogates.SJFrame}) or {@link InlineStrategy}
+ * {@link SJFrame}) or {@link InlineStrategy}
  * ({@link MainWindow @MainWindow}-annotated, peer is
  * {@link com.vaadin.swingbridge.surrogates.SJPanel}, attached to a
  * {@link MainWindowRoute}).
@@ -61,9 +85,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * <a href="../../../emulators/decisions.md#D_framework_peer_selection">D_framework_peer_selection</a>;
  * user code cannot influence the choice.
  */
-public class JFrame extends vaadinx.awt.Frame
-        implements javax.swing.WindowConstants, javax.accessibility.Accessible,
-                   vaadinx.swing.RootPaneContainer {
+public class JFrame extends Frame
+        implements WindowConstants, Accessible,
+                   RootPaneContainer {
 
     /**
      * Singleton slot for the {@code @MainWindow}-annotated class. CAS-set
@@ -109,24 +133,24 @@ public class JFrame extends vaadinx.awt.Frame
     // "By default, this is set to HIDE_ON_CLOSE"). Most migrated apps
     // override this with EXIT_ON_CLOSE right after construction; a few use
     // DISPOSE_ON_CLOSE for transient sub-windows.
-    private int defaultCloseOperation = javax.swing.WindowConstants.HIDE_ON_CLOSE;
+    private int defaultCloseOperation = WindowConstants.HIDE_ON_CLOSE;
 
-    public JFrame(java.lang.String title, vaadinx.awt.GraphicsConfiguration gc) {
+    public JFrame(String title, GraphicsConfiguration gc) {
         // Accepted and ignored: one viewport, one configuration. Title seeds the
         // Dialog header via Frame.setTitle.
         this(title);
     }
 
-    public JFrame(java.lang.String title) throws java.awt.HeadlessException {
+    public JFrame(String title) throws HeadlessException {
         this();
         setTitle(title);
     }
 
-    public JFrame(vaadinx.awt.GraphicsConfiguration gc) {
+    public JFrame(GraphicsConfiguration gc) {
         this();
     }
 
-    public JFrame() throws java.awt.HeadlessException {
+    public JFrame() throws HeadlessException {
         // Funnel through the private (FrameStrategy) ctor with a strategy
         // chosen by inspecting the runtime class via stack walk — Java
         // forbids `getClass()` in a `super(...)` invocation (JLS 8.8.7.1),
@@ -141,7 +165,7 @@ public class JFrame extends vaadinx.awt.Frame
      * framework-canonical strategy choice per D_framework_peer_selection.
      */
     private JFrame(FrameStrategy strategy) {
-        super(strategy.createPeer());
+        super(peerTypeOf(strategy), strategy::createPeer);
         this.strategy = strategy;
         // CAS check for @MainWindow uniqueness. The check must run AFTER
         // super(); we couldn't read getClass() in the super() call.
@@ -185,6 +209,12 @@ public class JFrame extends vaadinx.awt.Frame
         if (strategy == InlineStrategy.INSTANCE) {
             registerForShutdown(this);
         }
+    }
+
+    /** {@link FrameStrategy#peerType()}, typed so the lazy ctor's factory type checks against it. */
+    @SuppressWarnings("unchecked")
+    private static Class<com.vaadin.flow.component.Component> peerTypeOf(FrameStrategy strategy) {
+        return (Class<com.vaadin.flow.component.Component>) strategy.peerType();
     }
 
     /**
@@ -252,7 +282,7 @@ public class JFrame extends vaadinx.awt.Frame
      * override fires from the constructor exactly as on the desktop.
      */
     protected void frameInit() {
-        enableEvents(java.awt.AWTEvent.KEY_EVENT_MASK | java.awt.AWTEvent.WINDOW_EVENT_MASK);
+        enableEvents(AWTEvent.KEY_EVENT_MASK | AWTEvent.WINDOW_EVENT_MASK);
         setLocale(JComponent.getDefaultLocale());
         setRootPane(createRootPane());
         setBackground(UIManager.controlColor());
@@ -261,8 +291,8 @@ public class JFrame extends vaadinx.awt.Frame
         // chain; this adds the host-level one, which only the frame knows about
         // — the classes and the measurements are in emul/swindow.css.
         // A write, so a content pane whose peer is lazy is built with a UI, not here.
-        vaadinx.awt.Container contentPane = getContentPane();
-        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
+        Container contentPane = getContentPane();
+        withPeer(p -> SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
         // Per D_inline_route_sizing: InlineStrategy frames fill their route by default
         // (SJPanel peer gets width:100% / height:100% so it stretches
         // inside the route's setSizeFull()). The setPreferredSize override
@@ -313,17 +343,17 @@ public class JFrame extends vaadinx.awt.Frame
      * by Component.setPreferredSize verbatim. Per D_inline_route_sizing.
      */
     @Override
-    public void setPreferredSize(java.awt.Dimension preferredSize) {
+    public void setPreferredSize(Dimension preferredSize) {
         super.setPreferredSize(preferredSize);
         if (strategy == InlineStrategy.INSTANCE && isResizable()) {
-            com.vaadin.flow.dom.Style s = peer().getElement().getStyle();
+            Style s = peer().getElement().getStyle();
             s.set("width", "100%");
             s.set("height", "100%");
         }
     }
 
     /** Delegates to the root pane, as the JDK's does (JFrame.java:645). */
-    public vaadinx.awt.Container getContentPane() {
+    public Container getContentPane() {
         return getRootPane().getContentPane();
     }
 
@@ -333,22 +363,22 @@ public class JFrame extends vaadinx.awt.Frame
      * {@code frame.getRootPane().getContentPane()} are the same pane by
      * construction rather than by a mirror that has to be kept in step.
      */
-    public void setContentPane(vaadinx.awt.Container newPane) {
+    public void setContentPane(Container newPane) {
         // Match real Swing (via JRootPane.setContentPane): null is a
         // programming error, not a silent drop. D_never_fail_on_gaps scopes the never-throw
         // rule to incomplete emulation, not to input errors Swing itself
         // rejects.
         if (newPane == null) {
-            throw new java.awt.IllegalComponentStateException("contentPane cannot be set to null");
+            throw new IllegalComponentStateException("contentPane cannot be set to null");
         }
-        vaadinx.awt.Container old = getRootPane().getContentPane();
+        Container old = getRootPane().getContentPane();
         if (newPane == old) return;
         getRootPane().setContentPane(newPane);
-        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(
+        withPeer(p -> SHelper.markContentPaneSpan(
                 p, newPane.getPeer(), old == null ? null : old.getPeer()));
     }
 
-    protected void addImpl(vaadinx.awt.Component comp, java.lang.Object constraints, int index) {
+    protected void addImpl(vaadinx.awt.Component comp, Object constraints, int index) {
         // Real Swing pattern: intercept frame.add/etc. and redirect into
         // the content pane (JFrame.java:540). Calling getContentPane().add
         // (the public 3-arg overload) — not addImpl directly — keeps the
@@ -362,7 +392,7 @@ public class JFrame extends vaadinx.awt.Frame
         }
     }
 
-    public void setLayout(vaadinx.awt.LayoutManager manager) {
+    public void setLayout(LayoutManager manager) {
         // Swing apps call frame.setLayout(new BorderLayout()) expecting
         // the layout to apply to the content pane. Mirror that; with the
         // content pane already a Div, D_layout_css_on_content's applyContainerCss path will
@@ -426,28 +456,24 @@ public class JFrame extends vaadinx.awt.Frame
         } finally {
             rootPaneCheckingEnabled = wasChecking;
         }
+        // The SJFrame holds the same root pane (SD_sjframe), so the Enter shortcut
+        // setDefaultButton installs through either layer is one browser-side registration:
+        // sjframe.getRootPane() and jframe.getRootPane() reach one SJRootPane. An
+        // InlineStrategy SJPanel holds no root pane of its own.
+        withPeer(p -> {
+            if (p instanceof SJFrame sjf) {
+                sjf.setRootPane(newRootPane == null ? null
+                        : (SJRootPane) newRootPane.getPeer());
+            }
+        });
     }
 
+    /**
+     * A fresh {@code JRootPane}, called from
+     * {@link #frameInit()} so a subclass override supplies the frame's root pane.
+     * {@link #setRootPane} hands it to the surrogate.
+     */
     protected JRootPane createRootPane() {
-        // Factory hook — subclasses can override to supply a custom
-        // JRootPane. Real Swing's JFrame calls this from frameInit;
-        // ours constructs on-demand at getRootPane time instead.
-        //
-        // Share the SJRootPane surrogate (SD_sjframe) with the SJFrame
-        // peer so the Enter-shortcut install installed via the
-        // emulator path and any surrogate-path default-button reads
-        // see the same browser-side registration. Pure-surrogate users
-        // going through sjframe.getRootPane() and emulator users
-        // going through jframe.getRootPane() now both reach the same
-        // SJRootPane.
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJFrame sjf) {
-            return new JRootPane(sjf.getRootPane());
-        }
-        // InlineStrategy peer (SJPanel) and any defensive non-SJFrame
-        // path: independent SJRootPane keeps both layers working; just
-        // no shared shortcut state with whatever peer the strategy
-        // picked. Layered/glass-pane rendering remains deferred either
-        // way.
         return new JRootPane();
     }
 
@@ -467,7 +493,7 @@ public class JFrame extends vaadinx.awt.Frame
         getRootPane().setGlassPane(glass);
     }
 
-    public void update(java.awt.Graphics arg0) {
+    public void update(Graphics arg0) {
         // Real Swing's JFrame overrides update to skip the background clear
         // (since the frame paints its entire surface in paint anyway). We
         // have no painting to skip either way — Container.update delegates
@@ -476,16 +502,16 @@ public class JFrame extends vaadinx.awt.Frame
         super.update(arg0);
     }
 
-    protected java.lang.String paramString() {
+    protected String paramString() {
         // Swing appends ",defaultCloseOperation=<NAME>" to Frame's output.
         // Chain up so Frame's title/resizable/state and Container's layout=
         // line are in front of our addition — matches AWT's toString shape.
-        java.lang.String s = super.paramString();
-        java.lang.String opName = switch (defaultCloseOperation) {
-            case javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE -> "DO_NOTHING_ON_CLOSE";
-            case javax.swing.WindowConstants.HIDE_ON_CLOSE -> "HIDE_ON_CLOSE";
-            case javax.swing.WindowConstants.DISPOSE_ON_CLOSE -> "DISPOSE_ON_CLOSE";
-            case javax.swing.WindowConstants.EXIT_ON_CLOSE -> "EXIT_ON_CLOSE";
+        String s = super.paramString();
+        String opName = switch (defaultCloseOperation) {
+            case WindowConstants.DO_NOTHING_ON_CLOSE -> "DO_NOTHING_ON_CLOSE";
+            case WindowConstants.HIDE_ON_CLOSE -> "HIDE_ON_CLOSE";
+            case WindowConstants.DISPOSE_ON_CLOSE -> "DISPOSE_ON_CLOSE";
+            case WindowConstants.EXIT_ON_CLOSE -> "EXIT_ON_CLOSE";
             default -> "UNKNOWN_CLOSE_OPERATION";
         };
         return s + ",defaultCloseOperation=" + opName;
@@ -504,7 +530,7 @@ public class JFrame extends vaadinx.awt.Frame
      *     <li>{@link DialogStrategy}: {@code EXIT_ON_CLOSE} throws
      *         {@link IllegalStateException} per D_gap_severity_triage case 2.
      *     <li>{@link InlineStrategy} disposes on {@code EXIT_ON_CLOSE}; the
-     *         session then ends through {@link vaadinx.AutoShutdown} if that
+     *         session then ends through {@link AutoShutdown} if that
      *         took the app's last displayable window (D_auto_shutdown).
      *     <li>{@code DISPOSE_ON_CLOSE} calls {@link #dispose()}; {@code HIDE} /
      *         {@code DO_NOTHING} are no-ops in both strategies (HIDE is
@@ -513,10 +539,10 @@ public class JFrame extends vaadinx.awt.Frame
      *         the peer's close gestures).
      * </ul>
      */
-    protected void processWindowEvent(vaadinx.awt.event.WindowEvent e) {
+    protected void processWindowEvent(WindowEvent e) {
         super.processWindowEvent(e);
         if (e == null) return;
-        if (e.getID() != vaadinx.awt.event.WindowEvent.WINDOW_CLOSING) return;
+        if (e.getID() != WindowEvent.WINDOW_CLOSING) return;
         strategy.handleClosing(this, defaultCloseOperation);
     }
 
@@ -545,7 +571,7 @@ public class JFrame extends vaadinx.awt.Frame
     }
 
     @Override
-    public void setTitle(java.lang.String title) {
+    public void setTitle(String title) {
         // Frame.setTitle already pushes to SFrame for the Dialog header
         // (DialogStrategy peer is SJFrame extends SFrame — instanceof
         // matches). For InlineStrategy peer (SJPanel), the instanceof
@@ -565,7 +591,7 @@ public class JFrame extends vaadinx.awt.Frame
     }
 
     // The java.awt.event.WindowEvent-typed overload of processWindowEvent is
-    // deliberately absent: the real one above takes vaadinx.awt.event.WindowEvent
+    // deliberately absent: the real one above takes WindowEvent
     // and holds the close-op switch. A JDK-typed twin was a ghost — no
     // import-swapped code can produce a java.awt.event.WindowEvent to call it
     // with, and it shadowed nothing, so the swapped override already landed on
@@ -583,19 +609,19 @@ public class JFrame extends vaadinx.awt.Frame
      * D_window_fanout).
      *
      * <p>JDK-shape signature uses {@code javax.swing.JMenuBar}; we
-     * accept {@link vaadinx.swing.JMenuBar} per the import-swap
+     * accept {@link JMenuBar} per the import-swap
      * migration arc (Stage 2 — user code rewrites
-     * {@code import javax.swing.JMenuBar} → {@code import vaadinx.swing.JMenuBar}).
+     * {@code import javax.swing.JMenuBar} → {@code import JMenuBar}).
      */
-    public void setJMenuBar(vaadinx.swing.JMenuBar bar) {
+    public void setJMenuBar(JMenuBar bar) {
         getRootPane().setJMenuBar(bar);
     }
 
-    public vaadinx.swing.JMenuBar getJMenuBar() {
+    public JMenuBar getJMenuBar() {
         return getRootPane().getJMenuBar();
     }
 
-    public void setIconImage(java.awt.Image arg0) {
+    public void setIconImage(Image arg0) {
         // Real Swing's JFrame override wraps in a List and delegates to
         // setIconImages. Window's setIconImage / setIconImages silent-accept
         // (favicons are route-level, not Window-level — see Window's
@@ -603,7 +629,7 @@ public class JFrame extends vaadinx.awt.Frame
         super.setIconImage(arg0);
     }
 
-    public java.awt.Graphics getGraphics() {
+    public Graphics getGraphics() {
         // Real Swing's JFrame.getGraphics reaches through the root pane to
         // the native peer's Graphics. We don't have a live Graphics pipeline
         // (R_layouts_close_enough — the browser paints). Component.getGraphics already returns
@@ -623,30 +649,24 @@ public class JFrame extends vaadinx.awt.Frame
     }
 
     public void setDefaultCloseOperation(int operation) {
-        // Delegate validation + gesture-disarm + EXIT_ON_CLOSE throw to
-        // SJFrame (SD_sframe/SD_sjframe) — keeps the close-operation logic in one
-        // place. SJFrame throws IllegalArgumentException on unknown values
-        // (matching Swing's D_never_fail_on_gaps contract), fires its own surrogate-layer PCE,
-        // and disables Dialog's close gestures on DO_NOTHING. We keep an
-        // emulator-layer field + PCE so migrated PCE listeners registered
-        // via JFrame hear the event on their own side (SD_sjslider/SD_sjspinner independent-
-        // layer listener-list pattern).
-        int old = this.defaultCloseOperation;
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJFrame sjf) {
-            withPeer(p -> sjf.setDefaultCloseOperation(operation));  // throws IAE on unknown
-        } else {
-            // InlineStrategy peer (SJPanel) and any defensive non-SJFrame
-            // path — validate locally so the contract is preserved across
-            // strategies.
-            if (operation != javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE
-                    && operation != javax.swing.WindowConstants.HIDE_ON_CLOSE
-                    && operation != javax.swing.WindowConstants.DISPOSE_ON_CLOSE
-                    && operation != javax.swing.WindowConstants.EXIT_ON_CLOSE) {
-                throw new IllegalArgumentException(
-                        "defaultCloseOperation must be one of: DO_NOTHING_ON_CLOSE, "
-                                + "HIDE_ON_CLOSE, DISPOSE_ON_CLOSE, or EXIT_ON_CLOSE");
-            }
+        // Validated here, as the JDK's body does, so the throw does not wait for a
+        // peer. The gesture-disarm is SJFrame's (SD_sframe/SD_sjframe), which fires
+        // its own surrogate-layer PCE and disables Dialog's close gestures on
+        // DO_NOTHING. We keep an emulator-layer field + PCE so migrated PCE listeners
+        // registered via JFrame hear the event on their own side (SD_sjslider/SD_sjspinner
+        // independent-layer listener-list pattern).
+        if (operation != WindowConstants.DO_NOTHING_ON_CLOSE
+                && operation != WindowConstants.HIDE_ON_CLOSE
+                && operation != WindowConstants.DISPOSE_ON_CLOSE
+                && operation != WindowConstants.EXIT_ON_CLOSE) {
+            throw new IllegalArgumentException(
+                    "defaultCloseOperation must be one of: DO_NOTHING_ON_CLOSE, "
+                            + "HIDE_ON_CLOSE, DISPOSE_ON_CLOSE, or EXIT_ON_CLOSE");
         }
+        int old = this.defaultCloseOperation;
+        withPeer(p -> {
+            if (p instanceof SJFrame sjf) sjf.setDefaultCloseOperation(operation);
+        });
         if (old == operation) return;
         this.defaultCloseOperation = operation;
         firePropertyChange("defaultCloseOperation", old, operation);
@@ -657,22 +677,22 @@ public class JFrame extends vaadinx.awt.Frame
     }
 
     // D_drag_and_drop: signature ported to the emulator type so migrated code compiles
-    // against vaadinx.swing.TransferHandler; window-level DnD wiring is out of
+    // against TransferHandler; window-level DnD wiring is out of
     // the D_drag_and_drop scope (JComponent / JList / JTable only) — drop-and-WARN.
-    private vaadinx.swing.TransferHandler transferHandler;
+    private TransferHandler transferHandler;
 
-    public void setTransferHandler(vaadinx.swing.TransferHandler newHandler) {
+    public void setTransferHandler(TransferHandler newHandler) {
         // The undeliverable limb is SwingUtilities.installSwingDropTargetAsNecessary
         // — window-level DnD wiring is outside D_drag_and_drop's scope (JComponent / JList /
         // JTable only). The handler and its property change are kept: they cost
         // nothing and a migrated app's listener expects them (R_decline_effect_only).
-        vaadinx.swing.TransferHandler oldHandler = this.transferHandler;
+        TransferHandler oldHandler = this.transferHandler;
         this.transferHandler = newHandler;
-        vaadinx.EHelper.onUnimplemented("JFrame", "setTransferHandler/dropTarget", newHandler);
+        EHelper.onUnimplemented("JFrame", "setTransferHandler/dropTarget", newHandler);
         firePropertyChange("transferHandler", oldHandler, newHandler);
     }
 
-    public vaadinx.swing.TransferHandler getTransferHandler() {
+    public TransferHandler getTransferHandler() {
         return transferHandler;
     }
 
@@ -682,12 +702,12 @@ public class JFrame extends vaadinx.awt.Frame
         // since we have no L&F layer to honor that (R_layouts_close_enough/D_pixel_layout_not_planned). Same warn-only-
         // on-change shape as setUndecorated(true) in Frame.
         if (arg0) {
-            vaadinx.EHelper.onUnimplemented("JFrame", "setDefaultLookAndFeelDecorated", arg0);
+            EHelper.onUnimplemented("JFrame", "setDefaultLookAndFeelDecorated", arg0);
         }
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JFrame", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JFrame", "getAccessibleContext");
         return null;
     }
 
@@ -760,19 +780,19 @@ public class JFrame extends vaadinx.awt.Frame
      * frame is always built under a live route, so this holds in practice).
      */
     private static void registerForShutdown(JFrame f) {
-        com.vaadin.flow.component.UI ui = com.vaadin.flow.component.UI.getCurrent();
+        UI ui = UI.getCurrent();
         if (ui == null) return;
-        com.vaadin.flow.server.VaadinSession session = ui.getSession();
+        VaadinSession session = ui.getSession();
         if (session == null) return;
         session.setAttribute(MAIN_WINDOW_KEY, f);
         // Only a running app has an end to detect, and this frame is what makes
         // the session one (D_auto_shutdown).
-        vaadinx.AutoShutdown.enableForApp(session);
+        AutoShutdown.enableForApp(session);
         if (session.getAttribute(SHUTDOWN_LISTENER_KEY) != null) return;   // already installed
-        com.vaadin.flow.server.VaadinService service = session.getService();
+        VaadinService service = session.getService();
         if (service == null) return;
         session.setAttribute(SHUTDOWN_LISTENER_KEY, Boolean.TRUE);
-        final com.vaadin.flow.shared.Registration[] reg = new com.vaadin.flow.shared.Registration[1];
+        final Registration[] reg = new Registration[1];
         reg[0] = service.addSessionDestroyListener(event -> {
             if (event.getSession() != session) return;
             try {
@@ -795,7 +815,7 @@ public class JFrame extends vaadinx.awt.Frame
      *
      * <p>Skipped when the main window is no longer visible: a programmatic
      * {@code dispose()} (e.g. a Quit menu, which reaches {@code session.close()}
-     * through {@link vaadinx.AutoShutdown}) already ran its own
+     * through {@link AutoShutdown}) already ran its own
      * {@code WINDOW_CLOSED} and dropped visibility, so firing
      * {@code WINDOW_CLOSING} now would be out-of-order and redundant. That
      * visibility check is the D_shutdown_lifecycle dedup between the display-yanked path (fire)
@@ -805,8 +825,8 @@ public class JFrame extends vaadinx.awt.Frame
      * {@code fireSessionDestroy} as a deferred access task, awkward to drain
      * mid-test; the registration-wiring is covered separately via teardown.
      */
-    static void dispatchShutdownClosing(com.vaadin.flow.server.VaadinSession session) {
-        vaadinx.EHelper.markShuttingDown(session);
+    static void dispatchShutdownClosing(VaadinSession session) {
+        EHelper.markShuttingDown(session);
         Object mw = session.getAttribute(MAIN_WINDOW_KEY);
         session.setAttribute(MAIN_WINDOW_KEY, null);
         if (!(mw instanceof JFrame main) || !main.isVisible()) return;
@@ -818,12 +838,12 @@ public class JFrame extends vaadinx.awt.Frame
         // isShuttingDown() through it. Don't touch CurrentInstance here: restoring it
         // to null trips Vaadin/Karibu's "session set to null" guard.
         try {
-            main.processWindowEvent(new vaadinx.awt.event.WindowEvent(
-                    main, vaadinx.awt.event.WindowEvent.WINDOW_CLOSING));
+            main.processWindowEvent(new WindowEvent(
+                    main, WindowEvent.WINDOW_CLOSING));
         } catch (RuntimeException e) {
             // A buggy WINDOW_CLOSING listener must not strand teardown (D_close_operation_dispatch):
             // route to the session ErrorHandler and continue.
-            vaadinx.EHelper.reportUncaught(session, e);
+            EHelper.reportUncaught(session, e);
         }
     }
 
@@ -831,12 +851,12 @@ public class JFrame extends vaadinx.awt.Frame
      * Prompt-dispatch entry for the tab-scope destroy listener
      * ({@link vaadinx.AppTab#onTabClosed}): fires the D_shutdown_lifecycle {@code WINDOW_CLOSING}
      * on a real app-tab close directly, rather than waiting for the
-     * {@link com.vaadin.flow.server.VaadinSession}-destroy backstop. Public only
+     * {@link VaadinSession}-destroy backstop. Public only
      * to cross the {@code vaadinx} → {@code vaadinx.swing} package seam; see the
      * "Shutdown lifecycle (D_shutdown_lifecycle)" note above for why the reaper thread can't rely
      * on the backstop.
      */
-    public static void dispatchShutdownFromTabClose(com.vaadin.flow.server.VaadinSession session) {
+    public static void dispatchShutdownFromTabClose(VaadinSession session) {
         dispatchShutdownClosing(session);
     }
 }

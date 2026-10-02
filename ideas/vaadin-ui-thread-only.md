@@ -1,7 +1,7 @@
 # Vaadin components touched on the UI thread only — surrogates as a locked renderer
 
 **Status:** every question answered (2026-10-02); the mechanism (§ "The mechanism", agreed
-2026-10-01) is built and rolled out to everything but the windows. Opened 2026-09-28. The interim design, decided the same day, is
+2026-10-01) is built and rolled out to every emulator (2026-10-02). Opened 2026-09-28. The interim design, decided the same day, is
 *eager peers built on any thread, and a session capture per component to hop through*. This file is
 how SB-Emulators gets from there to **zero Vaadin exposure to background threads**.
 
@@ -105,7 +105,7 @@ kept regardless; each one is a design problem to solve.
    not depend on where a flag is set. `preventPeerEvents` stays as defence in depth, and value
    equality still catches the client-side echoes (the RTE's init handshake and normalisation). The
    cost is that a state change Vaadin makes on its own server-side is no longer heard, so each such
-   case must be computed emulator-side — sweep rule 10 and worklist item 4 of
+   case must be computed emulator-side — sweep rule 10 and worklist item 2 of
    [lazy-peer-sweep.md](./lazy-peer-sweep.md).
 8. **`getPeer()` is public API.** Migrators hand it to vanilla Vaadin layouts, as R_no_vaadin_in_api
    sanctions, and Karibu reaches through it. A lazily built peer means `getPeer()` materialises it,
@@ -180,7 +180,7 @@ Agreed 2026-10-01; built and partly rolled out — the worklist and the rules th
 
 - **`Q_vaadin_contract`** — what, if anything, Vaadin guarantees about constructing and mutating
   detached components off the UI thread. **Moot by the sweep (2026-10-02), not to be researched:**
-  once the windows are lazy nothing in SB-Emulators relies on such a guarantee, and the suite-wide
+  with the windows lazy nothing in SB-Emulators relies on such a guarantee, and the suite-wide
   `peersBuiltOffUIThread() == 0` gate ([lazy-peer-sweep.md](./lazy-peer-sweep.md) § "After the
   sweep") turns the last raw off-thread `getPeer()` into a build failure. Closed when that gate lands.
 - The pin: `DetachedOffUiThreadTest` in `:surrogates` constructs and mutates every surrogate on a
@@ -190,7 +190,7 @@ Agreed 2026-10-01; built and partly rolled out — the worklist and the rules th
 
 ## Graduation
 
-Every question is answered (2026-10-02). Graduate once the mechanism is fully rolled out — the
-windows lazy and the `peersBuiltOffUIThread()` gate in place, per
+Every question is answered (2026-10-02), and every emulator is lazy (2026-10-02). Graduate once
+the `peersBuiltOffUIThread()` gate is in place, per
 [lazy-peer-sweep.md](./lazy-peer-sweep.md) — as decisions superseding the interim session-capture
 design; then delete this file.

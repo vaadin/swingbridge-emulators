@@ -20,6 +20,7 @@ package com.vaadin.swingbridge.surrogates;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.html.Div;
 
+import java.awt.IllegalComponentStateException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -142,7 +143,7 @@ final class RootPaneScaffold {
 
     /**
      * Swap the content pane. JDK contract: null throws
-     * {@link java.awt.IllegalComponentStateException}. Existing children
+     * {@link IllegalComponentStateException}. Existing children
      * are NOT migrated (matches {@code JRootPane.setContentPane}) — user
      * code that wants to keep content must re-add to the new pane.
      *
@@ -153,7 +154,7 @@ final class RootPaneScaffold {
      */
     void setContentPane(Div newPane) {
         if (newPane == null) {
-            throw new java.awt.IllegalComponentStateException("contentPane cannot be set to null");
+            throw new IllegalComponentStateException("contentPane cannot be set to null");
         }
         if (newPane == this.contentPane) return;
 
@@ -288,6 +289,26 @@ final class RootPaneScaffold {
     SJRootPane getRootPane() {
         ensureRootPane();
         return rootPane;
+    }
+
+    /**
+     * The JDK's {@code JFrame.setRootPane} body: remove the outgoing root pane from the host,
+     * then plant the incoming one, both under a cleared checking flag. The content pane is
+     * re-read from the new root pane on next use, since it lives there.
+     *
+     * @param newRootPane {@code null} leaves the host without one, as the JDK allows
+     */
+    void setRootPane(SJRootPane newRootPane) {
+        if (newRootPane == rootPane) return;
+        SJRootPane old = rootPane;
+        if (old != null) {
+            withCheckingDisabled(() -> host.remove(Collections.singletonList(old)));
+        }
+        rootPane = newRootPane;
+        contentPane = null;
+        if (newRootPane != null) {
+            withCheckingDisabled(() -> host.add(Collections.singletonList(newRootPane)));
+        }
     }
 
     // ---- Glass pane (D_glasspane_structural / SD_glasspane_structural) --------------------------------------

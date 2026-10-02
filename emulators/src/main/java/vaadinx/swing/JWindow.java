@@ -39,6 +39,23 @@
 
 package vaadinx.swing;
 
+import com.vaadin.swingbridge.surrogates.SHelper;
+import com.vaadin.swingbridge.surrogates.SJRootPane;
+import com.vaadin.swingbridge.surrogates.SJWindow;
+import com.vaadin.swingbridge.surrogates.SWindow;
+import vaadinx.EHelper;
+import vaadinx.awt.Component;
+import vaadinx.awt.Container;
+import vaadinx.awt.Frame;
+import vaadinx.awt.GraphicsConfiguration;
+import vaadinx.awt.LayoutManager;
+import vaadinx.awt.Window;
+
+import javax.accessibility.Accessible;
+import javax.accessibility.AccessibleContext;
+import java.awt.Graphics;
+import java.awt.IllegalComponentStateException;
+
 // Hand-finished emulator for javax.swing.JWindow, mirroring JDialog's
 // shape minus the sections JWindow doesn't have: no title, no
 // defaultCloseOperation (JWindow doesn't implement WindowConstants — the
@@ -54,12 +71,12 @@ package vaadinx.swing;
 // composition instead — see com.vaadin.swingbridge.surrogates.RootPaneScaffold.
 //
 // R_leaf_peer_lockdown leaf lock-down: javax.swing.JWindow is a public-hierarchy leaf, so
-// the peer is hardcoded to com.vaadin.swingbridge.surrogates.SJWindow; no protected
+// the peer is hardcoded to SJWindow; no protected
 // (Component peer) ctor.
 
-/** Emulator for {@link javax.swing.JWindow}. R_leaf_peer_lockdown-locked peer is {@link com.vaadin.swingbridge.surrogates.SJWindow}. */
-public class JWindow extends vaadinx.awt.Window
-        implements javax.accessibility.Accessible, vaadinx.swing.RootPaneContainer {
+/** Emulator for {@link javax.swing.JWindow}. R_leaf_peer_lockdown-locked peer is {@link SJWindow}. */
+public class JWindow extends Window
+        implements Accessible, RootPaneContainer {
 
     // ---- Content pane / root pane (mirrors JDialog) -----------------
 
@@ -86,26 +103,28 @@ public class JWindow extends vaadinx.awt.Window
     // ============================================================
 
     public JWindow() {
-        super(new com.vaadin.swingbridge.surrogates.SJWindow(), null);
+        super(SJWindow.class, SJWindow::new, null);
         windowInit();
     }
 
-    public JWindow(vaadinx.awt.GraphicsConfiguration gc) {
+    public JWindow(GraphicsConfiguration gc) {
         // Accepted and ignored: one viewport, one configuration.
         this();
     }
 
-    public JWindow(vaadinx.awt.Frame owner) {
-        super(new com.vaadin.swingbridge.surrogates.SJWindow(unwrapSWindow(owner)), owner);
+    public JWindow(Frame owner) {
+        super(SJWindow.class,
+                () -> new SJWindow(unwrapSWindow(owner)), owner);
         windowInit();
     }
 
-    public JWindow(vaadinx.awt.Window owner) {
-        super(new com.vaadin.swingbridge.surrogates.SJWindow(unwrapSWindow(owner)), owner);
+    public JWindow(Window owner) {
+        super(SJWindow.class,
+                () -> new SJWindow(unwrapSWindow(owner)), owner);
         windowInit();
     }
 
-    public JWindow(vaadinx.awt.Window owner, vaadinx.awt.GraphicsConfiguration gc) {
+    public JWindow(Window owner, GraphicsConfiguration gc) {
         this(owner);
     }
 
@@ -115,12 +134,12 @@ public class JWindow extends vaadinx.awt.Window
      * Unwrap the SWindow peer from an emulator-layer Window for
      * SJWindow's owner argument — any window-family emulator peer
      * (SFrame, SJFrame, SJDialog, SWindow, SJWindow) passes the
-     * {@code instanceof SWindow} check. Public {@code getPeer()} is the
-     * cross-package access path.
+     * {@code instanceof SWindow} check. Called from the peer factory, so on the UI
+     * thread, where reading the owner's peer builds it.
      */
-    private static com.vaadin.swingbridge.surrogates.SWindow unwrapSWindow(vaadinx.awt.Window w) {
+    private static SWindow unwrapSWindow(Window w) {
         if (w == null) return null;
-        return w.getPeer() instanceof com.vaadin.swingbridge.surrogates.SWindow sw ? sw : null;
+        return w.getPeer() instanceof SWindow sw ? sw : null;
     }
 
     // ---- windowInit / contentPane (mirrors JDialog.dialogInit) ------
@@ -145,13 +164,13 @@ public class JWindow extends vaadinx.awt.Window
         // height inside it. The pane-level classes come from the surrogate chain;
         // this adds the host-level one — see emul/swindow.css.
         // A write, so a content pane whose peer is lazy is built with a UI, not here.
-        vaadinx.awt.Container contentPane = getContentPane();
-        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
+        Container contentPane = getContentPane();
+        withPeer(p -> SHelper.markContentPaneSpan(p, contentPane.getPeer(), null));
         setRootPaneCheckingEnabled(true);
     }
 
     /** Delegates to the root pane, as the JDK's does. */
-    public vaadinx.awt.Container getContentPane() {
+    public Container getContentPane() {
         return getRootPane().getContentPane();
     }
 
@@ -161,21 +180,21 @@ public class JWindow extends vaadinx.awt.Window
      * {@code window.getRootPane().getContentPane()} are the same pane by
      * construction rather than by a mirror kept in step.
      */
-    public void setContentPane(vaadinx.awt.Container newPane) {
+    public void setContentPane(Container newPane) {
         if (newPane == null) {
-            throw new java.awt.IllegalComponentStateException("contentPane cannot be set to null");
+            throw new IllegalComponentStateException("contentPane cannot be set to null");
         }
-        vaadinx.awt.Container old = getRootPane().getContentPane();
+        Container old = getRootPane().getContentPane();
         if (newPane == old) return;
         getRootPane().setContentPane(newPane);
-        withPeer(p -> com.vaadin.swingbridge.surrogates.SHelper.markContentPaneSpan(
+        withPeer(p -> SHelper.markContentPaneSpan(
                 p, newPane.getPeer(), old == null ? null : old.getPeer()));
     }
 
     // ---- add/remove/setLayout redirect (mirrors JDialog) -------------
 
     @Override
-    protected void addImpl(vaadinx.awt.Component comp, Object constraints, int index) {
+    protected void addImpl(Component comp, Object constraints, int index) {
         if (isRootPaneCheckingEnabled()) {
             getContentPane().add(comp, constraints, index);
         } else {
@@ -184,7 +203,7 @@ public class JWindow extends vaadinx.awt.Window
     }
 
     @Override
-    public void setLayout(vaadinx.awt.LayoutManager manager) {
+    public void setLayout(LayoutManager manager) {
         if (isRootPaneCheckingEnabled()) {
             getContentPane().setLayout(manager);
         } else {
@@ -193,7 +212,7 @@ public class JWindow extends vaadinx.awt.Window
     }
 
     @Override
-    public void remove(vaadinx.awt.Component comp) {
+    public void remove(Component comp) {
         if (isRootPaneCheckingEnabled()) {
             getContentPane().remove(comp);
         } else {
@@ -240,19 +259,18 @@ public class JWindow extends vaadinx.awt.Window
         } finally {
             rootPaneCheckingEnabled = wasChecking;
         }
+        // The surrogate holds the same root pane, so both layers share its default-button
+        // wiring — see JFrame.setRootPane.
+        withPeer(p -> {
+            if (p instanceof SJWindow sjw) {
+                sjw.setRootPane(newRootPane == null ? null
+                        : (SJRootPane) newRootPane.getPeer());
+            }
+        });
     }
 
+    /** A fresh {@code JRootPane}, which {@link #setRootPane} hands to the surrogate. */
     protected JRootPane createRootPane() {
-        // Share the SJRootPane surrogate with the SJWindow peer so any
-        // default-button Enter wiring and other browser-side root-pane
-        // state are unified across the emulator and surrogate layers —
-        // same idiom as JFrame.createRootPane / JDialog.createRootPane.
-        if (getPeer() instanceof com.vaadin.swingbridge.surrogates.SJWindow sjw) {
-            return new JRootPane(sjw.getRootPane());
-        }
-        // Defensive fallback — R_leaf_peer_lockdown lock-down means no current ctor picks
-        // a non-SJWindow peer, but a behaviour-only subclass could
-        // theoretically override createRootPane and reach here.
         return new JRootPane();
     }
 
@@ -264,17 +282,17 @@ public class JWindow extends vaadinx.awt.Window
         getRootPane().setLayeredPane(layered);
     }
 
-    public vaadinx.awt.Component getGlassPane() {
+    public Component getGlassPane() {
         return getRootPane().getGlassPane();
     }
 
-    public void setGlassPane(vaadinx.awt.Component glass) {
+    public void setGlassPane(Component glass) {
         getRootPane().setGlassPane(glass);
     }
 
     // ---- Misc ---------------------------------------------------------
 
-    public void update(java.awt.Graphics g) {
+    public void update(Graphics g) {
         // JDK JWindow.update forwards straight to paint (no background
         // clear). Container.update already delegates to paint and our
         // leaf paint() is an R_layouts_close_enough no-op; chain up so user overrides on
@@ -289,18 +307,18 @@ public class JWindow extends vaadinx.awt.Window
                 + ",rootPaneCheckingEnabled=" + rootPaneCheckingEnabled;
     }
 
-    public javax.accessibility.AccessibleContext getAccessibleContext() {
-        vaadinx.EHelper.onUnimplemented("JWindow", "getAccessibleContext");
+    public AccessibleContext getAccessibleContext() {
+        EHelper.onUnimplemented("JWindow", "getAccessibleContext");
         return null;
     }
 
     // D_drag_and_drop: signature ported to the emulator type so migrated code compiles
-    // against vaadinx.swing.TransferHandler; window-level DnD wiring is out of
+    // against TransferHandler; window-level DnD wiring is out of
     // the D_drag_and_drop scope (JComponent / JList / JTable only) — drop-and-WARN.
-    public void setTransferHandler(vaadinx.swing.TransferHandler h) {
-        vaadinx.swing.TransferHandler old = this.transferHandler;
+    public void setTransferHandler(TransferHandler h) {
+        TransferHandler old = this.transferHandler;
         this.transferHandler = h;
-        vaadinx.EHelper.onUnimplemented("JWindow", "setTransferHandler(drop target)", h);
+        EHelper.onUnimplemented("JWindow", "setTransferHandler(drop target)", h);
         firePropertyChange("transferHandler", old, h);
     }
 
@@ -308,11 +326,11 @@ public class JWindow extends vaadinx.awt.Window
     // honest (R_decline_effect_only, D_owed_events). Same shape as JDialog's; this one was missed there only
     // because JWindow fires no bound property at all, which put the whole class
     // outside the reverse sweep's work-list (D_missing_constants).
-    private vaadinx.swing.TransferHandler transferHandler;
+    private TransferHandler transferHandler;
 
-    public vaadinx.swing.TransferHandler getTransferHandler() {
+    public TransferHandler getTransferHandler() {
         if (transferHandler != null) return transferHandler;
-        vaadinx.EHelper.onUnimplemented("JWindow", "getTransferHandler");
+        EHelper.onUnimplemented("JWindow", "getTransferHandler");
         return null;
     }
 }
