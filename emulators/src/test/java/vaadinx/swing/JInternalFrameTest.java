@@ -54,6 +54,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -338,6 +340,82 @@ class JInternalFrameTest extends AbstractKaribuTest {
         ComponentUtil.fireEvent(minimize, new ClickEvent<>(minimize));
         assertTrue(f.isIcon(), "header minimize should drive setIcon(true)");
         iconified.assertEquals(1);
+    }
+
+    // --- Header clicks are peer→Swing callbacks (R_callswing_envelope) ---------------------
+
+    /**
+     * Clicks {@code label}'s header glyph and asserts the listener the click reached could park on
+     * a blocking modal: the click returns while the modal is up, and the listener resumes once the
+     * modal is disposed.
+     */
+    private static void assertHeaderClickCanPark(JInternalFrame f, String label, CountDownLatch resumed,
+                                                 JDialog modal) throws InterruptedException {
+        Icon glyph = headerIcons(f).get(label);
+        ComponentUtil.fireEvent(glyph, new ClickEvent<>(glyph));
+        assertTrue(modal.isVisible(), "the listener's modal should be showing");
+        assertEquals(1, resumed.getCount(), "the listener should still be parked on its modal");
+        EHelper.callSwing(modal::dispose);
+        assertTrue(resumed.await(5, TimeUnit.SECONDS), "the listener did not resume after dispose()");
+    }
+
+    private static JDialog modalDialog() {
+        JDialog modal = new JDialog();
+        modal.setModal(true);
+        return modal;
+    }
+
+    @Test
+    @DisplayName("an internalFrameClosing listener reached from close-X can park on a modal")
+    void closeClickListenerCanPark() throws InterruptedException {
+        JInternalFrame f = new JInternalFrame("Doc", true, true, true, true);
+        f.setDefaultCloseOperation(JInternalFrame.DO_NOTHING_ON_CLOSE);
+        f.setVisible(true);
+        JDialog modal = modalDialog();
+        CountDownLatch resumed = new CountDownLatch(1);
+        f.addInternalFrameListener(new InternalFrameAdapter() {
+            @Override
+            public void internalFrameClosing(InternalFrameEvent e) {
+                modal.setVisible(true);
+                resumed.countDown();
+            }
+        });
+        assertHeaderClickCanPark(f, "Close", resumed, modal);
+    }
+
+    @Test
+    @DisplayName("an internalFrameIconified listener reached from minimize can park on a modal")
+    void minimizeClickListenerCanPark() throws InterruptedException {
+        JInternalFrame f = new JInternalFrame("Doc", true, true, true, true);
+        f.setVisible(true);
+        JDialog modal = modalDialog();
+        CountDownLatch resumed = new CountDownLatch(1);
+        f.addInternalFrameListener(new InternalFrameAdapter() {
+            @Override
+            public void internalFrameIconified(InternalFrameEvent e) {
+                modal.setVisible(true);
+                resumed.countDown();
+            }
+        });
+        assertHeaderClickCanPark(f, "Minimize", resumed, modal);
+        assertTrue(f.isIcon());
+    }
+
+    @Test
+    @DisplayName("a vetoable maximum listener reached from maximize can park on a modal")
+    void maximizeClickListenerCanPark() throws InterruptedException {
+        JInternalFrame f = new JInternalFrame("Doc", true, true, true, true);
+        f.setVisible(true);
+        JDialog modal = modalDialog();
+        CountDownLatch resumed = new CountDownLatch(1);
+        f.addVetoableChangeListener(e -> {
+            if (JInternalFrame.IS_MAXIMUM_PROPERTY.equals(e.getPropertyName())) {
+                modal.setVisible(true);
+                resumed.countDown();
+            }
+        });
+        assertHeaderClickCanPark(f, "Maximize", resumed, modal);
+        assertTrue(f.isMaximum());
     }
 
     @Test

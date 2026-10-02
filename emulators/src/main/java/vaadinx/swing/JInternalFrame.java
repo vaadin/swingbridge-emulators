@@ -206,15 +206,18 @@ public class JInternalFrame extends JComponent
         // Drive the peer's native resize affordance + title-bar controls
         // from the ctor flags, and wire the header minimize / maximize
         // buttons to our vetoable setIcon / setMaximum (so a header click
-        // honours the JInternalFrame constrained properties).
+        // honours the JInternalFrame constrained properties). Only a header
+        // click calls these handlers, so each is a peer→Swing callback and
+        // takes the R_callswing_envelope envelope: a VetoableChangeListener
+        // or InternalFrameListener may open a modal dialog.
         withPeer(p -> {
             if (p instanceof SJInternalFrame sif) {
                 sif.setResizable(resizable);
                 sif.setClosable(closable);
                 sif.setIconifiable(iconifiable);
                 sif.setMaximizable(maximizable);
-                sif.setIconifyHandler(this::iconifyFromHeader);
-                sif.setMaximizeHandler(this::toggleMaximumFromHeader);
+                sif.setIconifyHandler(() -> EHelper.callSwing(this::iconifyFromHeader));
+                sif.setMaximizeHandler(() -> EHelper.callSwing(this::toggleMaximumFromHeader));
             }
         });
     }
@@ -275,8 +278,13 @@ public class JInternalFrame extends JComponent
             }
             @Override public void internalFrameClosing(SInternalFrameEvent e) {
                 // No fire here: doDefaultCloseAction fires CLOSING itself, as
-                // the JDK's does — see its javadoc (D_owed_events).
-                doDefaultCloseAction();
+                // the JDK's does — see its javadoc (D_owed_events). The peer
+                // fires CLOSING only for a user close (close-X, ESC), so this
+                // is a peer→Swing callback: R_callswing_envelope, since an
+                // internalFrameClosing listener is where a "save changes?"
+                // dialog goes. The other relays fire from our own server-side
+                // writes and run on the writing thread, as the JDK's do.
+                EHelper.callSwing(JInternalFrame.this::doDefaultCloseAction);
             }
             @Override public void internalFrameClosed(SInternalFrameEvent e) {
                 fireInternalFrameEvent(InternalFrameEvent.INTERNAL_FRAME_CLOSED);
