@@ -129,12 +129,20 @@ release 21, so `java.lang.classfile` is not available to its tests; ArchUnit (al
 lambda passed to `withPeer` is told apart from a direct call. The two gates are complementary: the
 structural one proves the call goes through the seam, the behavioural one proves the seam hops.
 
-## 5. Cost — `Q_hop_cost`
+## 5. Cost — `Q_hop_cost` — settled: accepted (2026-10-02)
 
-Every off-thread write is one session-lock acquisition, and with automatic Push one `unlock` → push.
-A worker building a 30-field form off-thread pushes 30 times. `SwingUtilities.invokeAndWait` works
-from a worker since D_invoke_from_background, and is the migrator's batching escape. `runOnSession`
-has no slow-hop WARN, where `runInUIThread` has one — add it? Nothing is measured yet.
+Every off-thread write to an *attached* component is one session-lock acquisition, and with
+automatic Push one `unlock` → push. **Whatever that costs, we accept it**: the hop is what makes the
+write correct, and no cost has been measured that would argue against it. If it proves a problem in
+practice, profile and optimise then — not speculatively. What bounds it meanwhile:
+- **A detached component pays nothing per write.** Under the queue
+  ([vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "The mechanism") its writes queue and
+  drain at the attaching write, so a worker building a 30-field form before showing it does not
+  push 30 times. The cost is a worker updating a form already on screen.
+- **The migrator's batching escape** is `SwingUtilities.invokeAndWait` from the worker
+  (D_invoke_from_background): one hop around the whole batch.
+- **No slow-hop WARN on `withPeer`** (`runInUIThread` keeps its own): instrumentation is part of the
+  optimisation work this defers.
 
 ## 6. `Q_drop_log_level` — carried over
 
@@ -172,5 +180,5 @@ observed.
 ## 9. Graduation
 
 Graduate once §2–§4 are decided and §8 is observed. The answers go to
-D_attach_aware_hop (the seam shape, the read policy, the gate) and to R_tolerate_off_ui_thread (anything the leak taxonomy makes a
-rule); then delete this file.
+D_attach_aware_hop (the seam shape, the read policy, the gate, §5's accepted cost) and to
+R_tolerate_off_ui_thread (anything the leak taxonomy makes a rule); then delete this file.
