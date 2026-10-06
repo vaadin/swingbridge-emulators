@@ -74,10 +74,11 @@ real class files, not memory. Nearly everything SB-Emulators touches already exi
   `String.formatted`.
 - JDK 24+ was *only* ever mandated for JEP 491 pinning (the why-not is the "JDK 24+ is
   mandatory" paragraph in [CLAUDE.md](../CLAUDE.md); a loom backport to 21 is closed as
-  won't-implement). Without virtual threads that motivation evaporates — `PLATFORM` sidesteps
-  the pin rather than fixing it, so it carries no JDK floor of its own.
+  won't-implement). Without virtual threads that motivation evaporates — the session-unlock
+  runner sidesteps the pin rather than fixing it, so it carries no JDK floor of its own.
 
-Estimate: a **Vaadin 24 / Java 17 build is a few days of work on top of `PLATFORM`**, with
+Estimate: a **Vaadin 24 / Java 17 build is a few days of work on top of the session-unlock
+runner**, with
 `SJSlider`'s peer swap the only piece that needs design rather than mechanical edits.
 
 ## Vaadin 23 (Java 11): real work, and a paid target
@@ -163,8 +164,8 @@ is the same open question as below.
   a real migrator settles this cheaper than the build does. Ask the Spring question in the same
   conversation (see *The Spring angle*): "which Spring line are you on" decides whether 24 buys
   them anything.
-- `PLATFORM`'s open questions (`Q_karibu_determinism`, `Q_modal_gap`, `Q_scale_budget`) are
-  *this* idea's open questions too; a 24 target cannot ship until they close.
+- The session-unlock runner's own open questions (Karibu determinism, the modal gap, the scale
+  budget) are *this* idea's open questions too; a 24 target cannot ship until they close.
 - Does the `SJSlider` is-a → has-a change ripple into the `JSlider` emulator's
   R_leaf_peer_lockdown status? Check before committing to the seam.
 - Third-party add-ons (`swingbridge-emulators-jcalendar-1.4`, `swingbridge-emulators-jgoodies-forms-1.2.1`) were not skimmed;

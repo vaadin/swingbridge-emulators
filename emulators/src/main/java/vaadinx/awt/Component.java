@@ -251,7 +251,7 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
     /**
      * Peers on a {@code peerType} that {@code peerFactory} builds only once a UI is current —
      * at the first write that has one, or at the attach that drains the writes made before it
-     * (ideas/vaadin-ui-thread-only.md § "The mechanism"). So an emulator constructed and
+     * (D_lazy_peers). So an emulator constructed and
      * configured on a worker runs no Vaadin code there at all.
      *
      * @param peerType what {@code peerFactory} returns, which answers the type checks made

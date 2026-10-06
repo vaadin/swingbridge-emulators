@@ -29,14 +29,14 @@ So mixing is currently one-directional *by construction*, and nobody decided tha
 `getPeer()` being public while `Container.add` is JDK-typed.
 
 **The working direction is about to break this shape** (agreed 2026-10-01,
-[vaadin-ui-thread-only.md](./vaadin-ui-thread-only.md) § "The mechanism"): calls on a detached
+[D_lazy_peers](../emulators/decisions.md#D_lazy_peers); the `getPeer()` half is open in [withpeer-shape.md](./withpeer-shape.md)): calls on a detached
 emulator queue until the write that attaches its island, and `getPeer()` leaves the migrator's surface
 for a `void` `withPeer(Consumer)`. `vaadinLayout.add(panel.getPeer())` then has no expression, and
 its obvious translation `panel.withPeer(p -> vaadinLayout.add(p))` never runs — the body waits for an
 attach only it would cause. **Emulator into Vaadin therefore needs a seam of its own that is the
 attaching write** (take the lock, drain the island, add), e.g. `EHelper.addTo(HasComponents,
 Component)`. That turns this direction from an accident of `getPeer()` into a decided API — which is
-also the natural place to answer §9 question 7 for it. The test corpus's bare-peer attach keeps
+also the natural place to answer §8 question 7 for it. The test corpus's bare-peer attach keeps
 working either way, through the test accessor.
 
 ### It is already load-bearing, so "ban it" is not on the table
@@ -64,46 +64,19 @@ urgent than it looks. Worth asking a real migration round rather than assuming.
 
 ---
 
-## 2. What ships today (D_component_displayable's minimum)
+## 2. What ships today
 
-- An emulator with **no emulator parent** whose peer attaches to a live UI is a **realisation root**:
-  it becomes displayable and cascades `addNotify` + `DISPLAYABILITY_CHANGED` through its subtree.
-  Detach unrealises it.
-- This is the same rule that already realised a `@MainWindow` JFrame from a route, with `Window`
-  un-hard-coded. It is a generalisation, not a new mode.
-- A realised mixed root adopted into a Swing container is unrealised first, then realised by its new
-  parent — mirroring the ordinary reparent path, because a displayable-with-no-parent component is a
-  state AWT cannot reach and so has no precedent to copy.
-
-Nothing else about mixing is designed.
+Only D_component_displayable's minimum: a rootless emulator whose peer attaches to a live UI is a
+**realisation root** (displayable, cascading `addNotify` + `DISPLAYABILITY_CHANGED`; detach
+unrealises it), and a realised mixed root adopted into a Swing container is unrealised first. That
+entry also records the JDK 25 displayability/visibility measurements this design is constrained by —
+above all that AWT never writes a descendant's `visible` field, so `isShowing()` is derived by
+walking the parent chain, and the walk bottoms out at `parent == null`, which in mixed mode is a lie
+(§3). Nothing else about mixing is designed.
 
 ---
 
-## 3. What the displayability/visibility measurements taught, that constrains this
-
-All measured against JDK 25 on a real display, and all of it bears on mixed mode:
-
-- **AWT never writes a descendant's `visible` field.** Showing or hiding a `JFrame` leaves every
-  child `visible == true`; only the derived `isShowing()` changes, and it derives by walking the
-  parent chain. This is why no visibility-inheritance machinery was needed — and it is exactly what
-  makes mixed mode *hard*, see `Q_mixed_showing` below: the walk bottoms out at `parent == null`,
-  which in mixed mode is a lie.
-- **Visibility defaults are per-class, not inherited.** `java.awt.Panel`, `Button`, `JPanel` all
-  construct visible; only `Window` constructs hidden.
-- **Realisation cascades top-down and unrealisation bottom-up** (`addNotify` chains to super then
-  walks children forwards; `removeNotify` walks children backwards then chains). The JDK's own
-  comment explains the index loops: a menu is a child of `JLayeredPane` rather than of a particular
-  component, so the collection mutates under an iterator when a menu shows or hides.
-- **`DISPLAYABILITY_CHANGED` does not recurse; `PARENT_CHANGED` does.** Each component fires its own
-  displayability event with `changed` = itself, because the cascade already visits everyone.
-- **`AncestorEvent` is keyed to *showing*, not to displayability.** `pack()` fires no
-  `ancestorAdded`; hiding a window fires `ancestorRemoved`.
-- **A component added to a hidden-but-displayable container becomes displayable and not showing**,
-  and fires no showing event — it was never showing to begin with.
-
----
-
-## 4. `Q_mixed_showing` — `isShowing()` lies at the boundary
+## 3. `Q_mixed_showing` — `isShowing()` lies at the boundary
 
 <a id="Q_mixed_showing"></a>
 
@@ -133,7 +106,7 @@ Vaadin honours — so the *outbound* direction works and only the *inbound* one 
 
 ---
 
-## 5. `Q_mixed_ancestor_lookups` — the null `getParent()` and everything that walks it
+## 4. `Q_mixed_ancestor_lookups` — the null `getParent()` and everything that walks it
 
 <a id="Q_mixed_ancestor_lookups"></a>
 
@@ -165,7 +138,7 @@ but not in its `getComponents()` a coherent object, or a trap?
 
 ---
 
-## 6. `Q_vaadin_into_emulator` — the missing seam, and where it can live
+## 5. `Q_vaadin_into_emulator` — the missing seam, and where it can live
 
 <a id="Q_vaadin_into_emulator"></a>
 
@@ -193,7 +166,7 @@ or is a leaf enough?
 
 ---
 
-## 7. `Q_mixed_layout` — two layout systems meeting at the seam
+## 6. `Q_mixed_layout` — two layout systems meeting at the seam
 
 <a id="Q_mixed_layout"></a>
 
@@ -203,13 +176,13 @@ one of them is styling a child the other thinks it owns.
 
 Unknowns worth a spike rather than a guess: does a `BorderLayout`-emitting `Div` behave sanely as a
 flex child of a `VerticalLayout` (does it stretch, collapse, or size to content)? Does a Vaadin
-component wrapped per §6 receive the grid-area CSS its emulator wrapper is assigned? Under
+component wrapped per §5 receive the grid-area CSS its emulator wrapper is assigned? Under
 [R_layouts_close_enough](../CLAUDE.md#hard-rules) pixel drift is fine, but "renders at preferred
 width leaving half the dialog empty" is explicitly *structural* and not.
 
 ---
 
-## 8. The deferred visibility front (folded in from D_component_displayable)
+## 7. The deferred visibility front (folded in from D_component_displayable)
 
 Two accepted limitations were recorded there rather than fixed, and they are one piece of work.
 
@@ -232,7 +205,9 @@ The JDK fires it, measured: on `Window` show/hide down the whole subtree with `c
 **and** on any intermediate `Container.setVisible` down its subtree with `changed` = that container.
 `Container.fireHierarchyEvent` already recurses, so the fan-out is nearly free — the work is picking
 the sites (`Component.setVisible`, `Window.show()`/`hide()`) and the guard (only when the derived
-`isShowing()` of the subtree actually flips, which is not the same as the flag flipping).
+`isShowing()` of the subtree actually flips, which is not the same as the flag flipping). Also
+measured: a component added to a hidden-but-displayable container becomes displayable and not
+showing, and fires no showing event — it was never showing to begin with.
 
 One ordering divergence to fix or accept while in there: **the JDK fires deepest-first, SB-Emulators fires
 self-first.** `Container.fireHierarchyEvent` does `super` (self) then children; the JDK's measured
@@ -258,10 +233,10 @@ deliberate.
 
 ---
 
-## 9. Open questions for the design pass
+## 8. Open questions for the design pass
 
 1. Does the widget-swap direction (**Vaadin into emulator**) actually occur in migration, or do views
-   get rewritten whole? Decides whether §6 is urgent or theoretical.
+   get rewritten whole? Decides whether §5 is urgent or theoretical.
 2. `Q_mixed_showing`: peer-chain walk, or documented lie?
 3. `Q_mixed_ancestor_lookups`: null-tolerate each site independently, or one peer-chain-aware
    resolver — and is "in the logical hierarchy but not in `getComponents()`" coherent or a trap?

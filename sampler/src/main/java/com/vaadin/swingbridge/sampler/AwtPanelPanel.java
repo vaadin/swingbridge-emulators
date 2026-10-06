@@ -36,7 +36,7 @@ import java.awt.Color;
 /**
  * {@link vaadinx.awt.Panel} — AWT's generic container, not {@link JPanel}.
  * Decisions: {@code D_awt_panel} / {@code SD_no_spanel}; the lane's rationale:
- * {@code ideas/awt-widgets.md}.
+ * {@code D_awt_lane}.
  *
  * <p>The class is four lines over {@code vaadinx.awt.Container}, so the demos
  * show the two things the AWT lane's leaf widgets could not: an all-AWT

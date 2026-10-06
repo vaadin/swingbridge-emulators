@@ -36,7 +36,7 @@ import java.util.Arrays;
  * {@link vaadinx.awt.Checkbox} + {@link CheckboxGroup} — one widget rendering as
  * two, not {@link vaadinx.swing.JCheckBox} / {@link vaadinx.swing.JRadioButton}.
  * Decisions: {@code D_awt_checkbox} / {@code SD_scheckbox}; the lane's rationale:
- * {@code ideas/awt-widgets.md}.
+ * {@code D_awt_lane}.
  *
  * <ol>
  *   <li><b>The silence of {@code setState}</b> — two ungrouped boxes whose

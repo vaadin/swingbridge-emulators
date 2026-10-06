@@ -32,7 +32,7 @@ import java.awt.Color;
 /**
  * {@link vaadinx.awt.Label} — AWT 1.0 static text, not {@link JLabel}.
  * Decisions: {@code D_awt_label} / {@code SD_slabel}; the lane's rationale:
- * {@code ideas/awt-widgets.md}.
+ * {@code D_awt_lane}.
  *
  * <ol>
  *   <li><b>Alignment</b> — three labels pinned to LEFT / CENTER / RIGHT with a

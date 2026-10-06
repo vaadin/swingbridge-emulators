@@ -60,7 +60,7 @@ Read from the JDK sources (`$JAVA_HOME/lib/src.zip`) and, for the event-posting 
 
 1. **`setText` fires a `TextEvent`.** `TextComponent.setText` pushes to the peer only when the text actually changed (`if (peer != null && !text.equals(peer.getText()))`, with an explicit comment saying an unchanged text must not post an event), and `XTextFieldPeer.setXAWTTextField` posts exactly one `TEXT_VALUE_CHANGED` per push — it detaches its own `DocumentListener` around the inner `JTextField.setText` precisely so the remove+insert pair *coalesces into one* event. The `firstChangeSkipped` guard suppresses the one push that happens while the peer is being created. So the faithful contract is: **one `TextEvent` per text-changing `setText`, none for a no-op `setText`, none from the constructor.** This is the single most important behavioural fact in this document, and it is the opposite of the "AWT setters are silent" prior.
 2. **Every keystroke fires a `TextEvent` too** — `insertUpdate` / `removeUpdate` / `changedUpdate` on the peer's document each post one.
-3. **`null` text is normalised to `""`, in the constructor and in `setText`.** `TextComponent(String text) { this.text = (text != null) ? text : ""; }` and `setText(String t) { text = (t != null) ? t : ""; }`. **There is no null round-trip to preserve** — `new TextField(null).getText()` is `""`, not null. This is the first AWT-lane class that needs **no emulator-side field shadow**, and it inverts the `label`/`text` split D_awt_button and D_awt_label both had to make.
+3. **`null` text is normalised to `""`, in the constructor and in `setText`.** `TextComponent(String text) { this.text = (text != null) ? text : ""; }` and `setText(String t) { text = (t != null) ? t : ""; }`. **There is no null round-trip to preserve** — `new TextField(null).getText()` is `""`, not null, unlike `Button.getLabel()` / `Label.getText()`.
 4. **`TextField.setText` and the ctor run `replaceEOL`** — every `System.lineSeparator()` and every `"\n"` becomes a single space. `new TextField("a\nb").getText()` is `"a b"`. `replaceEOL(null)` returns null and is then normalised to `""` upstream.
 5. **`TextField(String text)` derives columns from the text**: `this(text, text != null ? text.length() : 0)`. `new TextField("hello").getColumns() == 5`; `new TextField("hello", 0).getColumns() == 0`. Migrated code that constructs `new TextField("initial value")` gets a 13-column field and will notice if we return 0.
 6. **The ctor clamps a negative column count; the setter throws.** `TextField(String, int)` does `this.columns = (columns >= 0) ? columns : 0`, while `setColumns(int)` throws `IllegalArgumentException("columns less than zero.")`. Same asymmetry as `setCaretPosition`, below — AWT is inconsistent here and we have to be inconsistent with it.
@@ -133,7 +133,7 @@ Vaadin-bound, nothing stored:
 
 | property | binding | note |
 |---|---|---|
-| `text` | `getValue()` / `setValue(t == null ? "" : t)` | **lossless** — AWT's own contract normalises null to `""`, so unlike `SButton.label` / `SLabel.text` there is no R_vaadin_first loss and no emulator shadow to compensate for it |
+| `text` | `getValue()` / `setValue(t == null ? "" : t)` | **lossless** — AWT's own contract normalises null to `""`, so unlike `SButton.label` / `SLabel.text` there is no R_vaadin_first loss |
 | `editable` | `!isReadOnly()` / `setReadOnly(!b)` | `JTextComponentMixin` precedent |
 | `enabled`, `foreground`, `background`, `font`, `cursor`, `name`, `tooltip`, focus | `ComponentMixin` | free |
 
@@ -170,7 +170,7 @@ Two Vaadin subscriptions, both installed from the constructor, both in R_vaadin_
 - **`addKeyPressListener(Key.ENTER, …)` → `processActionEvent(new ActionEvent(this, ACTION_PERFORMED, getText(), …))`** — command is the text, per quirk 13. Lives on `STextField`, not the mixin, because Enter in a `TextArea` inserts a newline (the same reason `SJTextField.installEnterWiring` is not in `JTextComponentMixin`).
 - **Programmatic `setText`** fires a `TextEvent` too, once, only when the text actually changed, and never from the constructor (quirk 1). The `preventPeerEvents` guard has to be shaped so that the *`setValue` echo* is suppressed while the *deliberate* single event is fired — i.e. fire from `setText` itself and suppress the value-change listener, rather than letting the listener fire and hoping it fires once.
 - **`processTextEvent` / `processActionEvent` are the single funnels**, both reachable from a subclass, matching SD_sbutton's call on `SButton.processActionEvent`.
-- **Selection read-back** — SD_caret_selection's `installSelectionBridge` restores AWT's read-the-live-peer contract for `getSelectionStart` / `getSelectedText` / `getCaretPosition`. On the Swing side it installs lazily on the first `CaretListener`; **AWT has no `CaretListener`, so there is no lazy trigger to hang it on.** Proposal: install it **eagerly in the constructor**, and say why — an AWT text field in a migrated app is residue, a handful of instances, and the alternative is `getSelectedText()` that cannot see a selection the user made with the mouse, which is precisely the read AWT code performs. That is a per-caret-move round trip we deliberately buy. (The JS itself — the `emul-selection` custom event and its client-side dedupe — is the one piece I would rather not duplicate; see Open questions.)
+- **Selection read-back** — install the browser's selection reports **eagerly in the constructor**: AWT has no `CaretListener` to hang a lazy install on, and without them `getSelectedText()` cannot see a selection the user made with the mouse, which is precisely the read AWT code performs. The held, debounced reports `JTextComponentMixin.addSelectionReportListener` sends ([SD_caret_selection](../surrogates/decisions.md#SD_caret_selection), [D_emulator_caret](../emulators/decisions.md#D_emulator_caret)) cost no round trip per caret move, which is what makes eager install cheap — `vaadinx.swing.text.JTextComponent` installs them from its constructor the same way. (The JS itself — the `emul-selection` custom event and its client-side dedupe — is the one piece I would rather not duplicate; see Open questions.)
 
 ## Emulator design (`vaadinx.awt.TextField`)
 
@@ -181,12 +181,12 @@ vaadinx.awt.TextField     extends vaadinx.awt.TextComponent
 
 **R_leaf_peer_lockdown verdict — lock down `TextField`, keep the seam on `TextComponent`.**
 
-- `java.awt.TextField` is `non-sealed` and **no public class in `java.awt` extends it** (`TextArea` extends `TextComponent`, not `TextField`). It is a leaf in the public hierarchy, so R_leaf_peer_lockdown applies: no protected `(Component peer)` ctor, and all four public ctors reach `super(new STextField())`.
+- `java.awt.TextField` is `non-sealed` and **no public class in `java.awt` extends it** (`TextArea` extends `TextComponent`, not `TextField`). It is a leaf in the public hierarchy, so R_leaf_peer_lockdown applies: no protected `(Component peer)` ctor, and all four public ctors reach the lazy `super(STextField.class, STextField::new)` shape `Label` / `Choice` / `List` use.
 - `vaadinx.awt.TextComponent` is a non-leaf and needs the D_peer_ctor_injection peer seam for `TextField` and a future `TextArea`. Proposal: make that ctor **package-private**, mirroring the JDK's own package-private `TextComponent(String)` — both subclasses live in `vaadinx.awt`, so they reach it, and user code cannot subclass `TextComponent`, which is exactly the JDK's constraint (there, expressed as `sealed`). Alternative: `protected` per R_leaf_peer_lockdown's literal non-leaf wording, or a faithful `sealed … permits TextField, TextArea`, which costs a second edit to the `permits` clause when `TextArea` lands. Judgement call; flagged in Open questions.
 
-**No field shadows for `text`** — quirk 3. This is the first AWT-lane emulator where `getText()` can delegate straight to the peer, because the JDK contract *is* the peer's contract (`null → ""`). D_awt_button's `label` shadow and D_awt_label's `text` shadow exist only to preserve a null the JDK stores verbatim; there is no such null here, and adding a shadow "for symmetry" would be a second source of truth for nothing. Same for `echoChar` and `columns`: single source of truth on the surrogate, emulator delegates, following `JPasswordField`'s explicit call ("a duplicated echoChar field would let emulator.setEchoChar('@') and surrogate disagree").
+**State is emulator-owned**, per [D_emulator_owned_state](../emulators/decisions.md#D_emulator_owned_state): `text`, `editable`, `selectionStart` / `selectionEnd`, `echoChar` and `columns` are the JDK's fields under the JDK's names, the getters never read the peer, and the surrogate renders them through `withPeer` flushes (as `vaadinx.swing.JPasswordField` now holds its own `echoChar` and `JTextField` its own `columns`). A programmatic `setText` fires its `TextEvent` from the emulator on the caller's thread (that entry's rule 2), so the peer bridge below relays browser-originated changes only. The selection pair is fed by the browser's held selection reports, as [D_emulator_caret](../emulators/decisions.md#D_emulator_caret) feeds `vaadinx.swing.text.JTextComponent`'s caret.
 
-**The one field the emulator does own: `backgroundSetByClientCode`** (quirk 10). `vaadinx.awt.Component` already keeps its own `background` field and walks parents when it is null, so the override is the JDK's shape verbatim:
+**One JDK field worth naming: `backgroundSetByClientCode`** (quirk 10). `vaadinx.awt.Component` already keeps its own `background` field and walks parents when it is null, so the override is the JDK's shape verbatim:
 
 ```
 public Color getBackground() {
@@ -213,7 +213,7 @@ This is R_swing_is_truth state on the layer that owns JDK state, which is why it
 
 On the `eventEnabled` gate (quirk 16): the JDK does not call `processTextEvent` unless a `TextListener` is registered. Reproducing the gate means a subclass that overrides `processTextEvent` and registers no listener sees nothing — which is faithful, and is what the JDK's own javadoc promises. The alternative (always dispatch; let the funnel's null-listener check no-op) is more generous than the JDK and makes the override always reachable, which R_no_vaadin_in_api limb 2 arguably prefers. Recommendation: **reproduce the gate**, since limb 2 asks for "actually called by the path that calls it in the JDK", and the JDK's path is gated. Flagged in Open questions because it cuts both ways.
 
-`removeNotify`'s JDK snapshot (quirk 15) has nothing to do: the emulator reads text and selection through the live peer, so there is no local copy to refresh before detach. Override, call super, one comment saying so — the shape the memory rule about not dropping overrides asks for.
+`removeNotify`'s JDK snapshot (quirk 15) has nothing to do: the emulator owns text and selection, so there is no peer copy to rescue before detach. Override, call super, one comment saying so — the shape the memory rule about not dropping overrides asks for.
 
 **Not overridden:** `enableInputMethods` and `getInputMethodRequests` already exist on `vaadinx.awt.Component` as a noop and a WARN respectively; `TextComponent`'s JDK overrides are pure input-method machinery.
 
@@ -221,7 +221,7 @@ On the `eventEnabled` gate (quirk 16): the JDK does not call `processTextEvent` 
 
 | input | JDK behaviour | layer that throws |
 |---|---|---|
-| `setColumns(-1)` | `IllegalArgumentException("columns less than zero.")` | both — surrogate validates before writing CSS, emulator validates before delegating (the doubled guard `JTextField`/`SJTextField` already use, so a surrogate used directly is as safe as through the emulator) |
+| `setColumns(-1)` | `IllegalArgumentException("columns less than zero.")` | both — surrogate validates before writing CSS, emulator validates before storing (the doubled guard `JTextField`/`SJTextField` already use, so a surrogate used directly is as safe as through the emulator) |
 | `new TextField("x", -1)` | **no throw**; clamps to 0 | emulator ctor + surrogate ctor (clamp, do not reuse the setter's validator) |
 | `setCaretPosition(-1)` | `IllegalArgumentException("position less than zero.")` | mixin. **Note the message differs from Swing's** — `JTextComponentMixin` uses `"setCaretPosition: bad position: N (document length L)"`; AWT's is the shorter string, and copying Swing's here would be a fidelity bug |
 | `setCaretPosition(len + 5)` | **no throw**; clamps to `len` | mixin (Swing throws here — do not share the validator) |
@@ -241,13 +241,13 @@ No case here is a candidate for R_match_swing_errors's major-gap throw list; the
 
 ## Dropped / WARN surface (R_match_swing_errors sub-buckets)
 
-- **(a) blocked-upstream — selection/caret read-back.** Vaadin surfaces no selection or caret property and no `selectionchange` server-side event (verified against the whole `vaadin-text-field-flow` module). Our workaround is SD_caret_selection's JS bridge on the inner input; a first-class Vaadin selection API would replace it. Until then, `getCaretPosition()` can lag between bridge round trips.
+- **(a) blocked-upstream — selection/caret read-back.** Vaadin surfaces no selection or caret property and no `selectionchange` server-side event (verified against the whole `vaadin-text-field-flow` module). Our workaround is the held selection reports on the inner input (SD_caret_selection / D_emulator_caret); a first-class Vaadin selection API would replace it. Until then, `getCaretPosition()` read by code the browser did not trigger (a Timer, a worker) can be up to a second stale — D_emulator_caret's accepted limitation.
 - **(a) blocked-upstream — the echo *glyph*.** No Vaadin API and no CSS property lets the mask character be chosen; `-webkit-text-security` draws a disc. Masked-vs-unmasked is honoured, the glyph is not. Silent (documented), not a WARN — same call `SJPasswordField` makes for the identical divergence.
 - **(b) permanently deferred — `getAccessibleContext()`.** WARN + null, as everywhere.
 - **(b) permanently deferred — input methods.** `enableInputMethods` (noop) and `getInputMethodRequests` (WARN + null) on `vaadinx.awt.Component`. Consequence for the exit gate: `getInputMethodRequests` must stay out of the API driver, like `getAccessibleContext`.
 - **(b) permanently deferred — low-level dispatch.** `dispatchEvent` stays stubbed on `vaadinx.awt.Component`, and `enableEvents` is a documented no-op per [D_frameinit_shape](../emulators/decisions.md#D_frameinit_shape), so `enableEvents(AWTEvent.TEXT_EVENT_MASK)` cannot switch text events on without a listener. Named because it is the one way the `eventEnabled` gate above is observably narrower than the JDK's.
 
-  **Tripwire for whoever implements point 16's gate.** `enableEvents` is a *no-op* rather than a WARN because SB-Emulators' dispatch is unconditional — every mask it could ask for is already on, so nothing is owed. **An `eventEnabled` gate on this component is the first place that stops being true**: once `processTextEvent` is reachable only when a `TextListener` is registered, `enableEvents(TEXT_EVENT_MASK)` becomes a request SB-Emulators silently drops, and the no-op becomes a lie of exactly the shape R_decline_effect_only exists to catch. So a gate here must come with either the mask modelled or `enableEvents` reverted to `onUnimplemented` — and the latter costs a WARN per `JFrame` / `JDialog` construction, which is why D_frameinit_shape needed the no-op in the first place. Cheapest resolution if it comes to this: gate on the listener list only (as the bullet above already describes) and leave `enableEvents` unable to widen it, which is the *current* divergence made explicit rather than a new one.
+  **Tripwire for whoever implements point 16's gate:** a listener-gated `processTextEvent` turns `enableEvents`' no-op into a silently dropped request — recorded in [D_frameinit_shape](../emulators/decisions.md#D_frameinit_shape) § `Q_enableevents_meaningful`, which names the two ways out (model the mask, or revert `enableEvents` to `onUnimplemented` at a WARN per window). Cheapest resolution if it comes to this: gate on the listener list only (as the bullet above already describes) and leave `enableEvents` unable to widen it, which is the *current* divergence made explicit rather than a new one.
 - **(b) permanently deferred — `paramString()` byte fidelity.** Debug-only; we reproduce the shape (`,text=…`, `,editable`, `,selection=s-e`, `,echo=c`) and not the `Component` prefix, since `vaadinx.awt.Component.paramString` returns `""` by design.
 - **(c) R_vaadin_first drop-and-WARN — `getPreferredSize(int)` / `preferredSize(int)` / `getMinimumSize(int)` / `minimumSize(int)`.** The JDK computes these from the native peer's `FontMetrics`; we have R_layouts_close_enough dummy bounds. Proposal: return the same `Dimension` the no-arg overloads return and **do not WARN** — `ComponentMixin.getPreferredSize` does not WARN either, and a WARN here would either evict these four methods from the exit-gate driver or make the gate un-passable. Documented as an R_layouts_close_enough divergence instead.
 - **(c) — non-editable rendering.** The `getBackground()` → `SystemColor.control` *value* is reproduced (emulator, above); the *paint* is not — Vaadin renders its own readonly styling rather than AWT's control-grey. Cosmetic, R_layouts_close_enough.
@@ -256,16 +256,7 @@ No case here is a candidate for R_match_swing_errors's major-gap throw list; the
 
 ## Sampler demo + exit gate
 
-> **Stale plumbing — the demo content below still stands.** This section was written when the four
-> landed AWT widgets shared one `AwtWidgetsPanel` on a single `AWT widgets` route. They no longer do:
-> the lane's convention is **one pane per AWT class**, so wherever this section says "append Demo N to
-> `AwtWidgetsPanel`" / "a bucket in `AwtWidgetsWarnInventoryTest`" / "no `SamplerCatalogue` edit
-> needed", read: a new `Awt<Class>Panel`, a new `Awt<Class>WarnInventoryTest`, and one
-> `SamplerCatalogue` line under category `"AWT"` labelled with the bare JDK class name. Rationale:
-> [awt-widgets.md § The Sampler convention](./awt-widgets.md#the-sampler-convention-one-pane-per-awt-class).
-
-
-**Demo 5 on the existing `AWT widgets` route** (`AwtWidgetsPanel`), appended in the established shape — a `demoSection` wrapper, `BorderLayout` sub-panels, a readout `JLabel` that Swing owns so the AWT-beside-Swing point keeps being made. A login-form shape covers the whole surface on one screen:
+**A new `AwtTextFieldPanel`**, one `SamplerCatalogue` line under category `"AWT"` labelled `TextField` — the lane's one-pane-per-AWT-class convention (`AwtButtonPanel`, `AwtLabelPanel`, …) — in the established shape: a `demoSection` wrapper, `BorderLayout` sub-panels, a readout `JLabel` that Swing owns so the AWT-beside-Swing point keeps being made. A login-form shape covers the whole surface on one screen:
 
 1. A `TextField("user")` whose `TextListener` writes each keystroke's `getText()` into a readout — the keystroke → `TextEvent` path, and the one thing this slice adds that no earlier AWT widget had.
 2. A `TextField` with `setEchoChar('*')` and a Swing "Show / hide" button toggling `setEchoChar(0)` — the masking mechanism, both directions, which is also the demo a human has to *look at* in a browser, since a server-side test cannot see a mask.
@@ -274,7 +265,7 @@ No case here is a candidate for R_match_swing_errors's major-gap throw list; the
 5. A `setEditable(false)` field beside an editable one, with `getBackground()` printed, so the `SystemColor.control` quirk is visible.
 6. A `new TextField("initial value")` with its `getColumns()` printed — the ctor-derives-columns quirk, which is the one a migrator hits first without knowing it.
 
-**`AwtWidgetsWarnInventoryTest`** gains a fourth bucket, `inventory_awt_textfield_api_surface`, and the existing `inventory_user_path` gains steps: an `_find(STextField.class, withCount(4))` peer-count assertion (the same guard the `SButton`/`SLabel` counts provide), a `_setValue` on the user field to drive the keystroke path, and clicks through the show/hide, selection and editable toggles.
+**A new `AwtTextFieldWarnInventoryTest`** holds an API bucket, `inventory_awt_textfield_api_surface`, and the pane's user path: an exact `_find(STextField.class, withCount(N))` peer-count assertion (the pane holds only its own widget's peers), a `_setValue` on the user field to drive the keystroke path, and clicks through the show/hide, selection and editable toggles.
 
 The API bucket cannot be exhaustive the way `Button`'s and `Label`'s are — this is a ~45-method surface across two classes, with two methods expected to WARN (`getAccessibleContext`, `getInputMethodRequests`) and the four `process*` / `paramString` hooks protected and therefore driven from the unit tests instead. That difference should be stated in the test's javadoc rather than papered over, since `sampler/description.md` currently advertises the AWT buckets as exhaustive.
 
@@ -283,7 +274,7 @@ The API bucket cannot be exhaustive the way `Button`'s and `Label`'s are — thi
 `surrogates/src/test/java/com/vaadin/swingbridge/surrogates/STextFieldTest.java` (~24) and `emulators/src/test/java/vaadinx/awt/TextFieldTest.java` (~22). The behaviours that earn a test, in rough priority — every one of them is a quirk that a plausible implementation gets wrong:
 
 - All four ctors, including `new TextField("hello")` → `columns == 5` and `new TextField("hello", 0)` → `columns == 0`.
-- `new TextField(null).getText() == ""` and `setText(null)` → `""` — the *absence* of a null round-trip, i.e. a regression guard against someone adding the shadow field D_awt_button/D_awt_label needed.
+- `new TextField(null).getText() == ""` and `setText(null)` → `""` — the *absence* of a null round-trip, unlike `Button` / `Label`.
 - `replaceEOL`: `setText("a\nb")` → `"a b"`, and with `System.lineSeparator()` on a platform where it is `\r\n`.
 - **`setText` fires exactly one `TextEvent`**, an unchanged `setText` fires none, and the constructor fires none. The single most breakable assertion in the slice.
 - One `TextEvent` per browser keystroke, driven through Karibu `_setValue` on the peer.
@@ -308,20 +299,20 @@ Mirroring `eea1c09` (Button) and `4d3eb27` (Label):
 | file | action |
 |---|---|
 | `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/awt/TextComponentMixin.java` | **new** |
-| `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/internal/AwtTextStateStore.java` | **new** (dot/mark, `selectionBridgeInstalled`, `textListeners`, `preventPeerEvents`) |
+| `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/internal/AwtTextStateStore.java` | **new** (dot/mark, `textListeners`, `preventPeerEvents`) |
 | `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/STextField.java` | **new** |
 | `surrogates/src/test/java/com/vaadin/swingbridge/surrogates/STextFieldTest.java` | **new** |
-| `surrogates/decisions.md` | SD_schoice (`STextField` + the mixin), possibly SD_scheckbox if the masking mechanism deserves its own entry |
+| `surrogates/decisions.md` | new `SD_stextfield` entry (`STextField` + the mixin), possibly a separate entry if the masking mechanism deserves its own |
 | `emulators/src/main/java/vaadinx/awt/TextComponent.java` | **new** |
 | `emulators/src/main/java/vaadinx/awt/TextField.java` | **new** |
 | `emulators/src/test/java/vaadinx/awt/TextFieldTest.java` | **new** |
-| `emulators/decisions.md` | D_document_last_word |
-| `sampler/src/main/java/com/vaadin/swingbridge/sampler/AwtWidgetsPanel.java` | Demo 5 appended + class javadoc list item |
-| `sampler/src/test/java/com/vaadin/swingbridge/sampler/AwtWidgetsWarnInventoryTest.java` | fourth bucket + user-path steps |
-| `sampler/description.md` | extend the `AwtWidgetsWarnInventoryTest` inventory line; correct the "exhaustive bucket" claim |
+| `emulators/decisions.md` | new `D_awt_textfield` entry; repoint `D_frameinit_shape`'s `Q_enableevents_meaningful` tripwire, which cites this plan |
+| `emulators/src/test/java/vaadinx/EmulatorOwnedStateTest.java` | a bare-thread read of the getters, per D_emulator_owned_state |
+| `sampler/src/main/java/com/vaadin/swingbridge/sampler/AwtTextFieldPanel.java` | **new** |
+| `sampler/src/test/java/com/vaadin/swingbridge/sampler/AwtTextFieldWarnInventoryTest.java` | **new** — API bucket + user path |
+| `sampler/src/main/java/com/vaadin/swingbridge/sampler/SamplerCatalogue.java` | one `"AWT"` / `TextField` line |
+| `sampler/description.md` | add the `AwtTextFieldWarnInventoryTest` inventory line; correct the "exhaustive bucket" claim |
 | `CLAUDE.md` | one clause in the *Component surface* paragraph, next to `vaadinx.awt.Button` / `vaadinx.awt.Label` |
-| `ideas/awt-widgets.md` | flip the `TextField` row to *landed*, keep `TextArea` pointing at `ideas/awt-textarea.md` |
-| `ideas/awt-textfield.md` | **deleted** on graduation — nuggets to SD_schoice / D_document_last_word per the ideas-folder convention |
 
 No `META-INF/resources` CSS file unless the declarative masking variant wins over the inline-style one.
 
@@ -330,14 +321,13 @@ No `META-INF/resources` CSS file unless the declarative masking variant wins ove
 Things a human has to decide, and the places I am guessing.
 
 1. **The masking mechanism is unverified in a browser.** I verified from `javap` and the Vaadin sources that no server-side API exists, and `-webkit-text-security` is the mechanism I would reach for — but I have not confirmed that it applies to Vaadin 25's inner input, nor that Firefox (which shipped the property late) honours it, nor whether the input is light-DOM-reachable from a global stylesheet. **This slice should not land on a WARN-and-render-cleartext fallback**: if none of the three mechanisms survives verification, that is a finding to bring back, not a divergence to accept quietly.
-2. **Should SD_caret_selection's selection JS be shared rather than duplicated?** The `emul-selection` custom event, its client-side dedupe and `whenInputElementReady` are ~40 lines of JS protocol that `TextComponentMixin` would need verbatim. Duplicating a JS protocol is materially worse than duplicating SD_sbutton's 40 lines of Java listener fan-out, because the two copies drift silently. The clean fix is extracting it into a small `com.vaadin.swingbridge.surrogates.internal` helper parameterised by a text-length supplier and a dot/mark holder — but that is **a refactor of a landed Swing path to accommodate an AWT widget**, which is exactly the kind of change the project treats as a decision rather than a chore. My recommendation is to extract; the call is not mine.
-3. **Eager vs lazy selection bridge.** I propose eager (constructor), because AWT has no `CaretListener` to trigger a lazy install and AWT's read contract is "read the live peer". The cost is a round trip per caret move on every AWT text field in the app. If that is judged too expensive, the fallback is lazy-on-first-selection-read, which still returns a stale answer on that first read — i.e. the worst of both.
-4. **`vaadinx.awt.TextComponent`'s ctor visibility.** Package-private (mirrors the JDK, closes the seam to user code, works because both subclasses are in `vaadinx.awt`) vs `protected` (R_leaf_peer_lockdown's literal wording for a non-leaf) vs a faithful `sealed … permits`. I lean package-private; it is a one-word change either way.
-5. **Reproduce the `eventEnabled` gate on `processTextEvent`, or always dispatch?** Gating is faithful and matches the JDK's own javadoc; always dispatching makes a subclass override unconditionally reachable, which R_no_vaadin_in_api limb 2 is arguably about. I lean faithful, but this is the kind of thing the R_no_vaadin_in_api sweep would want stated one way in a `D*` entry.
-6. **Is `columns` on the surrogate really R_vaadin_first-legitimate?** I said the justification is the weakest in the class and I stand by that. The precedent (`SJTextField`, `SJPasswordField`) is what carries it, not the reasoning.
-7. **Does `getPreferredSize(int)` WARN?** I propose no, for exit-gate reasons as much as consistency. If the answer is yes, four methods leave the API driver and the "exhaustive bucket" language weakens further.
-8. **`TextField` or `TextArea` first?** `TextArea` is the same base plus five methods, and doing them together would settle the mixin's shape with two real consumers instead of one — at the cost of a much bigger single slice. The lane's habit so far is one widget per slice.
-9. **Unverified: whether `ValueChangeMode.EAGER` + the `setText`-fires-once requirement compose cleanly.** The `preventPeerEvents` interaction is described above from first principles, not from a working implementation; it is the part I would expect to need a second pass.
+2. **Should the selection-report JS be shared rather than duplicated?** The `emul-selection` / `emul-selection-now` custom events behind `JTextComponentMixin.addSelectionReportListener`, their client-side dedupe and `whenInputElementReady` are ~40 lines of JS protocol that `TextComponentMixin` would need verbatim. Duplicating a JS protocol is materially worse than duplicating SD_sbutton's 40 lines of Java listener fan-out, because the two copies drift silently. The clean fix is extracting it into a small `com.vaadin.swingbridge.surrogates.internal` helper parameterised by a text-length supplier and a dot/mark holder — but that is **a refactor of a landed Swing path to accommodate an AWT widget**, which is exactly the kind of change the project treats as a decision rather than a chore. My recommendation is to extract; the call is not mine.
+3. **`vaadinx.awt.TextComponent`'s ctor visibility.** Package-private (mirrors the JDK, closes the seam to user code, works because both subclasses are in `vaadinx.awt`) vs `protected` (R_leaf_peer_lockdown's literal wording for a non-leaf) vs a faithful `sealed … permits`. I lean package-private; it is a one-word change either way.
+4. **Reproduce the `eventEnabled` gate on `processTextEvent`, or always dispatch?** Gating is faithful and matches the JDK's own javadoc; always dispatching makes a subclass override unconditionally reachable, which R_no_vaadin_in_api limb 2 is arguably about. I lean faithful, but this is the kind of thing the R_no_vaadin_in_api sweep would want stated one way in a `D*` entry.
+5. **Is `columns` on the surrogate really R_vaadin_first-legitimate?** I said the justification is the weakest in the class and I stand by that. The precedent (`SJTextField`, `SJPasswordField`) is what carries it, not the reasoning.
+6. **Does `getPreferredSize(int)` WARN?** I propose no, for exit-gate reasons as much as consistency. If the answer is yes, four methods leave the API driver and the "exhaustive bucket" language weakens further.
+7. **`TextField` or `TextArea` first?** `TextArea` is the same base plus five methods, and doing them together would settle the mixin's shape with two real consumers instead of one — at the cost of a much bigger single slice. The lane's habit so far is one widget per slice.
+8. **Unverified: whether `ValueChangeMode.EAGER` + the `setText`-fires-once requirement compose cleanly.** The `preventPeerEvents` interaction is described above from first principles, not from a working implementation; it is the part I would expect to need a second pass.
 
 ## Effort
 

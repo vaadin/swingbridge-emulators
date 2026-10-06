@@ -22,7 +22,7 @@ A Swing app holds a stateful backend connection (CORBA / JMS / a DB session / a 
 socket) opened at startup and torn down when the app quits. The migration guide already
 answers where such a service is *constructed* (M1D_static_taxonomy + the `main()`/`mainUI()` split) and
 how to handle *exit initiation* (`System.exit` / EXIT_ON_CLOSE → session-close). It says
-**nothing about teardown** — `addShutdownHook` appears nowhere in `migration/`.
+**nothing about teardown** — `addShutdownHook` appears nowhere in `guides/` or `migration/`.
 
 This matters because teardown, unlike `System.exit`, cannot be made transparent: `Runtime`
 is not in the Component hierarchy ([D_whitelist_porting](../emulators/decisions.md)) and is a `java.lang`
@@ -137,24 +137,12 @@ maybe (open `Q_runtime_detection`).
 
 - **`Q_helper`:** `AppLifecycle.onAppExit(Runnable)` in `vaadinx.swing.app`. Global case
   stays bare `addShutdownHook`.
-- **`Q_di_containers`:** out of scope. `Q_scope_mapping` was answered 2026-09-23
-  ([M1D_spring_bootloader_only](../migration/1-swing-to-emulators/decisions.md#M1D_spring_bootloader_only)):
-  no `vaadin-spring` scope stands in for the tab-scoped holder, Spring Boot is a bootloader only, and
-  a Swing app already built on Spring is unsupported for now. The earlier hope here —
-  `@VaadinSessionScope` + `@PreDestroy` as the DI-context-per-session — went with it: session is
-  the wrong boundary and has no tab-close teardown. The teardown story that would bring DI apps back
-  into scope is a per-tab context closed from the tab-scope destroy listener, researched in
+- **`Q_di_containers`:** out of scope, and settled in
+  [M1D_spring_bootloader_only](../migration/1-swing-to-emulators/decisions.md#M1D_spring_bootloader_only)
+  (no `vaadin-spring` scope, a Spring-based Swing app unsupported but not halted). Out-of-scope
+  teardown means *we do not wire your container's lifecycle for you*. The teardown story that would
+  bring DI apps back is a per-tab context closed from the tab-scope destroy listener, in
   [`spring-context-per-tab.md`](./spring-context-per-tab.md) (`Q_teardown`).
-
-  **What is settled, 2026-09-22: it is out of scope without being a stop.** The provisional gate
-  below — detect Spring, declare the migration unsupported, halt the porting agent — **is
-  withdrawn, unbuilt.** Detecting a DI container now presents the **bootstrap chooser's
-  Spring rows** ([M1D_bootstrap_choice](../migration/1-swing-to-emulators/decisions.md#M1D_bootstrap_choice)):
-  the version delta is stated, and the migrator picks Spring Boot after a Spring upgrade or Vaadin
-  Boot with their Spring left alone. Out-of-scope teardown means *we do not wire your
-  container's lifecycle for you*; it never meant *we refuse to run*. **2026-09-23:** "unsupported"
-  is back, for a new reason (per-user state in singleton beans, invisible to every gate) — but
-  still not a halt: the migration runs, it just carries no support promise.
 - **`Q_teardown_ordering` — execution environment & ordering:** resolved. `onAppExit` callbacks are
   **backend-only leaves** riding a generalized D_shutdown_lifecycle **shutdown coordinator**; the full design
   is §7 below.
@@ -162,6 +150,13 @@ maybe (open `Q_runtime_detection`).
 ## 7. Teardown execution contract & the shutdown coordinator (`Q_teardown_ordering` resolved)
 
 ### The execution environment (from the D_shutdown_lifecycle code)
+
+**Check before designing:** the dispatch now has two entry points. A real app-tab close runs it
+*promptly* from `AppTab.onTabClosed` on the request-less tab-scope reaper thread
+(`JFrame.dispatchShutdownFromTabClose`, before `session.close()`); `VaadinSession`-destroy is only the
+deduped backstop (D_shutdown_lifecycle, prompt-shutdown item 3). A coordinator riding that dispatch
+inherits the ~60 s promptness, which bears directly on caveat 1 and `Q_teardown_latency`. The
+bullets below describe the session-destroy (backstop) path.
 
 A teardown callback runs in SB-Emulators' existing session-destroy dispatch:
 
@@ -241,17 +236,14 @@ mental model. This makes `onAppExit` **self-sufficient** — it works with or wi
 
 ## 9. Next steps (when this graduates)
 
-- **Route DI usage to the consent fork — *not* a hard stop.** (Rewritten 2026-09-22; the previous
-  version of this step made a DI hit an unsupported hard-stop that halted the porting agent. It was
-  never built — no `springframework` row exists in
-  `migration-tool/src/main/resources/META-INF/emul/hazards.tsv`, no §7 bullet in
-  [`spec.md`](../migration/1-swing-to-emulators/spec.md), nothing in the guide — so this is a
-  proposal withdrawn rather than a shipped gate retracted. Keep the paragraph: the grep list is
-  reusable and the reversal is worth not re-deriving.)
+- **Route DI usage to the consent fork — *not* a hard stop** (a halting gate was proposed and
+  withdrawn unbuilt, per M1D_spring_bootloader_only). Not built yet: no Spring row exists in
+  `migration-tool/src/main/resources/META-INF/emul/hazards.tsv` nor a bullet in
+  [`spec.md`](../migration/1-swing-to-emulators/spec.md) §7.
 
-  The grep list stands (`org.springframework.*`, `@Autowired` / `@Component` / `@Service` /
+  The grep list (`org.springframework.*`, `@Autowired` / `@Component` / `@Service` /
   `@Bean` / `@PreDestroy` / `DisposableBean`, `ApplicationContext`, `com.google.inject.*` /
-  `@Inject` / Guice `Module`, PicoContainer, CDI `@ApplicationScoped`, …). What changes is the
+  `@Inject` / Guice `Module`, PicoContainer, CDI `@ApplicationScoped`, …) is ready. The
   **verdict**: a hit prints the chooser's Spring advice (`build-wiring.md` § Which bootstrap?) and
   "unsupported", and the migration continues either way.
 

@@ -10,6 +10,11 @@ The inventory app's `ActionButton` swaps a toolbar icon on hover and press with 
 the browser logs a **403** on `/VAADIN/dynamic/resource/…`. Cosmetic in effect, but a 403 on our own
 resource URL is not a cosmetic *cause*.
 
+Reproduced in the 2026-10-06 side-by-side run. The broken `<img>`'s alt text is the icon's
+`file:/home/…/target/classes/images/…` URL — `ImageIcon(URL)`'s JDK-default description, which
+`Icons.imageIconToVaadinImage` copies to `setAlt`. Faithful, but it puts the server's absolute path in
+the page (visible to the user only while the image is broken).
+
 ## Where to look
 
 - `surrogates/.../util/Icons.imageIconToVaadinImage` builds a Vaadin `Image` from the icon's

@@ -42,8 +42,8 @@ package vaadinx.awt;
 // Hand-written emulator — third widget in the AWT lane after Button and
 // Label, and the first of them that carries state worth adjusting: an item
 // list plus a selection, with four selection-adjust quirks the JDK's own
-// javadoc mis-describes. Rationale + the sizing of the rest of the AWT
-// widget family: ideas/awt-widgets.md; decisions: D_awt_choice / SD_schoice.
+// javadoc mis-describes. The lane's rationale and status:
+// D_awt_lane; decisions: D_awt_choice / SD_schoice.
 //
 // The Choice owns its state, as the JDK's does: pItems and selectedIndex are
 // the JDK's fields and the mutators are its bodies, so no getter reads the

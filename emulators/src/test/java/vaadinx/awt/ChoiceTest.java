@@ -62,7 +62,7 @@ import static vaadinx.TestAssertions.assertSingle;
  * class is the only place to check: R_no_vaadin_in_api limb 2's call directions (three
  * JDK hooks whose delegation runs the "wrong" way round on purpose), and
  * that a browser pick is re-sourced to the emulator. See D_awt_choice /
- * ideas/awt-widgets.md.
+ * D_awt_lane.
  */
 class ChoiceTest extends AbstractKaribuTest {
 

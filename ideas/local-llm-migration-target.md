@@ -2,8 +2,9 @@
 
 **Status:** a **"try,"** held loosely (see [*The "try" and islands*](#the-try-and-islands)) — not a
 hard commitment, but scoped and partly built. Brainstormed 2026-07-16; the target has a concrete
-shape (a struggle-list + escalation protocol, **not** an eval), and its four mechanical guardrails
-are implemented (see [*Status & where it lives*](#status--where-it-lives)).
+shape (a struggle-list + escalation protocol, **not** an eval). Its mechanical guardrails are built
+and live in their permanent homes (see [*What is built*](#what-is-built)); what is open is the
+target itself, still to be brainstormed in a dedicated session, and the release-gated probe.
 
 **Maintainer-facing.** Touches the stage-2 migration mechanics
 ([`migration/1-swing-to-emulators/`](../migration/1-swing-to-emulators/)) and the
@@ -67,24 +68,16 @@ Five instances of the one lever, all model-capability-independent:
    A **cloud** agent can build the generic ones (SwingX-scale) *once* — they carry no customer secret
    (open source), so it's fine even for the strictest privacy customer, and local migrations then
    just import-swap. Fork-priority ranked by **island-severity**, not popularity.
-4. **The grep list** — a runnable script unioning every §7 `Detect:` line, grouped by hazard.
+4. **The grep list** — one runnable finder (`HazardScan`) unioning every §7 `Detect:` line, grouped by hazard.
    Converts "remember to look for the FQN / `instanceof` edges" into "run these N greps." It's
    **complete over precise**: accept false positives (a comment match, dismissed in seconds); a false
    *negative* on a silent edge ships a bug invisibly.
 5. **A tool that owns a whole phase** — the strongest form of the lever, and the first phase to reach
-   it: the import swap is now `:migration-tool`, not prose the agent applies
-   ([M1D_import_swap_tool](../migration/1-swing-to-emulators/decisions.md#M1D_import_swap_tool)).
-   **This is the target's best evidence so far, and it is measured rather than argued.** Running the
-   tool's algorithm against all three testapps' human-graded stage-2 trees: 91 files, 67 exact,
-   24 differing, **0 disagreements** — and not one of the 24 was a judgement call *about an import*.
-   Every residue case belonged to a *different* phase (a later phase deleted the code; the agent
-   introduced a type during a semantic rewrite; the add-on table had no rows). So **Phase 2 is
-   judgement-free** (`Q_phase_fully_mechanical`, answered) — the first phase to become so, and a phase that on a typical app
-   is most of the diff. Phases 1 and 3–6 do not move. Two second-order wins worth naming, because both
-   were paid for by the same tool: a model too small to be trusted with 60 lines of shadowing rules now
-   needs none of it, and the tool **catches what a graded human run dropped** (`crud`'s
-   `EmployeeEditDialog` kept `import java.util.Calendar;` — harmless there, exactly the silent class,
-   and a tool does not get bored).
+   it: the import swap is now `:migration-tool`, not prose the agent applies. **This is the target's
+   best evidence so far, and it is measured rather than argued**: Phase 2 is judgement-free
+   ([M1D_import_swap_tool](../migration/1-swing-to-emulators/decisions.md#M1D_import_swap_tool) §
+   Status has the graded-tree comparison). Phases 1 and 3–6 do not move. For this target the win is
+   that a model too small to be trusted with 60 lines of shadowing rules now needs none of it.
 
 The question for each hard edit: **"can this be reshaped into a rule a 30B model applies reliably, or
 a gate that applies it *for* the model?"** If yes, it's on the mechanical path. If not, it routes by
@@ -119,29 +112,11 @@ session) compiles, boots, and passes the WARN inventory, then leaks across users
 production. Every *other* hazard fails loud (compile error, WARN, or throw), so the stuck-signal
 catches them; the static sweep the model never gets stuck on — it gets it wrong and moves on. So it
 gets its own handling class, **review-gated regardless of model** (even frontier output deserves it —
-no capability makes a silent verdict safe unreviewed):
-
-- **A build-time lint** (ArchUnit) flags any `static` field / session attribute assignable to
-  `vaadinx.awt.Component` — the mechanical floor under the loudest-consequence, most-common case.
-- **A human review-gate** on the finite per-field verdict table (`Q_user_specific` / `Q_world_global` / `Q_counter` of the tree): the model
-  emits one row per `static` field + reasoning; a human signs off. Dozens of rows, minutes to review
-  — the cheap cousin of the (deferred) test-gen "reviewed markdown" pattern, spent exactly where
-  silent cross-user bugs hide.
-
-The three detection tiers are chosen by loud-vs-silent, and the silent one is why the guaranteed tier
-exists:
-
-| Tier | Role | Guaranteed? |
-|---|---|---|
-| **grep list** | surface every hazard's candidate sites | ✅ always (zero-dependency) |
-| **LSP** | semantic refinement (real-vs-false, transitive reach) | ⚠️ best-effort — never load-bearing (may be absent/stale/unwired) |
-| **ArchUnit lint** | the guaranteed semantic check for the one silent hazard | ✅ runs in the build |
-
-Grep alone can't do this job: the canonical leak is `static MainFrame FRAME` where `MainFrame extends
-JFrame` — the declaration names `MainFrame`, not `JFrame`, so a name-based grep skips it, but ArchUnit
-resolves the hierarchy from bytecode and flags it. The decision tree + worked examples live in the
-migrator reference [static-fields.md](../guides/1-swing-to-emulators/static-fields.md);
-rationale + rejected alternatives in [M1D_static_taxonomy](../migration/1-swing-to-emulators/decisions.md#M1D_static_taxonomy).
+no capability makes a silent verdict safe unreviewed): a build-time lint as the mechanical floor, plus
+a human review-gate over the finite per-field verdict table. That handling is decided and built — the
+detection split in [M1D_static_taxonomy](../migration/1-swing-to-emulators/decisions.md#M1D_static_taxonomy),
+the lint in [M1D_guardrails_artifact](../migration/1-swing-to-emulators/decisions.md#M1D_guardrails_artifact),
+the migrator reference [static-fields.md](../guides/1-swing-to-emulators/static-fields.md).
 
 ## The fallback protocol — struggle-list, stuck-signal, islands
 
@@ -186,40 +161,23 @@ Held loosely, with two escape hatches — reshaped by the brainstorm *away* from
   [migrated-app-testing.md § "Decided"](./migrated-app-testing.md). Tests in general are not part of
   the local-LLM stage-2 target.
 
-## Status & where it lives
+## What is built
 
-The mechanical guardrails are built; each lives in its permanent home, this doc just points:
+The mechanical guardrails, each in its permanent home:
 
-- **The import-swap tool** — `:migration-tool`, per
-  [M1D_import_swap_tool](../migration/1-swing-to-emulators/decisions.md#M1D_import_swap_tool);
-  migrator-facing invocation in
-  [guide.md Phase 2](../guides/1-swing-to-emulators/guide.md). Unlike the other four this one
-  *removes* a phase from the docs rather than gating it, which is why it also changes what a probe run
-  measures — a Phase 2 stumble count now drops because the phase left the docs, not because the prose
-  improved, so a re-run has to partition its count by phase and exercise the retained by-hand prose
-  separately. Stated where a re-run is designed: `.claude/skills/guide-migrateapp/inventory.md` §"Designing
-  a re-run".
+- **The import-swap tool** — [M1D_import_swap_tool](../migration/1-swing-to-emulators/decisions.md#M1D_import_swap_tool).
+- **Colocation tags** — the per-hazard `LLM:` overlay behind a legend in
+  [spec.md §7](../migration/1-swing-to-emulators/spec.md). The migrator-facing
+  [static-fields.md](../guides/1-swing-to-emulators/static-fields.md) stays model-agnostic (no LLM
+  tags), same as the guide; the overlay graduates there only if the target firms up past "try."
+- **`Q_component` lint + `System.exit` ban** — `MigrationGuardrails`,
+  [M1D_guardrails_artifact](../migration/1-swing-to-emulators/decisions.md#M1D_guardrails_artifact).
+- **The grep list** — `HazardScan`,
+  [M1D_hazard_scan_tool](../migration/1-swing-to-emulators/decisions.md#M1D_hazard_scan_tool), whose
+  `Q_llm_overlay_column` is held as loosely as the overlay itself.
 
-- **Colocation tags** — [spec.md §7](../migration/1-swing-to-emulators/spec.md) (per-hazard `LLM:`
-  difficulty × sensitivity + ⚠silent, behind a legend) carries the static sweep's overlay on its
-  "Static frame singletons" + "Multi-tab" entries, and [M1D_static_taxonomy](../migration/1-swing-to-emulators/decisions.md#M1D_static_taxonomy)'s
-  detection-split paragraph states the mechanical-floor-vs-review-gate routing. The migrator-facing
-  [static-fields.md](../guides/1-swing-to-emulators/static-fields.md) stays model-agnostic (no
-  LLM tags), same as the guide/checklist; the overlay graduates there only if the target firms up
-  past "try."
-- **`Q_component` lint + `System.exit` ban** — `MigrationGuardrails` in
-  [`:migration-guardrails`](../migration-guardrails), installed by
-  [guide.md Phase 6 step 6](../guides/1-swing-to-emulators/guide.md) as a six-line test.
-  Shipped as a **published test-scope artifact** since 2026-09-02
-  ([M1D_guardrails_artifact](../migration/1-swing-to-emulators/decisions.md#M1D_guardrails_artifact)),
-  which supersedes the earlier copy-paste-rules form — the discoverability bar this doc sets is what
-  the fluent builder was measured against. Covers the direct/blanket cases; transitive / collection /
-  session-attribute cases stay in the review-gate.
-- **`hazardscan.HazardScan`** — the consolidated finder in [`:migration-tool`](../migration-tool),
-  §7 `Detect:` lines + the §5 import sharp edges, in a table `HazardTableTest` joins bidirectionally
-  with §7 by `H_` slug (M1D_hazard_scan_tool). A finder (exits 0), not a gate. Its report names each
-  section's `H_` id, which is the hook an overlay column would hang on if `Q_llm_overlay_column`
-  ever lands — held as loosely as the overlay itself.
-- **Open:** the release-gated local-LLM probe (run a candidate model against `testapps/crud/swing`
-  decoupled from sources, diff against the golden `1-emulators/`) — formerly tracked in `TODO.md`,
-  the only remaining item.
+## Open
+
+- **The target itself** — undecided; to be brainstormed in a dedicated session.
+- **The release-gated local-LLM probe**: run a candidate model against `testapps/crud/swing`
+  decoupled from sources, and diff against the golden `1-emulators/`.

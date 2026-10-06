@@ -34,7 +34,7 @@ import java.awt.event.AdjustmentEvent;
 /**
  * {@link vaadinx.awt.Scrollbar} — the AWT 1.0 scrollbar, not
  * {@link vaadinx.swing.JScrollBar}. Decisions: {@code D_awt_scrollbar} / {@code SD_sscrollbar}; the
- * lane's rationale: {@code ideas/awt-widgets.md}.
+ * lane's rationale: {@code D_awt_lane}.
  *
  * <ol>
  *   <li><b>The poor-man's slider</b> — a horizontal 0–255 bar tinting a

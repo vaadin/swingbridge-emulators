@@ -56,7 +56,7 @@ package vaadinx.awt;
 // Browser -> AWT: a user's drag runs setValueIsAdjusting + setValue and then
 // posts, and the drag end runs setValueIsAdjusting(false) and posts, as the
 // JDK's Windows peer does (WScrollbarPeer.postAdjustmentEvent / dragEnd).
-// Rationale: D_awt_scrollbar / SD_sscrollbar; family sizing: ideas/awt-widgets.md.
+// Rationale: D_awt_scrollbar / SD_sscrollbar; the lane: D_awt_lane.
 
 /**
  * Emulator for {@link java.awt.Scrollbar} — the AWT 1.0 scrollbar, not

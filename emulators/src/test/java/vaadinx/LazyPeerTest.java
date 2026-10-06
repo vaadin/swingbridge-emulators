@@ -133,7 +133,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * A lazy emulator builds its Vaadin peer only once a UI is current: an emulator constructed and
  * configured on a worker runs no Vaadin code there, and its writes reach the peer when it is
- * attached (ideas/vaadin-ui-thread-only.md § "The mechanism").
+ * attached (D_lazy_peers).
  */
 class LazyPeerTest extends AbstractKaribuTest {
 

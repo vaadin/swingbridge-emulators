@@ -61,7 +61,7 @@ import static vaadinx.TestAssertions.assertSingle;
  * that make this widget unlike the AWT leaves before it: every programmatic
  * path is silent where Swing's fires, and the group turns a checkbox into a
  * radio button whose deselect is vetoed. {@code CheckboxGroup}'s own surface is
- * covered in {@link CheckboxGroupTest}. See ideas/awt-widgets.md.
+ * covered in {@link CheckboxGroupTest}. See D_awt_lane.
  *
  * <p>Java has no import alias, so the Vaadin peer type is spelled out in full
  * at every lookup — {@code Checkbox} here is unqualified for the emulator.

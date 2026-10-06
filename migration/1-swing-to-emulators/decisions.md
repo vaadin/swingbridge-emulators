@@ -1592,7 +1592,11 @@ it is not.
 compares the tool's output against all three committed stage-2 trees by *resolved binding* rather than
 text (the graded run used `vaadinx.swing.*` wildcards where the tool emits single-type imports; a
 textual diff scores dozens of false failures): **91 files compared, 67 exact, 24 differing, 0
-disagreements** — no shared binding resolves differently. End-to-end, the tool's output on the pristine
+disagreements** — no shared binding resolves differently. Nor was any of the 24 a judgement call
+*about an import*: every residue belonged to a different phase (a later phase deleted the code, a
+semantic rewrite introduced a type, the add-on table had no rows), so **Phase 2 is judgement-free**
+(`Q_phase_fully_mechanical`) — the first guide phase to become so, and on a typical app most of the
+diff. End-to-end, the tool's output on the pristine
 stage-1 trees compiles against `:emulators`: `crud` (7 files) and `jlawyer-shape` (20) clean, `inventory`
 (65) down to 4 errors, all of them documented `swingbridge-emulators-jcalendar` method gaps (`getDateEditor`,
 `getDateFormatString`) already named in that add-on's MIGRATION.md and hand-resolved in the graded tree.

@@ -1,9 +1,12 @@
 # The `java.awt.MenuComponent` family — design pass (not planned work)
 
-**Status:** brainstorm, no commitment. Estimated 2026-08-21. Sized in [awt-widgets.md](./awt-widgets.md),
-whose status line carries the lane's own: **delayed and paused, 2026-09-22.**
+**Status:** brainstorm, no commitment. Estimated 2026-08-21. Part of the AWT-widget lane, which is
+**delayed and paused (2026-09-22).** Nothing below is implemented: `vaadinx.awt` ports no
+`MenuComponent` class, `Component.add(PopupMenu)` / `Component.remove(MenuComponent)` /
+`Frame.remove(MenuComponent)` are WARN stubs typed on the JDK classes, and `Frame.setMenuBar` stores
+a `java.awt.MenuBar` and WARNs, rendering nothing.
 
-**Maintainer-facing.** The parent sizing doc gives this family one row — *"**multi-session** — the real
+**Maintainer-facing.** The AWT-lane sizing gave this family one row — *"**multi-session** — the real
 cost: they extend `java.awt.MenuComponent`, a second unported root hierarchy. `MenuTreeBuilder` logic
 is reusable, the base classes are not."* This is the pass that checks how bad that actually is.
 
@@ -17,8 +20,8 @@ menu rendering was already built layer-neutral. `com.vaadin.swingbridge.surrogat
 Swing type in it, and `MenuTreeBuilder` consumes only that record. An AWT menu tree plugs into the
 existing builder unchanged. **Expected new surrogate classes: zero.** Re-estimate: ~2 sessions, and
 the irreducible part is not the menus at all — it is re-typing `MenuContainer` through two landed
-classes (`vaadinx.awt.Component`, `vaadinx.awt.Frame`) and giving `SFrame` the menubar slot only
-`SJFrame` has today.
+classes (`vaadinx.awt.Component`, `vaadinx.awt.Frame`) and giving a plain `vaadinx.awt.Frame` (peer
+`SFrame`, no root pane) the menubar slot only root-pane containers have today.
 
 ---
 
@@ -76,10 +79,9 @@ public boolean postEvent(Event);
 ```
 
 Implemented by `MenuBar`, `Menu`, **and `java.awt.Component`** (`javap java.awt.Component` →
-`implements ImageObserver, MenuContainer, Serializable`), plus `java.awt.Frame` redundantly. This is
-why `vaadinx.awt.Component` already carries `remove(java.awt.MenuComponent)` (WARN stub, line 116)
-and `postEvent(java.awt.Event)` — it has the *shape* of `MenuContainer` today without declaring the
-interface.
+`implements ImageObserver, MenuContainer, Serializable`), plus `java.awt.Frame` redundantly.
+`vaadinx.awt.Component` today declares the **JDK's** `java.awt.MenuContainer`, with
+`remove(java.awt.MenuComponent)` a WARN stub and `postEvent(java.awt.Event)` beside it.
 
 ### `MenuBar` (extends `MenuComponent`, implements `MenuContainer, Accessible`)
 
@@ -223,7 +225,7 @@ public AccessibleContext getAccessibleContext();
   `MenuBar` (then *"this PopupMenu is really just a plain, old Menu"* — `addNotify` chains to
   `super`, and `show` throws).
 - The parent is set by **`java.awt.Component.add(PopupMenu)`** — which is a WARN stub on
-  `vaadinx.awt.Component` (line 136) today. Wiring it is what makes `show`'s exception ladder
+  `vaadinx.awt.Component` today. Wiring it is what makes `show`'s exception ladder
   meaningful.
 - `show`'s exception ladder is the richest R_match_swing_errors surface in the family — see the table.
 
@@ -343,10 +345,11 @@ entire `JMenuItem` / `JMenu` / `JCheckBoxMenuItem` / `JRadioButtonMenuItem` fami
 3. The root's `pushTree()` walks the *emulator* tree via `JMenuItem.toMenuNode(parentEnabled)` /
    `JMenu.collectChildren(...)`, producing a fresh `List<MenuNode>`, and hands it to
    `SJMenuBar.rebuildFromTree` / `SJPopupMenu.rebuildFromTree`.
-4. The surrogate tears down the old Vaadin item tree and old shortcut registrations and rebuilds from
-   scratch.
+4. The surrogate updates the existing Vaadin items in place when the tree's shape is unchanged
+   (`MenuTreeBuilder.patchInPlace`), and otherwise tears down the old item tree and old shortcut
+   registrations and rebuilds from scratch.
 
-**This is exactly the hypothesis the parent doc's framing obscures.** Because the tree is rebuilt
+**This is exactly the hypothesis the lane sizing's framing obscures.** Because the tree is rebuilt
 from the emulator hierarchy on every mutation, and because the descriptor it is rebuilt *from* is
 layer-neutral, **the peer type of an individual item is irrelevant — and for AWT items, there needn't
 be one at all.** The Swing family only carries a Span because `AbstractButton`'s ctor chain demands
@@ -387,9 +390,9 @@ accessor pointing at them). There is nothing Swing-shaped to graft.
 The `SJ` prefix reads slightly wrong in `vaadinx.awt.MenuBar`'s ctor, and that is the whole cost of
 the reuse. Per the S-prefix rule the prefix marks the *module*, not a Swing/AWT split; a rename to
 `SMenuBar` used by both lanes would be honest but is a churn-for-naming trade, and `SJMenuBar` is
-what `RootPaneScaffold.setMenuBar(SJMenuBar)`, `SJFrame.setJMenuBar(SJMenuBar)` and
-`DialogStrategy.applyMenuBar` are all typed on today. Recommendation: **reuse under the existing
-name; note the naming wart in the decision entry** rather than renaming five call sites.
+what `SJRootPane.setJMenuBar(SJMenuBar)`, `SJFrame` / `SJDialog`, `RootPaneScaffold` and the Swing
+emulators are all typed on today. Recommendation: **reuse under the existing name; note the naming
+wart in the decision entry** rather than renaming the typed call sites.
 
 **Does a shared abstraction over the Swing and AWT *emulator* trees belong anywhere?** No, and the
 module direction is not even the reason. Both trees live in `:emulators`, so a shared helper there
@@ -431,8 +434,9 @@ public interface MenuContainer {
 ```
 
 Ported because it references `MenuComponent`, which is ported. Then — and this is the ripple —
-`vaadinx.awt.Component` and `vaadinx.awt.Frame` should **declare** `implements
-vaadinx.awt.MenuContainer` (today they carry the shape but not the interface), and their
+`vaadinx.awt.Component` (and redundantly `vaadinx.awt.Frame`, as in the JDK) should **declare**
+`implements vaadinx.awt.MenuContainer` (today `Component` declares the JDK's `java.awt.MenuContainer`
+instead), and their
 `remove(java.awt.MenuComponent)` stubs must re-type to `remove(vaadinx.awt.MenuComponent)`. Both are
 **breaking signature changes on landed classes** — and both are *required* by R_no_vaadin_in_api's first limb: once
 `vaadinx.awt.MenuComponent` exists, a public method that shadows the JDK's `remove(MenuComponent)`
@@ -534,16 +538,9 @@ MenuNode.onClick  →  EHelper.callSwing(() -> item.dispatchEvent(new ActionEven
 **Route the browser click through `dispatchEvent`, not straight to `processActionEvent`.** Because
 `MenuComponent.dispatchEvent` is `final`, it is a safe funnel: a user override of `processEvent` or
 `processActionEvent` is then genuinely reached by a real click, which is precisely what limb 2 asks
-for. It also gets the unhandled-action-bubbles-to-parent limb for free.
-
-**A finding worth flagging: `vaadinx.awt.Button` does not do this.** Its bridge calls
-`processActionEvent(...)` directly, and its `processEvent` override peels `ActionEvent` off before
-`super`. So a migrator subclassing `vaadinx.awt.Button` and overriding `processEvent` — the JDK's own
-documented interception point, and the *only* one if they haven't registered a listener — compiles,
-looks wired, and never runs on a browser click. That is limb-2 shaped, same category D_r12_provenance found on
-`JTable.prepareRenderer`. Not this doc's slice to fix; recorded so the menu family does not copy the
-pattern, and so someone can decide whether `Button` (and `Label`, which has no listeners at all and
-so is unaffected) deserves a follow-up.
+for. It also gets the unhandled-action-bubbles-to-parent limb for free. (`vaadinx.awt.Button`'s
+bridge enters at `processEvent` for the same reason — `Component.dispatchEvent` is still a stub
+there, while `MenuComponent.dispatchEvent` would be ours to implement.)
 
 ### R_leaf_peer_lockdown, and why it is vacuous here
 
@@ -625,13 +622,12 @@ matching what `vaadinx.swing.JPopupMenu.show(vaadinx.awt.Component, int, int)` a
 Two things the AWT version gets that the Swing one does not:
 
 1. **A real exception ladder that we can honour exactly**, because everything it checks already
-   exists: `Container.isAncestorOf(vaadinx.awt.Component)` (line 738) and
-   `Component.isShowing()` (line 447, `visible && isDisplayable()`, and `isDisplayable` walks the Flow
-   attachment chain). See the R_match_swing_errors table.
+   exists: `Container.isAncestorOf(vaadinx.awt.Component)` and `Component.isShowing()`. See the
+   R_match_swing_errors table.
 2. **The parent must be wired.** `java.awt.Component.add(PopupMenu)` is what sets `popup.parent`; on
-   `vaadinx.awt.Component` (line 136) it is a WARN stub. Implementing it — store the popup, set
+   `vaadinx.awt.Component` it is a WARN stub. Implementing it — store the popup, set
    `popup.parent = this`, and `menu.setTarget(this.getPeer())` right away — is what makes both `show`
-   and the plain right-click idiom work. `Component.remove(MenuComponent)` (line 116) is the matching
+   and the plain right-click idiom work. `Component.remove(MenuComponent)` is the matching
    teardown, and is also the `MenuContainer` method, so it stops being a stub for two reasons at once.
 
 Since binding the target at `add(PopupMenu)` time already makes right-click work, **the common AWT
@@ -642,36 +638,29 @@ Swing.
 
 ## `Frame.setMenuBar`
 
-Today, in `vaadinx.awt.Frame`:
-
-```java
-public void remove(java.awt.MenuComponent arg0) { EHelper.onUnimplemented("Frame", "remove", arg0); }
-public void setMenuBar(java.awt.MenuBar arg0)   { EHelper.onUnimplemented("Frame", "setMenuBar", arg0); }
-public java.awt.MenuBar getMenuBar()            { EHelper.onUnimplemented("Frame", "getMenuBar"); return null; }
-```
-
-Three generator stubs typed on the **JDK** classes — correct while `MenuBar` is unported (same status
-as `java.awt.Color`), and **required to change the moment it is ported**, per R_no_vaadin_in_api limb 1: the
-migrator's `import java.awt.MenuBar` becomes `import vaadinx.awt.MenuBar`, so the signature must
-follow. `JFrame extends Frame` inherits all three, giving a `JFrame` both `setJMenuBar(vaadinx.swing.JMenuBar)`
-and `setMenuBar(vaadinx.awt.MenuBar)` — exactly the JDK's shape.
+Today `vaadinx.awt.Frame.setMenuBar(java.awt.MenuBar)` / `getMenuBar()` are a field round-trip over
+the **JDK** type — `setMenuBar` stores the bar (with AWT's early return on an unchanged bar) and
+WARNs, rendering nothing — and `Frame.remove(java.awt.MenuComponent)` is a WARN stub. The JDK type is
+correct while `MenuBar` is unported (same status as `java.awt.Color`), and **required to change the
+moment it is ported**, per R_no_vaadin_in_api limb 1: the migrator's `import java.awt.MenuBar`
+becomes `import vaadinx.awt.MenuBar`, so the signature must follow. `JFrame extends Frame` inherits
+all three, giving a `JFrame` both `setJMenuBar(vaadinx.swing.JMenuBar)` and
+`setMenuBar(vaadinx.awt.MenuBar)` — exactly the JDK's shape.
 
 What it needs beyond re-typing:
 
-- **A render slot on `SFrame`.** `SJFrame.setJMenuBar(SJMenuBar)` delegates to
-  `RootPaneScaffold.setMenuBar(SJMenuBar)` (index 0, sibling of the content pane, detach-old-first).
-  `RootPaneScaffold` lives on `SJFrame` / `SJDialog` — **`SFrame`, which is a plain
-  `vaadinx.awt.Frame`'s peer, has no scaffold and no menubar slot.** Either lift a minimal slot onto
-  `SFrame`, or insert the element directly at index 0 the way `InlineStrategy.applyMenuBar` does for
-  the `@MainWindow` `SJPanel` peer. The element-insert route needs no `:surrogates` change, which
-  keeps the zero-`SD*` property; the lift is cleaner. Open question.
-- **`FrameStrategy.applyMenuBar(JFrame, JMenuBar, JMenuBar)` is typed on `vaadinx.swing.JMenuBar`.**
-  For a `JFrame` receiving an *AWT* `MenuBar`, either widen the strategy to the surrogate type
-  (`applyMenuBar(JFrame, SJMenuBar, SJMenuBar)` — both lanes' emulators can produce one) or add an
-  overload. Three implementors: `DialogStrategy` (delegates to `SJFrame.setJMenuBar`),
-  `InlineStrategy` (element insert at index 0), and the interface itself.
-- **`getMenuBar()` becomes a real field round-trip**, and `Frame.remove(MenuComponent)` clears it when
-  the argument is the current menubar (the JDK's `MenuBar.remove` path does the reverse bookkeeping).
+- **A render slot.** A Swing menu bar is planted by the root pane, not the frame strategy:
+  `JFrame.setJMenuBar` → `JRootPane` → `SJRootPane.setJMenuBar(SJMenuBar)`, which inserts the bar at
+  index 0 of the layered pane, above the content pane (D_rootpane_containment). A `JFrame` receiving
+  an *AWT* `MenuBar` can hand that same `SJRootPane` slot its `SJMenuBar`. **A plain
+  `vaadinx.awt.Frame` peers on `SFrame`, which has no root pane and no menubar slot.** Either lift a
+  minimal slot onto `SFrame`, or insert the element at index 0 from the emulator side. The
+  element-insert route needs no `:surrogates` change, which keeps the zero-`SD*` property; the lift
+  is cleaner. Open question.
+- **`Frame.remove(MenuComponent)` clears the bar** when the argument is the current menubar (the
+  JDK's `MenuBar.remove` path does the reverse bookkeeping), and the JDK's `setMenuBar →
+  remove(MenuComponent)` edge — which D_frame_state_pairs deliberately did not take while both were
+  stubs over `java.awt.MenuBar` — gets taken.
 
 Note the asymmetry a migrator will hit: mixing `setJMenuBar` and `setMenuBar` on one `JFrame` — legal
 in the JDK, where they are two independent slots the L&F renders differently — has **one** slot here.
@@ -733,37 +722,30 @@ enumerated throw set. Everything above is a JDK-faithful throw; everything not a
 
 ## Sampler demo + exit gate
 
-> **Stale plumbing — the demo content below still stands.** This section was written when the four
-> landed AWT widgets shared one `AwtWidgetsPanel` on a single `AWT widgets` route. They no longer do:
-> the lane's convention is **one pane per AWT class**, so wherever this section says "append Demo N to
-> `AwtWidgetsPanel`" / "a bucket in `AwtWidgetsWarnInventoryTest`" / "no `SamplerCatalogue` edit
-> needed", read: a new `Awt<Class>Panel`, a new `Awt<Class>WarnInventoryTest`, and one
-> `SamplerCatalogue` line under category `"AWT"` labelled with the bare JDK class name. Rationale:
-> [awt-widgets.md § The Sampler convention](./awt-widgets.md#the-sampler-convention-one-pane-per-awt-class).
+Per the AWT lane's Sampler convention — **one pane per AWT class** (`AwtButtonPanel`,
+`AwtLabelPanel`, …), each with its own `Awt<Class>WarnInventoryTest` and one `SamplerCatalogue` line
+under category `"AWT"` labelled with the bare JDK class name — the two demos below become two panes,
+e.g. `AwtPopupMenuPanel` and `AwtMenuBarPanel`, each with its own exit-gate test.
 
-
-Two demos appended to the existing `AWT widgets` route (`AwtWidgetsPanel`), keeping the route's
-one-panel-per-lane shape rather than opening a new route:
-
-**Demo 5 — `PopupMenu` on an AWT `Button`.** Entirely in-panel, no `Frame` needed: build a
+**Demo 1 — `PopupMenu` on an AWT `Button`.** Entirely in-panel, no `Frame` needed: build a
 `PopupMenu` with two `MenuItem`s, a separator, a `CheckboxMenuItem` and one nested `Menu`;
 `button.add(popup)`; right-click the button. Readout label shows the last `ActionEvent`'s
 `getActionCommand()` and the checkbox's `getState()`. This demo carries the load: it exercises the
 whole tree walk, both event types, the separator-is-a-`MenuItem("-")` rule, and nesting — without
 needing a window.
 
-**Demo 6 — `MenuBar` on a `vaadinx.awt.Frame`.** A `MenuBar` cannot live in a `JPanel`; it needs a
+**Demo 2 — `MenuBar` on a `vaadinx.awt.Frame`.** A `MenuBar` cannot live in a `JPanel`; it needs a
 `Frame`. So: a Swing `JButton` that constructs a `vaadinx.awt.Frame`, gives it a `MenuBar` with a
 `File` menu (an item with a `MenuShortcut(VK_S)`, a separator, a `CheckboxMenuItem`), a `Help` menu
 installed via `setHelpMenu`, and `setVisible(true)` — rendering as an overlay frame with an AWT
 menubar. The accelerator is the point: pressing the platform accelerator + `S` fires the item's
 `ActionListener` while the overlay is open. Note in the panel's javadoc that a *pure*-AWT frame is
-the rarer case; the realistic residue shape is `setMenuBar` on a `JFrame`, and Demo 6's frame is
+the rarer case; the realistic residue shape is `setMenuBar` on a `JFrame`, and Demo 2's frame is
 chosen because it also proves `SFrame` grew a working menubar slot.
 
-**`AwtWidgetsWarnInventoryTest`.** The user-path test gains steps: assert the new `SJPopupMenu` /
-`SJMenuBar` peer counts, click through a popup item and a checkbox item, then open the frame and fire
-the accelerator. Two new API-surface buckets:
+**The two `WarnInventoryTest`s.** User paths: assert the `SJPopupMenu` / `SJMenuBar` peer counts,
+click through a popup item and a checkbox item, then open the frame and fire the accelerator.
+API-surface buckets:
 
 - `inventory_awt_menu_api_surface` — `MenuComponent` (`get`/`setName`, `get`/`setFont`, `getParent`,
   `removeNotify`, `postEvent`, `toString`) plus `MenuBar` (all ctors, `add`, `getMenu`,
@@ -803,7 +785,7 @@ R_java_karibu_tests shape: Java + Karibu (`LocatorJ`), reaching the rendered tre
 | `emulators/src/test/java/vaadinx/awt/MenuItemTest.java` | `getActionCommand()` label fallback including the null-label case; **every setter fires nothing** (a `PropertyChangeListener`-shaped probe is impossible — assert no `ActionEvent` and that no rebuild-visible event escapes); `setEnabled` reaching the rendered item; the effective-enabled cascade rendering disabled while `isEnabled()` still reports true; browser click → `dispatchEvent` → `processEvent` override → `processActionEvent` → listener, with `source == this`; `MenuShortcut` → `KeyStroke` conversion and the installed Vaadin shortcut firing the item |
 | `emulators/src/test/java/vaadinx/awt/CheckboxMenuItemTest.java` | **`setState` fires no `ItemEvent`** (the headline divergence from the Swing sibling); a click fires `ItemEvent` and **no `ActionEvent`**; `ItemEvent.getItem()` is the label `String`, not `this`; `getSelectedObjects()` null when off; rendered `checkable`/`checked` following the state |
 | `emulators/src/test/java/vaadinx/awt/PopupMenuTest.java` | the full four-rung exception ladder with exact messages; `Component.add(popup)` binding the `ContextMenu` target; a right-click firing a nested item; top-level separator rendering (where `SJMenuBar` drops it); a `PopupMenu` parented to a `Menu` behaving as a plain `Menu` and throwing from `show` |
-| `emulators/src/test/java/vaadinx/awt/FrameMenuBarTest.java` | `setMenuBar` / `getMenuBar` round-trip; the bar's element landing at index 0 before the content pane on both an `SFrame` and (via `JFrame`) an `SJFrame` and an `SJPanel`; replacing a bar detaching the old one; `setMenuBar(null)` clearing; the `setJMenuBar`-and-`setMenuBar`-on-one-`JFrame` last-writer-wins WARN |
+| `emulators/src/test/java/vaadinx/awt/FrameMenuBarTest.java` | `setMenuBar` / `getMenuBar` round-trip; the bar's element landing at index 0 before the content on an `SFrame`, and (via `JFrame`) at index 0 of the root pane's layered pane under both frame strategies; replacing a bar detaching the old one; `setMenuBar(null)` clearing; the `setJMenuBar`-and-`setMenuBar`-on-one-`JFrame` last-writer-wins WARN |
 
 No new `:surrogates` tests are expected, which is itself worth asserting: if a test has to be added
 to `SJMenuBarTest`, the reuse verdict was wrong.
@@ -823,27 +805,26 @@ Mirroring the Button (`eea1c09`, 12 files) and Label (`4d3eb27`, 11 files) commi
 - `emulators/src/main/java/vaadinx/awt/CheckboxMenuItem.java`
 - `emulators/src/main/java/vaadinx/awt/PopupMenu.java`
 
-**Changed — `:emulators` (5):**
-- `vaadinx/awt/Component.java` — `implements MenuContainer`; `remove(MenuComponent)` re-typed and
-  implemented; `add(PopupMenu)` re-typed and implemented (target bind + parent set)
+**Changed — `:emulators` (2–3):**
+- `vaadinx/awt/Component.java` — `implements vaadinx.awt.MenuContainer` in place of the JDK's;
+  `remove(MenuComponent)` re-typed and implemented; `add(PopupMenu)` re-typed and implemented
+  (target bind + parent set)
 - `vaadinx/awt/Frame.java` — `implements MenuContainer`; `setMenuBar` / `getMenuBar` /
   `remove(MenuComponent)` re-typed and implemented
-- `vaadinx/swing/FrameStrategy.java` — `applyMenuBar` widened or overloaded
-- `vaadinx/swing/DialogStrategy.java` — ditto
-- `vaadinx/swing/InlineStrategy.java` — ditto
+- possibly `vaadinx/swing/JFrame.java` / `JRootPane.java` — handing an AWT bar's `SJMenuBar` to the
+  root pane's existing slot
 
 **Changed — `:surrogates` (0–1):** none if the `SFrame` menubar slot is done by element insert;
-`com/vaadin/swingbridge/surrogates/SFrame.java` (+ possibly `RootPaneScaffold.java`) if the slot is lifted. `MenuNode`
-gains a field only if the per-item-font question resolves that way.
+`com/vaadin/swingbridge/surrogates/SFrame.java` if the slot is lifted. `MenuNode` gains a field only
+if the per-item-font question resolves that way.
 
 **Tests (7):** the files in the table above.
 
-**Sampler (3):** `AwtWidgetsPanel.java` (+2 demos), `AwtWidgetsWarnInventoryTest.java` (+2 buckets,
-+user-path steps), `sampler/description.md` (exit-gate inventory line).
+**Sampler (5):** `AwtPopupMenuPanel.java` + `AwtMenuBarPanel.java`, their two `WarnInventoryTest`s,
+`SamplerCatalogue` (two `"AWT"` lines), and `sampler/description.md` (exit-gate inventory lines).
 
-**Docs (3):** `emulators/decisions.md` (one `D_document_last_word`-shaped entry — next free ID after D_r12_provenance), `CLAUDE.md`
-(component-surface line), `ideas/awt-widgets.md` (row → *landed*) — plus deleting this file per the
-ideas-graduation convention. **`surrogates/decisions.md`: no entry**, if the reuse verdict holds.
+**Docs (2):** `emulators/decisions.md` (one new slug-named entry, e.g. `D_awt_menus`) and `CLAUDE.md`
+(component-surface line). **`surrogates/decisions.md`: no entry**, if the reuse verdict holds.
 
 Total ~25 files, against Button's 12 and Label's 11.
 
@@ -851,7 +832,7 @@ Total ~25 files, against Button's 12 and Label's 11.
 
 ## Effort — is it really multi-session?
 
-**Re-estimate: ~2 sessions.** The parent doc's "multi-session" is right in letter and misleading in
+**Re-estimate: ~2 sessions.** The lane sizing's "multi-session" is right in letter and misleading in
 spirit — it reads as *"budget for a hard, open-ended design fight"*, and the design fight is already
 won by machinery that landed for Swing.
 
@@ -880,12 +861,12 @@ What makes it cheaper than the row suggests:
    `Component.add(PopupMenu)`, `Frame.setMenuBar`, `Frame.getMenuBar`, `Frame.remove(MenuComponent)`
    all change signature from a `java.awt.*` type to a `vaadinx.awt.*` one. That is R_no_vaadin_in_api limb 1 doing
    its job, but it is a **breaking change to two landed, widely-inherited classes** (every emulator
-   extends `Component`; `JFrame extends Frame`), and it touches the three `FrameStrategy`
-   implementors. This is the part that cannot be scoped down or deferred: you cannot ship
-   `vaadinx.awt.MenuBar` and leave `Frame.setMenuBar(java.awt.MenuBar)` standing.
-2. **`SFrame` has no menubar slot.** The slot lives on `RootPaneScaffold`, reachable only from
-   `SJFrame` / `SJDialog`. A plain `vaadinx.awt.Frame` peers on `SFrame`. Either lift or element-insert
-   — a small job, but a *new* one, and the only candidate for a `:surrogates` change.
+   extends `Component`; `JFrame extends Frame`). This is the part that cannot be scoped down or
+   deferred: you cannot ship `vaadinx.awt.MenuBar` and leave `Frame.setMenuBar(java.awt.MenuBar)`
+   standing.
+2. **`SFrame` has no menubar slot.** The slot lives on `SJRootPane`'s layered pane, reachable only
+   from root-pane containers. A plain `vaadinx.awt.Frame` peers on `SFrame`. Either lift or
+   element-insert — a small job, but a *new* one, and the only candidate for a `:surrogates` change.
 3. **The emission-walk duplication.** ~60 lines of `toMenuNode` / `collectChildren` /
    `notifyTreeMutated` / `pushTree`, written a second time for a tree whose separators, icons,
    accelerators and check semantics all differ. Deliberate duplication per SD_sbutton's reasoning, but
@@ -895,13 +876,9 @@ What makes it cheaper than the row suggests:
    `ActionEvent`).
 
 **Session split, if someone picks it up:** session 1 — `MenuContainer` + `MenuComponent` + `MenuItem`
-+ `Menu` + `MenuBar` + the `Frame`/`Component`/strategy ripple + the `SFrame` slot + four test files.
++ `Menu` + `MenuBar` + the `Frame`/`Component` ripple + the `SFrame` slot + four test files.
 Session 2 — `CheckboxMenuItem` + `PopupMenu` + `Component.add(PopupMenu)` + the `MenuShortcut`
-conversion + three test files + both Sampler demos + the exit gate + the `D_document_last_word` entry.
-
-**Where the parent doc's row should land:** not "multi-session, the real cost" but *"~2 sessions —
-the base classes are new but tiny, the render machinery is reused unchanged, and the real cost is
-re-typing `MenuContainer` through `Component` and `Frame`."*
+conversion + three test files + both Sampler demos + the exit gates + the decision entry.
 
 ---
 
@@ -916,17 +893,18 @@ Things a human must decide, and things this pass could not verify.
    (c) apply it once at the bar level (`SJMenuBar`'s own element), which covers the common
    "restyle the whole menubar" case and drops per-item. **Leaning (a) for the first slice, (c) as a
    cheap follow-up** — but this is the only genuinely open design call in the family.
-2. **`SFrame` menubar slot: lift or element-insert?** Lifting `RootPaneScaffold`'s slot onto `SFrame`
-   is cleaner and gives `Frame` and `JFrame` one code path; the element insert (copying
-   `InlineStrategy`) keeps `:surrogates` untouched and preserves the "first slice with no `SD*` entry"
-   property. Cleanliness vs. a nice-sounding property is a human call.
+2. **`SFrame` menubar slot: lift or element-insert?** Lifting a slot onto `SFrame` (mirroring
+   `SJRootPane.setJMenuBar`'s index-0 insert) is cleaner; an emulator-side element insert keeps
+   `:surrogates` untouched and preserves the "first slice with no `SD*` entry" property. Cleanliness
+   vs. a nice-sounding property is a human call.
 3. **`SJMenuBar` / `SJPopupMenu` naming under AWT reuse.** Reading `new SJMenuBar()` inside
-   `vaadinx.awt.MenuBar` is a wart. Rename to `SMenuBar` / `SPopupMenu` (five typed call sites:
-   `SJFrame.setJMenuBar`, `SJDialog`, `RootPaneScaffold.setMenuBar`, `DialogStrategy.applyMenuBar`,
-   plus tests), or accept the wart and document it? The S-prefix rule says the prefix marks the
+   `vaadinx.awt.MenuBar` is a wart. Rename to `SMenuBar` / `SPopupMenu` (typed call sites in
+   `SJRootPane`, `SJFrame`, `SJDialog`, `RootPaneScaffold`, the Swing menu emulators, plus tests), or
+   accept the wart and document it? The S-prefix rule says the prefix marks the
    module, which argues the current name is *already* fine and the wart is cosmetic.
 4. **Mixing `setJMenuBar` and `setMenuBar` on one `JFrame`.** The JDK has two independent slots; we
-   have one. Last-writer-wins plus a WARN is proposed. Is a WARN right, or should the second call
+   have one (index 0 of the root pane's layered pane, under either frame strategy). Last-writer-wins
+   plus a WARN is proposed. Is a WARN right, or should the second call
    throw (it is arguably a programming error to install two menubars)? R_match_swing_errors's enumerated throw set is
    deliberately closed, which argues WARN.
 5. **`Menu.insert`'s O(n²) faithful implementation.** AWT's remove-tail / add / re-add-tail means an
@@ -936,7 +914,8 @@ Things a human must decide, and things this pass could not verify.
    churn. **Unverified**: whether the churn is actually observable at typical menu sizes.
 6. **`GraphicsEnvironment.isHeadless()` in the Vaadin server.** `MenuShortcut.toString()` degrades to
    `"+A"` under headless. I did not verify what `isHeadless()` returns in a running Sampler — it
-   depends on `java.awt.headless`, which nothing in the repo obviously sets. If it is true, any
+   depends on `java.awt.headless`, which the test suites set to `true` (root pom's Surefire
+   `argLine`) but nothing obviously sets for a running app. If it is true, any
    migrated app that puts `shortcut.toString()` in a UI string shows a broken label, and the fix
    would be a `vaadinx`-side formatter. Needs a one-line probe in a running app.
 7. **Is `Component.add(PopupMenu)` binding the target at `add` time correct?** The JDK's `add` only
@@ -946,13 +925,9 @@ Things a human must decide, and things this pass could not verify.
    `mousePressed(isPopupTrigger())` handler would then have the popup open on right-click *and* on
    its own trigger logic. Probably harmless (both are right-click), but I could not verify the double
    fire without running it.
-8. **Does anything else in the repo assume `vaadinx.awt.Component` does *not* implement an interface?**
-   The grep for `java.awt.MenuComponent` / `MenuContainer` found only the three stub sites, so the
+8. **What does swapping `Component`'s `java.awt.MenuContainer` for `vaadinx.awt.MenuContainer`
+   break?** The grep for `java.awt.MenuComponent` / `MenuContainer` finds only the stub sites, so the
    blast radius looks small — but a signature change on `Component` is the kind of thing that surfaces
    in `:emulators-printing`, the `third-party/` add-ons, and `testapps/`, none of which I compiled.
    **Unverified**: the actual compile blast radius. A full `./mvnw -C clean install` is the only honest
    check, and it is a build, not a read.
-9. **`MenuBar` on an `@MainWindow` `JFrame` (the `SJPanel` peer).** `InlineStrategy.applyMenuBar`
-   inserts at element index 0 assuming the content pane is at 0. With *both* a Swing and an AWT
-   menubar possible, and `setHelpMenu` in play, is index 0 still unambiguous? Probably yes (one slot),
-   but it interacts with question 4.

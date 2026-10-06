@@ -45,7 +45,7 @@ package vaadinx.awt;
 //   - addImpl does NOT reproduce the JDK's addToPanel lightweight wrapping
 //   - setValue does not clamp, because a faithful clamp collapses to 0 forever
 //   - the scroll channel is server->browser only, so user scrolls fire nothing
-// Rationale: D_awt_scrollpane / SD_sscrollpane; the lane's sizing: ideas/awt-widgets.md.
+// Rationale: D_awt_scrollpane / SD_sscrollpane; the lane: D_awt_lane.
 
 /**
  * Emulator for {@link java.awt.ScrollPane} — AWT's scrolling container, not

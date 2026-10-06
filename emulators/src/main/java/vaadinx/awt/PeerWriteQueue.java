@@ -60,7 +60,7 @@ import java.util.ArrayDeque;
  * Queued writes always drain before a newer one runs, so writes reach the peer in the order
  * they were made. A queued write must be a pure sink, observable by nothing on the Swing side
  * before attach; {@link vaadinx.EHelper#callSwing} asserts it. See
- * ideas/vaadin-ui-thread-only.md § "The mechanism".
+ * D_lazy_peers and D_peer_queue_shape.
  *
  * <p>Thread-safe. The queue is guarded by a private lock, held only for bookkeeping and never
  * while a write runs, and always taken after the session lock, never before it.

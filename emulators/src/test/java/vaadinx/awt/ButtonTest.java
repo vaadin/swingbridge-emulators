@@ -56,7 +56,7 @@ import static vaadinx.TestAssertions.assertSingle;
  * button, not {@code vaadinx.swing.JButton}. Beyond the twelve-method API this
  * is the first plain AWT leaf widget in the tree, so it doubles as the
  * check that {@code vaadinx.awt.Component} carries a non-JComponent leaf and
- * that such a leaf drops into a Swing container. See ideas/awt-widgets.md.
+ * that such a leaf drops into a Swing container. See D_awt_lane.
  *
  * <p>Java has no import alias, so the Vaadin peer type is spelled out in full
  * at every {@code _get} — {@code Button} here is unqualified for the emulator.

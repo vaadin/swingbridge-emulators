@@ -177,6 +177,41 @@ falls out: a migrator-facing doc is authored for the migrator, never adopted fro
 for someone else.** The global skill still exists and is still the right thing for a new Vaadin-Boot
 app; it is simply not a source these guides track.
 
+## Gated rounds — the gate ladder is the rubric
+
+A guide-loop round grades the docs and stops at a crash check; a **gated round** drives the *booted*
+app against a fixed ladder of gates — the "separate workflow" the done condition above leaves out of
+scope. Same tree, different measurement: **don't merge the two exercises.** None has run yet; the
+plan for the first ones, on `inventory`, is
+[`ideas/inventory-testapp-migration.md`](../../ideas/inventory-testapp-migration.md).
+
+**Decided 2026-08-25: there is no separate scoring scheme.** Each gate emits a comparable figure of
+its own, so a round's result is the four readings side by side:
+
+- **Compile gate** — does the import-swapped app build against `:emulators`, and how many distinct
+  error classes on the first attempt?
+- **Boot gate** — does it reach its first screen (for `inventory`, the login, `ADMIN`/`ADMIN`) in a
+  browser?
+- **Zero-stub-WARN gate** — the `WarnInventoryTest` shape `:sampler` already uses per-route, applied
+  to the app's user paths.
+- **Journey gate** — N named journeys (for `inventory`: login → add category → add vendor → add
+  item → stock query → transfer → return), captured against the *desktop* app via `swing-mcp` as
+  behavioural ground truth, replayed against the migrated web app. It is the capture→review→generate
+  pipeline of [`ideas/migrated-app-testing.md`](../../ideas/migrated-app-testing.md) applied to a
+  testapp, which that file's § "Decided" (2026-09-10) makes the place the pipeline is developed: the
+  rounds are repeated, so suite-authoring cost amortizes, and the pipeline stays optional, so a round
+  can still run "migration pure" without it.
+
+What a score would add on top is weighting and aggregation into one number, and that is the part
+with negative value: collapsing "did not compile" and "three stub WARNs" into one figure destroys
+exactly the where-did-it-break information the rounds exist to produce, and any weighting between
+gates would be invented rather than measured.
+
+**The discipline is recording, not scoring: each round writes all four readings verbatim into its
+`STUMBLES.md`, including the ones it did not reach** (a round that fails the compile gate records
+the remaining three as *not-reached*, never as absent). An unreported gate is what makes two rounds
+incomparable — the lack of a score is not.
+
 ## Future work
 
 - **Integration-testing the migrated app.** The guides deliberately say nothing about it: how a

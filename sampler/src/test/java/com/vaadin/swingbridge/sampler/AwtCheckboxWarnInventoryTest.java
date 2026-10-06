@@ -36,7 +36,7 @@ import java.util.function.Consumer;
 
 /**
  * {@link vaadinx.awt.Checkbox} + {@link vaadinx.awt.CheckboxGroup} WARN
- * inventory exit gate — D_awt_checkbox / SD_scheckbox (see {@code ideas/awt-widgets.md}). Every
+ * inventory exit gate — D_awt_checkbox / SD_scheckbox (see {@code D_awt_lane}). Every
  * test fails if any {@code onUnimplemented} fires along the asserted path:
  *
  * <ol>

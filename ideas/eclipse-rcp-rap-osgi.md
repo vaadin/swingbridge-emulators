@@ -266,9 +266,13 @@ Decision rules to state *before* seeing the numbers, so we can't rationalise aft
    enough for one perceived application? Who has done this?
 9. If path C: does `swingbridge-workbench` belong in SB-Emulators at all, or is it a separate product? It has no
    Swing in it.
-10. Licence lane: RCP/JFace/RAP are EPL, SB-Emulators is GPLv2 + Classpath Exception. Reimplementation is clean; any *forked* source
-    needs its own EPL module, as `third-party/` already does for BSD. Legal review before a line of
-    prototype code.
+10. Licence lane: RCP/JFace/RAP are EPL. SB-Emulators' lanes are per module
+    ([D_licence_lanes](../emulators/decisions.md#D_licence_lanes)): the emulator core is GPLv2 +
+    Classpath Exception, every other module Apache-2.0, and an add-on reproducing a third-party
+    library's API takes *that library's* licence
+    ([M1D_addon_upstream_licence](../migration/1-swing-to-emulators/decisions.md#M1D_addon_upstream_licence)) —
+    so an RCP-shaped module would presumably be EPL whether forked or reimplemented, as `third-party/`
+    already does for BSD and LGPL. Legal review of the EPL lane before a line of prototype code.
 11. Is there an open-source RCP app small enough to adopt as a testbed (via the
     [`adopt-testapp`](../.claude/skills/adopt-testapp/SKILL.md) skill)?
 12. What if the app dropped Eclipse RCP as part of the migration? Everything good here (path C)

@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>That is an inference from how Flow is built, not a contract Vaadin documents, which is why
  * it is pinned: this test goes red on the Vaadin upgrade that breaks it, before a migrator finds
- * out. The way out of the dependency altogether is {@code ideas/vaadin-ui-thread-only.md}.
+ * out. The way out of the dependency altogether is {@code D_lazy_peers}.
  *
  * <p>No Karibu here, deliberately. Setters are swept reflectively with two sample values each;
  * a rejection Swing itself would make (an {@code IllegalArgumentException} for a bad index, say)
@@ -105,7 +105,7 @@ class DetachedOffUiThreadTest {
         assertTrue(probed > 500, "the sweep found almost nothing to probe: " + probed);
         assertEquals(Map.of(), failures, "a surrogate no longer works detached on a plain thread — "
                 + "a Vaadin upgrade has changed the behaviour SB-Emulators relies on; see "
-                + "ideas/vaadin-ui-thread-only.md");
+                + "D_lazy_peers");
     }
 
     private static Throwable unwrap(Throwable e) {

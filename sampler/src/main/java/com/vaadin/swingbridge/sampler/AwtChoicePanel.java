@@ -33,7 +33,7 @@ import java.util.Arrays;
 /**
  * {@link vaadinx.awt.Choice} — the AWT 1.0 dropdown, not
  * {@link vaadinx.swing.JComboBox}. Decisions: {@code D_awt_choice} / {@code SD_schoice}; the
- * lane's rationale: {@code ideas/awt-widgets.md}.
+ * lane's rationale: {@code D_awt_lane}.
  *
  * <ol>
  *   <li><b>{@code java.awt.Choice} vs {@code JComboBox}</b> — the four

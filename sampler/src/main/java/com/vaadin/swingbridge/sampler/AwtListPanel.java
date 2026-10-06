@@ -33,7 +33,7 @@ import java.util.Arrays;
 /**
  * {@link vaadinx.awt.List} — the AWT 1.0 scrolling list box, not
  * {@link vaadinx.swing.JList}. Decisions: {@code D_awt_list} / {@code SD_slist}; the
- * lane's rationale: {@code ideas/awt-widgets.md}.
+ * lane's rationale: {@code D_awt_lane}.
  *
  * <ol>
  *   <li><b>Single mode, and the two event shapes</b> — an {@code ItemEvent}

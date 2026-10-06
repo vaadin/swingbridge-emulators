@@ -44,8 +44,8 @@ package vaadinx.awt;
 // an Accessible marker and an addNotify override to java.awt.Container, and
 // nothing else. vaadinx.awt.Container already implements the rest, so almost
 // all of this file is the reasoning for why it stays four lines rather than
-// growing an SPanel nobody needs. Rationale: D_awt_panel / SD_no_spanel; the lane's sizing:
-// ideas/awt-widgets.md.
+// growing an SPanel nobody needs. Rationale: D_awt_panel / SD_no_spanel; the lane:
+// D_awt_lane.
 
 /**
  * Emulator for {@link java.awt.Panel} — AWT's generic on-screen container,

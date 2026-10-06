@@ -35,7 +35,7 @@ import java.util.function.Consumer;
 
 /**
  * {@link vaadinx.awt.Label} WARN inventory exit gate — D_awt_label / SD_slabel (see
- * {@code ideas/awt-widgets.md}). Every test fails if any
+ * {@code D_awt_lane}). Every test fails if any
  * {@code onUnimplemented} fires along the asserted path:
  *
  * <ol>

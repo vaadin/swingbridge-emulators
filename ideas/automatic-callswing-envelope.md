@@ -100,12 +100,12 @@ The sweep found code that reaches user Swing listeners from a browser event with
 today**. It also found one that has since been fixed, and that one is the evidence for the
 discipline argument:
 
-- **`JInternalFrame`** had zero `callSwing` calls. A `JOptionPane` in `internalFrameClosing` (close-X
-  or ESC), or in a listener reached from the header's minimize or maximize, threw from
-  `Dialog.parkUntilClose`'s `checkInUIFiber`. Its three peer→Swing entry points are now wrapped and
-  gated by `JInternalFrameTest`'s `*ClickListenerCanPark` tests. The gap went unnoticed because the
-  callbacks arrive through surrogate hooks (`SInternalFrameListener`, `setIconifyHandler`) rather
-  than a Vaadin listener, which is exactly the shape a per-listener rule misses.
+- **`JInternalFrame`** (fixed since, `3f59a95`; now recorded in
+  [D_internalframe_close_listener](../emulators/decisions.md#D_internalframe_close_listener)) had
+  zero `callSwing` calls: a `JOptionPane` in `internalFrameClosing`, or in a listener reached from
+  the header's minimize or maximize, threw from `Dialog.parkUntilClose`'s `checkInUIFiber`. The
+  callbacks arrive through surrogate hooks rather than a Vaadin listener, which is exactly the shape
+  a per-listener rule misses.
 - **Sampler's route** (`SamplerRoute:42`) runs `new SamplerFrame().setVisible(true)` on the request
   thread. `ui-navigate` is a UIDL event RPC, so a wrapped navigation would put `bootstrap()` in a
   fiber. A `main()` that shows a login `JOptionPane` before its frame would then work without

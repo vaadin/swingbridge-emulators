@@ -244,13 +244,15 @@ Caveats, none fatal, all worth measuring:
   custom-drawn markup renderer. Prime candidate for a `third-party/`-style fork module where the
   drawing is replaced by CSS — exactly the `swingbridge-emulators-jgoodies-forms-1.2.1` playbook
   ([M1D_addon_packaging](../migration/1-swing-to-emulators/decisions.md)).
-- **Licence lane.** SB-Emulators is GPLv2 + Classpath Exception; SWT/JFace/Forms are EPL.
-  *Reimplementing* an API is clean and inherits the project licence; *forking source* creates an EPL
-  module. The `third-party/` per-module licence lane already exists (the BSD JGoodies fork) so the
-  mechanism is there — but "no EPL source pasted into an SB-Emulators module" needs to be a hard rule
-  from day one of any prototype, and the packaging should make it structurally hard to violate. Note
-  the relicensing sharpened this, it did not soften it: R_gpl_provenance rule 4 already forbids the
-  paste repo-wide, and EPL-into-GPLv2 is a worse mismatch than EPL-into-Apache was.
+- **Licence lane.** SB-Emulators' emulator core is GPLv2 + Classpath Exception; SWT/JFace/Forms are
+  EPL. The `third-party/` per-module licence lane already exists, and
+  [M1D_addon_upstream_licence](../migration/1-swing-to-emulators/decisions.md#M1D_addon_upstream_licence)
+  settled that an add-on takes **its upstream library's licence, fork or reimplementation alike** —
+  so by that precedent an SWT emulation would be EPL whichever route it took. Whether the precedent
+  extends from a library add-on to a whole toolkit is open (question 13). Either way "no EPL source
+  pasted into an SB-Emulators module" needs to be a hard rule from day one of any prototype
+  (R_gpl_provenance rule 5 already forbids the paste repo-wide), and the packaging should make it
+  structurally hard to violate.
 
 ## The mixed-app dividend: `SWT_AWT` becomes almost free
 
@@ -422,8 +424,10 @@ that:
 11. `Image` from `ImageData`/`InputStream` → `StreamResource`: what does `getImageData()` return
     (R_vaadin_first round-trip loss), and does any real code round-trip it?
 12. `org.eclipse.ui.forms`: fork module (EPL lane) or excluded? Measure usage first.
-13. Licence: is a GPLv2+CE SB-Emulators comfortable shipping EPL fork modules alongside, and what does legal
-    want to see? (Reimplementation ≠ forking; keep them in separate modules.)
+13. Licence: does M1D_addon_upstream_licence (an add-on takes upstream's licence, fork or
+    reimplementation alike) apply to an SWT emulation, making it EPL throughout — and is a
+    GPLv2+CE core comfortable shipping EPL modules alongside? (Fork vs. reimplementation still
+    decides whose copyright notice sits on which file; keep them in separate modules.)
 14. Do `:emulators` and `:swt-emulators` share one `EHelper`-level substrate (session, threading,
     tab lifecycle) — and if so does that substrate need to be extracted into its own module?
 15. Testbed: is there an open-source pure-SWT app worth adopting under `testapps/` (via the

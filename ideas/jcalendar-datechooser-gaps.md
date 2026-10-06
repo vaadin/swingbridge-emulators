@@ -1,9 +1,10 @@
 # `swingbridge-emulators-jcalendar-1.4` — the two `JDateChooser` members a real app hit
 
-**Status:** hand-off, not yet implemented. Found by inventory's guide-loop round 2 (2026-09-04) as the
-**only place that migration lost behaviour**; recorded as a non-doc entry in
-[`testapps/inventory/1-emulators/STUMBLES.md`](../testapps/inventory/1-emulators/STUMBLES.md) § "Not a
-doc gap". The docs were right — [`MIGRATION.md`](../third-party/jcalendar-1.4/MIGRATION.md) § "Not
+**Status:** hand-off, not yet implemented — and **parked**: it widens a starter add-on, which
+[M1D_addon_starter_status](../migration/1-swing-to-emulators/decisions.md#M1D_addon_starter_status)
+freezes, so picking it up means revising that entry first. Found by inventory's guide-loop round 2
+(2026-09-04) as the **only place that migration lost behaviour** (recorded then as a "Not a doc gap"
+entry in that round's `STUMBLES.md`, since replaced by later rounds). The docs were right — [`MIGRATION.md`](../third-party/jcalendar-1.4/MIGRATION.md) § "Not
 ported" lists both by name — so this is an artefact gap, and the question is whether the add-on's
 four-member surface ([M1D_swap_vs_reimplement](../migration/1-swing-to-emulators/decisions.md#M1D_swap_vs_reimplement))
 should grow by two.
@@ -64,8 +65,8 @@ the order to try:
 2. **`setReadOnly(true)`** — rejected in advance: read-only disables the popup too, which is
    exactly the whole-chooser `setEnabled(false)` the app could not use.
 3. **Ship nothing and leave the compile error** — today's answer. Acceptable only if (1) fails the
-   measurement; then the addendum gains a paragraph saying *why* (the browser widget has no
-   picker-only mode), so the next migrator drops the call knowing what they lose.
+   measurement; the addendum's *Known divergence* already says what dropping the call costs (the
+   field stays typeable), so nothing more is owed there.
 
 ## Steps, in order
 
@@ -74,11 +75,12 @@ the order to try:
    `third-party/jcalendar-1.4/src/test` (state round-trip, default from browser locale, property
    change if upstream fires one).
 3. Land `getDateEditor()` per the probe's outcome; `IDateEditor` ported if (1) works.
-4. Update `MIGRATION.md` § "Not ported" — remove the shipped members, state the divergences
-   (format string is not rendered; the editor handle is a façade over one `DatePicker`). The
+4. Update `MIGRATION.md` § "Not ported" — remove the shipped members — and § "Known divergence":
+   replace the `getDateEditor()` bullet, and state the new divergences (format string is not
+   rendered; the editor handle is a façade over one `DatePicker`). The
    add-on's `MigrationDocTest` and `PortedTypesTableTest` gate the rest.
 5. Re-run `/guide-migrateapp inventory`; the expectation is `ItemEntryPanel` and `Validator` compile
-   without hand edits and the "Not a doc gap (b)" entry disappears from the next `STUMBLES.md`.
+   without hand edits.
 6. Delete this file.
 
 **Commit shape:** one commit per member is fine, but (2) and (3) each carry their addendum edit

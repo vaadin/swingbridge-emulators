@@ -40,7 +40,7 @@ import java.util.function.Consumer;
 
 /**
  * {@link vaadinx.awt.Panel} WARN inventory exit gate — D_awt_panel / SD_no_spanel (see
- * {@code ideas/awt-widgets.md}). Every test fails if any
+ * {@code D_awt_lane}). Every test fails if any
  * {@code onUnimplemented} fires along the asserted path:
  *
  * <ol>

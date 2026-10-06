@@ -11,24 +11,25 @@ future pass picks it up.
 
 Step 1 (swing→emulators) is done and its machinery lives under
 [`migration/1-swing-to-emulators/`](../migration/1-swing-to-emulators/) (sources) +
-[`guides/1-swing-to-emulators/`](../guides/1-swing-to-emulators/)
-(`guide.md` + `checklist.md`). Step 2 has an **empty slot**: no
-`migration/2-emulators-to-surrogates/` sources folder, no `out/` guide/checklist yet.
+[`guides/1-swing-to-emulators/`](../guides/1-swing-to-emulators/) (the migrator-facing
+guide). Step 2 has an **empty slot**: no `migration/2-emulators-to-surrogates/` sources
+folder, no `guides/2-emulators-to-surrogates/` guide yet.
 
-Dropped from TODO.md when this was parked: the **stage-3 sibling
-`testapps/jlawyer-shape/surrogated/`** — a one-session-agent rewrite of the stage-2
-`1-emulators/` app onto `:surrogates`, which is the natural round target for step 2.
+Also parked with it: the **stage-3 sibling `testapps/jlawyer-shape/surrogated/`** — a
+one-session-agent rewrite of the stage-2 `1-emulators/` app onto `:surrogates`, which is
+the natural round target for step 2.
 
 ## The loop to run when we pick it up
 
 Same **guide loop** that produced step 1's guide:
 
 1. **Spec** — draft `migration/2-emulators-to-surrogates/spec.md` (+ `decisions.md`
-   with `M2D*` IDs, per the [migration README](../migration/README.md)). No per-step
+   with `M2D_` slugs, per the [migration README](../migration/README.md)). No per-step
    `ideas.md` — loose ideas go in this folder, one file per idea.
-2. **Guide** — hand-author `guides/2-emulators-to-surrogates/guide.md` +
-   `checklist.md` from the spec.
+2. **Guide** — hand-author `guides/2-emulators-to-surrogates/guide.md` from the spec
+   (procedure only, references beside it — the split CLAUDE.md §"See also" describes
+   for step 1).
 3. **Round** — run an agent through the guide against a real target (the
    `jlawyer-shape/surrogated/` rewrite), recording every stumble.
-4. **Backport** — fold the stumbles into the guide/checklist and the spec/decisions;
+4. **Backport** — fold the stumbles into the guide and the spec/decisions;
    repeat until a round runs clean.

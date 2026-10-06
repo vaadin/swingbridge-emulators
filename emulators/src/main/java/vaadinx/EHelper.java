@@ -457,7 +457,7 @@ public final class EHelper {
     public static void callSwing(Runnable runnable) {
         assert !inQueuedPeerWrite() : "A queued peer write reached EHelper.callSwing while being drained: "
                 + "a queued write must be a pure sink, whose effect Swing cannot observe until attach "
-                + "(ideas/vaadin-ui-thread-only.md § \"The mechanism\")";
+                + "(D_lazy_peers)";
         final UI ui = UI.getCurrent();
         if (ui == null) {
             // Shutdown carve-out to R_callswing_envelope: on the request-less reaper thread that

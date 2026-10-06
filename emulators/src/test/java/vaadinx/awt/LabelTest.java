@@ -60,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * not {@code vaadinx.swing.JLabel}. Beyond the JDK API it re-checks what
  * {@code ButtonTest} established for the first AWT leaf: that a plain AWT widget
  * drops into a Swing container and that {@code vaadinx.awt.Component} carries a
- * leaf with no JComponent in its chain. See ideas/awt-widgets.md, D_awt_label.
+ * leaf with no JComponent in its chain. See D_awt_lane, D_awt_label.
  */
 class LabelTest extends AbstractKaribuTest {
 

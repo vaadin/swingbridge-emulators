@@ -33,14 +33,14 @@ different browser-backed resource.
 
 ## 2. What the code does today
 
-Two guards, both in `WebClipboard.assertUiAndVt` (`WebClipboard.java:259`), applied to every op:
+Two guards, both in `WebClipboard.assertUiAndVt`, applied to every op:
 
 - **no current UI → throw.** `Toolkit.getSystemClipboard()` (`Toolkit.java:157`) throws the same way
   one level earlier, because the instance is keyed per UI via `ComponentUtil.setData(ui, …)` and the
   helper JS is injected into that UI's `Page` on first access
   ([D_clipboard_helper_js](../emulators/decisions.md#D_clipboard_helper_js)).
 - **non-virtual thread → throw.** Both legs park on the `executeJs` promise —
-  `setContents` at `WebClipboard.java:172` and `getContents` at `:184`, both through `awaitJs`
+  `setContents` and `getContents`, both through `awaitJs` → `EHelper.awaitBrowserRoundTrip`
   ([D_clipboard_vt_park](../emulators/decisions.md#D_clipboard_vt_park)).
 
 **The rationale D_clipboard_vt_park gives for the guards is the assumption that has since been
@@ -49,9 +49,8 @@ of which spawn a VT via `callSwing`"*. That is exactly what R_tolerate_off_ui_th
 assuming.
 
 **Contrast with `java.util.prefs`, which has the same shape and does not throw.** The routing happens
-at the *handle*: `VaadinPreferencesFactory.userRoot()` (`:99`) hands a background caller carrying a
-context a `BridgedPreferences`, which wraps every read and write in `EHelper.callOnLiveUISync`
-(`BridgedPreferences.java:82` and five more). `PrefsCache.current()`'s UI guard sits on the other
+at the *handle*: `VaadinPreferencesFactory.userRoot()` hands a background caller carrying a
+context a `BridgedPreferences`, which wraps every read and write in `EHelper.callOnLiveUISync`. `PrefsCache.current()`'s UI guard sits on the other
 branch — session current *and* locked, i.e. a UI thread — so a worker never reaches it. One family,
 two answers, and that is the finding more than the throw itself.
 
@@ -89,7 +88,7 @@ one instance that branches per op, rather than a different implementation per ca
 **(a) The caller need not be a virtual thread, and that is what makes this worth more than a message
 fix.** The VT limb is about the thread that parks on the `executeJs` promise. Under
 `callOnLiveUISync` that is the body's thread inside `callSwing`; the caller only blocks on a
-`CountDownLatch` with a 30s backstop (`EHelper.java:697`). So a migrator's
+`CountDownLatch` with a 30s backstop (`EHelper.LIVE_UI_SYNC_TIMEOUT_SECONDS`). So a migrator's
 `EmulatorContext.wrap(Executors.newFixedThreadPool(4))` — **platform** threads — gains clipboard
 access, which it has no route to today and which a `SwingWorker`-only fix would not have delivered.
 
@@ -128,8 +127,8 @@ D_prefs_scope_split's contract, so it may belong with the case-(8) entry instead
 ## 6. What flips
 
 Two tests assert today's behaviour and would invert:
-`WebClipboardTest.getSystemClipboardWithNoUiThrowsIllegalStateException` (`:127`) and
-`ToolkitTest.getSystemClipboardWithNoUiThrows` (`:135`).
+`WebClipboardTest.getSystemClipboardWithNoUiThrowsIllegalStateException` and
+`ToolkitTest.getSystemClipboardWithNoUiThrows`.
 
 `D_clipboard_vt_park` needs rewriting rather than amending — its decision and its rationale both rest
 on the retired assumption. `D_clipboard_helper_js` needs one clause changed, since it pins the

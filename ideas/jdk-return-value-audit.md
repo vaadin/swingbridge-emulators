@@ -36,11 +36,13 @@ has not been done.**
      `FocusTraversalPolicy`, `ImageObserver`, `Keymap`, `List`, `MenuBar`, `RowSorter`,
      `Calendar`, `File[]`, `int[]`, `Object[]`, `TreePath[]`, `StyleSheet`, `InputVerifier`.
 
-4. **`JColorChooser.chooserPanels` needs an eye, not a tool.** The cross-layer drop it was filed as
-   does not exist; what is left is a *surrogate* store R_vaadin_first would rather see dropped,
-   with the value held emulator-side the way `setPreviewPanel` beside it already does. Neither
-   tool can see it (an array return with no probe value), and it is cosmetic against the rules
-   rather than observable to a migrator. Reasoning in the decision.
+4. **`SJColorChooser`'s `chooserPanels` / `previewPanel` stores need an eye, not a tool.** The
+   emulator now owns both values itself
+   ([D_colorchooser_panels_dropped](../emulators/decisions.md#D_colorchooser_panels_dropped)), so
+   what is left is a *surrogate* round-trip store R_vaadin_first would rather see dropped —
+   [SD_colorchooser_panels_dropped](../surrogates/decisions.md#SD_colorchooser_panels_dropped) still
+   keeps it "so getters are honest". Neither tool can see it (an array return with no probe value),
+   and it is cosmetic against the rules rather than observable to a migrator.
 
 5. **`JInternalFrame.restoreSubcomponentFocus()` is missing, and adding it needs a focus target.**
    Deliberately absent — reasoning, including why stubbing it with a WARN is not the fix, is in

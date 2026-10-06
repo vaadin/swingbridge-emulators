@@ -1,7 +1,6 @@
 # SJSlider / SJProgressBar VERTICAL — try `writing-mode` instead of `rotate`
 
 **Status:** idea, not planned work. Filed 2026-08-24.
-"SJSlider / SJProgressBar VERTICAL orientation".
 
 ## The idea
 
@@ -44,13 +43,13 @@ Prior expectation per host, to be confirmed or killed by the probe:
 Boot Sampler, hit the Inputs route, set `writing-mode` (and `direction: rtl`) on the live
 `<vaadin-slider>` / `<vaadin-progress-bar>` from Playwright, and read back visual box, layout box,
 and parent cell width, plus a screenshot of whether the internals followed. Same protocol as
-awt-scrollbar's probe, against the real hosts. ~20 minutes.
+SD_sscrollbar's probe, against the real hosts. ~20 minutes.
 
 ## Priority
 
-Low — both TODO entries are explicitly "revisit only on real demand" and no migration target has
+Low — vertical orientation on both is "revisit only on real demand", and no migration target has
 asked for a vertical slider or progress bar. Natural trigger: a migrated app that actually has one,
-or the AWT `Scrollbar` slice landing and making the vertical CSS a shared helper worth reusing.
+or wanting to share `SScrollbar.applyOrientationCss`'s writing-mode CSS as a helper.
 
 If the probe comes back green for either host, the win is bigger than the visual: it retires
 `applyTransformCss`'s transform-composition machinery (orientation × inverted) in favour of two

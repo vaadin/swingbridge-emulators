@@ -42,8 +42,8 @@ package vaadinx.awt;
 // Hand-written emulator — second widget in the AWT lane after Button, and
 // the one that shows the lane's shape is repeatable: a leaf hanging off
 // vaadinx.awt.Component with no JComponent in its chain, over a surrogate
-// on ComponentMixin. Rationale + the sizing of the rest of the AWT widget
-// family: ideas/awt-widgets.md; decisions: D_awt_label / SD_slabel.
+// on ComponentMixin. The lane's rationale and
+// status: D_awt_lane; decisions: D_awt_label / SD_slabel.
 
 /**
  * Emulator for {@link java.awt.Label} — AWT 1.0 static text, not

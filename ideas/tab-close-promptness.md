@@ -16,9 +16,12 @@ Neighbours: [`cancelable-tab-close.md`](./cancelable-tab-close.md) (can a close 
 ## The finding
 
 `tab-scope` 0.3 exposes `TabScope.installTabCloseBeacon(List<RequestHandler>)` and
-`onUnloadBeacon(UI)` — **and nothing in SB-Emulators calls either.**
-`SwingBridgeEmulatorsBootstrap` calls `TabScope.setup` only. So a closing tab sends *nothing*, and
-teardown falls to the scheduled reaper: `CLEANUP_DURATION_MS = 60000`, `scheduledReapEnabled = true`,
+`onUnloadBeacon(UI)` — **and nothing a migrated app gets calls either.** Only Sampler's
+`SamplerServlet` installs the beacon (the piece D_shutdown_lifecycle's "Prompt-shutdown latency"
+bullet describes as "the app installs"); `SwingBridgeVaadinServlet`, `:emulators-spring`'s
+`SwingBridgeSpringServlet`, the host-app seeds and the guides do not, and
+`SwingBridgeEmulatorsBootstrap` calls `TabScope.setup` only. So in a migrated app a closing tab sends
+*nothing*, and teardown falls to the scheduled reaper: `CLEANUP_DURATION_MS = 60000`, `scheduledReapEnabled = true`,
 both read off the class's `<clinit>`.
 
 **Measured with a 5 s heartbeat:** at **+20 s** after the app tab closed the session still believed
@@ -30,14 +33,22 @@ latency that is undocumented.
 
 `crud`'s `MainFrame` sets `EXIT_ON_CLOSE`, which is the common shape. *"The app shuts down when you
 close the tab"* and *"the app shuts down a minute or more after you close the tab"* are different
-sentences, and only one of them is currently true — while the guides imply the first.
+sentences. [`lifecycle.md`](../guides/1-swing-to-emulators/lifecycle.md) § "A `windowClosing` handler
+runs, but cannot stop the tab closing" says `WINDOW_CLOSING` arrives *"usually within a minute, at
+the latest when the session times out"* — the "within a minute" is the beacon-installed (Sampler)
+figure, which a migrated app without the beacon is not shown to meet (`Q_lone_tab_close`).
 
 ## Open
 
-`Q_tab_close_beacon` — should `SwingBridgeEmulatorsBootstrap` install the beacon, making tab close
+`Q_tab_close_beacon` — should the library install the beacon (in `SwingBridgeVaadinServlet` /
+`SwingBridgeSpringServlet`'s `createRequestHandlers`, as `SamplerServlet` does), making tab close
 prompt instead of eventual? It is one call at a place we already own. Against: it adds a
 `RequestHandler` to every migrated app, and the library warns *"no stock UidlRequestHandler found"*
-when it cannot attach, so that failure mode needs knowing before it is on by default.
+when it cannot attach, so that failure mode needs knowing before it is on by default; and
+`SamplerServlet`'s javadoc states the opposite stance — "the app wires it, never the library
+(R_no_spi_selfregister)" — which would need re-arguing, since a servlet subclass the app already
+extends is not SPI self-registration. The alternative is the seeds and host-app guides telling the
+migrator to wire it.
 
 `Q_reap_at_default_heartbeat` — **inferred, not measured.** The reaper collects *orphans* (scopes
 whose UIs are all detached), and detachment is heartbeat-driven. The 60 s above was observed with
@@ -63,5 +74,6 @@ dispatch. Anyone re-running this should not read silence as absence.
   [D_shutdown_lifecycle](../emulators/decisions.md#D_shutdown_lifecycle), since the tab-close
   detector is its mechanism.
 - The measured latency, once `Q_reap_at_default_heartbeat` is answered at a realistic heartbeat →
-  one sentence in [`guides/1-swing-to-emulators/lifecycle.md`](../guides/1-swing-to-emulators/lifecycle.md),
+  confirm or correct the "usually within a minute" sentence in
+  [`guides/1-swing-to-emulators/lifecycle.md`](../guides/1-swing-to-emulators/lifecycle.md),
   because a migrator whose app holds a lock or a file handle until shutdown needs the number.

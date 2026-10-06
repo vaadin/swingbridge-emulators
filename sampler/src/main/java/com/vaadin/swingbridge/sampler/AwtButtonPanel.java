@@ -29,8 +29,8 @@ import vaadinx.swing.JPanel;
 
 /**
  * {@link vaadinx.awt.Button} — the AWT 1.0 push button, not {@link JButton}.
- * Decisions: {@code D_awt_button} / {@code SD_sbutton}; the lane's rationale and the sizing of
- * the rest of the widget family: {@code ideas/awt-widgets.md}.
+ * Decisions: {@code D_awt_button} / {@code SD_sbutton}; the lane's rationale and
+ * status: {@code D_awt_lane}.
  *
  * <p>The scenario the AWT lane exists for is <b>AWT residue in an otherwise
  * Swing app</b>: a long-lived application ported forward from AWT 1.0 keeps a

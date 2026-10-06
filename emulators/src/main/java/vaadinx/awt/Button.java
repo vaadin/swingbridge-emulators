@@ -43,8 +43,8 @@ package vaadinx.awt;
 // Every other concrete class under vaadinx.awt.Component is either a Swing
 // class or a window (Frame / Window / Dialog / FileDialog), so this is the
 // class that exercises vaadinx.awt.Component on the path it was designed
-// for: a leaf widget with no JComponent above it. Rationale + the sizing of
-// the rest of the AWT widget family: ideas/awt-widgets.md.
+// for: a leaf widget with no JComponent above it. The lane's rationale
+// and status: D_awt_lane.
 
 /**
  * Emulator for {@link java.awt.Button} — a thin delegating shell over its

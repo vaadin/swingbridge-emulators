@@ -41,8 +41,8 @@ package vaadinx.awt;
 
 // Hand-written emulator — fourth widget in the AWT lane after Button, Label
 // and Choice, and the first that carries a second ported class
-// (CheckboxGroup) and two-way package-private hooks into it. Rationale + the
-// sizing of the rest of the AWT widget family: ideas/awt-widgets.md;
+// (CheckboxGroup) and two-way package-private hooks into it. The lane's
+// rationale and status: D_awt_lane;
 // decisions: D_awt_checkbox / SD_scheckbox.
 
 /**

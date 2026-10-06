@@ -114,10 +114,12 @@ Base analysis lives in [awt-textfield.md](./awt-textfield.md). The four base fac
   and `getText()` re-reads the peer on every call (`if (peer != null) text = peer.getText()`).
   The two-layer `Document`↔peer sync that `SJTextArea` + `vaadinx.swing.JTextArea` run
   has nothing to sync here. This is the single biggest simplification in the slice.
+  (The emulator still owns `text` as the JDK's field per
+  [D_emulator_owned_state](../emulators/decisions.md#D_emulator_owned_state); the JDK's own
+  peer read is that entry's "the JDK sometimes keeps state in its own peer" trap — measure both
+  branches.)
 - **`setText(null)` normalises to `""`,** in the ctor *and* in the setter. `getText()`
-  can therefore never return null. **So this slice needs no emulator-side field shadow** —
-  the thing D_awt_button needed for `label` and D_awt_label needed for `text`. Worth stating out loud
-  because it looks like it should be the third instance of that pattern and isn't.
+  can therefore never return null — unlike `Button.getLabel()` / `Label.getText()`.
 - **`getSelectedText()` returns `""` when nothing is selected**, not null — it is
   literally `getText().substring(start,end)`. `JTextComponentMixin.getSelectedText()`
   returns null, per *Swing's* contract. Another two-lane divergence.
@@ -314,20 +316,20 @@ public class TextArea extends vaadinx.awt.TextComponent      // new base, siblin
 **R_leaf_peer_lockdown lock-down: yes, and the leaf check is unusually clean.** `java.awt.TextComponent`
 is `sealed permits TextArea, TextField`, so the public hierarchy is closed at two leaves
 and no search is required: nothing in `java.awt` extends `TextArea`. So `vaadinx.awt.TextArea`
-omits the protected `(Component peer)` ctor and its root public ctor calls
-`super(new STextArea(...))` directly. Symmetrically, `vaadinx.awt.TextComponent` is
+omits the protected `(Component peer)` ctor and its root public ctor passes the `STextArea`
+directly (the lazy `super(STextArea.class, () -> new STextArea(...))` shape `Label` / `Choice` /
+`List` use). Symmetrically, `vaadinx.awt.TextComponent` is
 **non-leaf** and keeps the protected `(Component peer)` ctor as its [D_peer_ctor_injection](../emulators/decisions.md)
 seam — precisely the `JTextField` → `JPasswordField` shape. (`java.awt.TextArea` is itself
 declared `non-sealed`, so migrator subclassing for behaviour keeps working, which is what
 R_leaf_peer_lockdown is designed to allow.)
 
-**Field shadows: none.** This is the notable difference from D_awt_button and D_awt_label, both of which
-needed one so a JDK `null` survived a Vaadin-backed getter. Here the JDK normalises
-`null` → `""` itself, in `TextComponent(String)` and in `setText`, so `getText()` can
-never return null and there is nothing to protect. `rows` / `columns` /
-`scrollbarVisibility` live on the surrogate as the single source of truth, following
-`vaadinx.swing.JTextArea`'s own note that its emulator-side `rows`/`columns` fields
-were removed to stop the layers diverging.
+**State is emulator-owned**, per [D_emulator_owned_state](../emulators/decisions.md#D_emulator_owned_state):
+`text`, `rows`, `columns`, `scrollbarVisibility` and the selection pair are the JDK's fields
+under the JDK's names, the getters never read the peer, and the surrogate renders them through
+`withPeer` flushes (as `vaadinx.swing.JTextArea` now holds its own `rows` / `columns`). A
+programmatic `setText` fires its `TextEvent` from the emulator on the caller's thread (that
+entry's rule 2); the bridge below relays browser-originated changes only.
 
 **Peer → AWT bridge with source re-binding**, same shape as D_awt_button:
 
@@ -350,7 +352,7 @@ exposes four JDK hooks and three of them are easy to declare and never call.
 | `processTextEvent(TextEvent)` | The peer bridge above, on every browser keystroke and every programmatic `setText`. Also the only path `processEvent` routes a `TextEvent` down. **This is the hook a migrator's subclass overrides**, so an unreachable version would be the exact failure D_r12_provenance describes: compiles, looks wired, silently never runs. |
 | `processEvent(AWTEvent)` | Declared on `vaadinx.awt.TextComponent`, peeling `TextEvent` off before `super.processEvent(e)` — mirroring the JDK, and mirroring what `vaadinx.awt.Button.processEvent` does for `ActionEvent`. `vaadinx.awt.Component.processEvent` already exists as the routing sink for the mouse/key/focus/hierarchy families, so this is one more branch in an established path. Reachable from user-code `dispatchEvent`/`processEvent` calls in a subclass. |
 | `addNotify()` | **Verified reachable**: `vaadinx.awt.Component`'s ctor wires `peer.addAttachListener(e -> EHelper.callSwing(this::addNotify))`. Override, call super, and say in a comment why there is nothing to allocate (the peer is eternal) — the D_awt_button/D_awt_label precedent, and the reason not to just delete the override. |
-| `removeNotify()` | **Verified reachable**: the matching `peer.addDetachListener`. The JDK's `TextComponent.removeNotify` pulls `text` / `selectionStart` / `selectionEnd` out of the peer *before* it dies. Ours calls super and documents that the pull is a no-op because our peer outlives detach — the state it would rescue is still readable. |
+| `removeNotify()` | **Verified reachable**: the matching `peer.addDetachListener`. The JDK's `TextComponent.removeNotify` pulls `text` / `selectionStart` / `selectionEnd` out of the peer *before* it dies. Ours calls super and documents that the pull is a no-op because the emulator owns that state — there is no peer copy to rescue. |
 
 R_no_vaadin_in_api's first limb (types) is unremarkable here: every declared signature is JDK-shaped
 (`java.awt.Dimension`, `java.awt.event.TextEvent`, `String`, `int`), the only
@@ -407,7 +409,7 @@ against the live value. Observably identical, so not an R_match_swing_errors cas
 | low-level `dispatchEvent` / `enableEvents` | (b) | Already stubbed on `vaadinx.awt.Component`; `dispatchEvent` is `public final` there and WARNs. |
 | `paint`/`update`/`print(Graphics)` | (b) | User-authored `Graphics` paint is permanently out. |
 | horizontal scrolling actually rendering | (a) | Depends on `white-space: pre` / `wrap="off"` surviving inside `<vaadin-text-area>`; not a JDK-contract gap but a Vaadin-behaviour unknown. If it fails, `SCROLLBARS_BOTH` and `SCROLLBARS_HORIZONTAL_ONLY` degrade to soft wrap, i.e. `SJTextArea`'s existing accepted divergence — a (c) drop, not a throw. |
-| browser-side caret/selection read-back | (a) | Vaadin exposes no selection property or `selectionchange` event; SD_caret_selection already solved this with a JS bridge, so it is implementable rather than blocked — the AWT lane should reuse that bridge rather than re-derive it. Recommend lifting `whenInputElementReady` out of `JTextComponentMixin` (where it is a private interface method) into `SHelper`, per the "dedup cross-module helpers into the S-prefixed home" rule. |
+| browser-side caret/selection read-back | (a) | Vaadin exposes no selection property or `selectionchange` event; the Swing lane solved this with held selection reports (`JTextComponentMixin.addSelectionReportListener`, fed into the emulator-owned caret per [D_emulator_caret](../emulators/decisions.md#D_emulator_caret)), so it is implementable rather than blocked — the AWT lane should reuse that protocol rather than re-derive it. Recommend lifting it (and `whenInputElementReady`, a private interface method there) out of `JTextComponentMixin` into a shared `:surrogates` helper, per the "dedup cross-module helpers into the S-prefixed home" rule — the sibling TextField pass's open question 2. |
 | `getBackground()`'s `SystemColor.control` for a non-editable field | — | Implementable (`editable` + a `backgroundSetByClientCode` flag); base-level, sibling doc's call. Listed so it is not silently forgotten. |
 
 Nothing in this class lands in (c). That is a consequence of how small the JDK surface is:
@@ -418,49 +420,39 @@ would be to round-trip through its own getter.
 
 ## Sampler demo + exit gate
 
-> **Stale plumbing — the demo content below still stands.** This section was written when the four
-> landed AWT widgets shared one `AwtWidgetsPanel` on a single `AWT widgets` route. They no longer do:
-> the lane's convention is **one pane per AWT class**, so wherever this section says "append Demo N to
-> `AwtWidgetsPanel`" / "a bucket in `AwtWidgetsWarnInventoryTest`" / "no `SamplerCatalogue` edit
-> needed", read: a new `Awt<Class>Panel`, a new `Awt<Class>WarnInventoryTest`, and one
-> `SamplerCatalogue` line under category `"AWT"` labelled with the bare JDK class name. Rationale:
-> [awt-widgets.md § The Sampler convention](./awt-widgets.md#the-sampler-convention-one-pane-per-awt-class).
+**A new `AwtTextAreaPanel`**, one `SamplerCatalogue` line under category `"AWT"` labelled
+`TextArea` — the lane's one-pane-per-AWT-class convention (`AwtButtonPanel`, `AwtLabelPanel`, …).
+Each demo exists so the exit gate can assert a WARN-free user path:
 
-
-**Demo 5 on the existing `AWT widgets` route** (`AwtWidgetsPanel`), appended after
-Demo 4's labels, in the same style — each demo exists so the exit gate can assert a
-WARN-free user path:
-
-- **5a — `TextListener` fan-out.** A `new TextArea("edit me", 5, 30, SCROLLBARS_VERTICAL_ONLY)`
+- **1a — `TextListener` fan-out.** A `new TextArea("edit me", 5, 30, SCROLLBARS_VERTICAL_ONLY)`
   with a `JLabel` readout showing `getText().length()` and `getCaretPosition()`, driven by
   an `addTextListener`. Karibu can drive it with `_setValue`, which is exactly the
   browser-keystroke path.
-- **5b — the mutators a migrated app actually calls.** Swing buttons driving `append`,
+- **1b — the mutators a migrated app actually calls.** Swing buttons driving `append`,
   `insert(str, pos)`, `replaceRange`, `selectAll` + a `getSelectedText()` readout (which
   shows AWT's `""`-not-null contract), and `setEditable` toggling.
-- **5c — the scrollbar policy, side by side.** Three `TextArea`s of the same size pinned
+- **1c — the scrollbar policy, side by side.** Three `TextArea`s of the same size pinned
   to `SCROLLBARS_BOTH` / `VERTICAL_ONLY` / `NONE`, each pre-filled with one very long line
   plus enough short lines to overflow vertically, so the wrap-vs-scroll difference is
   *visible*. This is the demo that carries the browser-verification gate — a server-side
   test would pass with the scrollbars entirely absent, the same blind spot SD_slabel called out
   for alignment on an inline host.
 
-**Exit gate.** `AwtWidgetsWarnInventoryTest` gains a fourth bucket,
-`inventory_awt_textarea_api_surface`, structured like the existing two: all five ctors
+**Exit gate.** A new `AwtTextAreaWarnInventoryTest` holds the pane's user path plus an API
+bucket, `inventory_awt_textarea_api_surface`, structured like the other AWT panes': all five ctors
 (including the clamping and bad-scrollbars paths), `getRows`/`setRows`/`getColumns`/`setColumns`,
 `getScrollbarVisibility`, all three modern mutators **and** all three deprecated aliases,
 `getText`/`setText` (including null), `getSelectedText`, `select`/`selectAll`,
 `setCaretPosition`/`getCaretPosition`, `isEditable`/`setEditable`,
 `addTextListener`/`removeTextListener`/`getTextListeners`, the six size methods,
 `addNotify`, `toString`. Minus the expected-WARN `getAccessibleContext`, which stays in the
-unit tests. Like the other two buckets this is genuinely exhaustive — the class has
+unit tests. Like the Button and Label buckets this is genuinely exhaustive — the class has
 nothing else. `processEvent` / `processTextEvent` are protected and get driven from
 `vaadinx.awt.TextAreaTest` instead, same split the Button bucket documents.
 
-`inventory_user_path` grows: an `_find(STextArea.class, withCount(4))` assertion (one in
-5a, three in 5c — the count isolates the AWT lane the way the `SButton`/`SLabel` counts
-already do, since the Swing text areas elsewhere in Sampler peer on `SJTextArea`), a
-`_setValue` on 5a's field, and clicks through 5b's four buttons.
+The user path: an `_find(STextArea.class, withCount(4))` assertion (one in 1a, three in 1c —
+exact, since the pane holds only its own widget's peers), a `_setValue` on 1a's field, and
+clicks through 1b's four buttons.
 
 ---
 
@@ -477,10 +469,10 @@ Behaviours that earn a test because they would otherwise regress silently:
    throw with the JDK's exact messages. This is the single most likely thing to be
    "fixed" wrongly by a later reader.
 3. Bad `scrollbars` value in the ctor silently becomes `SCROLLBARS_BOTH` (no IAE — the
-   inverse of `SLabel`'s alignment contract, which sits three demos away in the same file).
+   inverse of `SLabel`'s alignment contract).
 4. The constant-collision trap: `SCROLLBARS_*` are 0/1/2/3, `java.awt.ScrollPane`'s are 0/1/2.
-5. `setText(null)` reads back `""` — and asserted as *not* null, i.e. a regression guard
-   against someone adding the field shadow D_awt_button/D_awt_label needed.
+5. `setText(null)` reads back `""` — and asserted as *not* null, unlike `Button.getLabel()` /
+   `Label.getText()`.
 6. `append(null)` appends the literal `"null"`; `replaceRange("X",4,2)` on `"hello"` gives
    `"hellXllo"`; the three `StringIndexOutOfBoundsException` messages verbatim.
 7. `getSelectedText()` with nothing selected returns `""`, not null.
@@ -522,20 +514,18 @@ sibling slice may already have landed:
 | `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/internal/AwtTextStore.java` | new, only on the mixin route (mirrors `TextStateStore`) |
 | `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/STextArea.java` | new |
 | `surrogates/src/main/resources/META-INF/resources/emul/stextarea.css` | new, only on the CSS route for the scrollbar policy |
-| `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/SHelper.java` | edit, if `whenInputElementReady` is lifted out of `JTextComponentMixin` |
+| `surrogates/src/main/java/com/vaadin/swingbridge/surrogates/SHelper.java` | edit, if the selection-report protocol / `whenInputElementReady` is lifted out of `JTextComponentMixin` |
 | `surrogates/src/test/java/com/vaadin/swingbridge/surrogates/STextAreaTest.java` | new |
 | `surrogates/decisions.md` | new `SD_stextarea` entry |
 | `emulators/src/main/java/vaadinx/awt/TextComponent.java` | new — **sibling doc owns**; non-leaf, keeps the D_peer_ctor_injection protected `(Component peer)` ctor |
 | `emulators/src/main/java/vaadinx/awt/TextArea.java` | new |
 | `emulators/src/test/java/vaadinx/awt/TextAreaTest.java` | new |
 | `emulators/decisions.md` | new `D_awt_textarea` entry |
-| `sampler/src/main/java/com/vaadin/swingbridge/sampler/AwtWidgetsPanel.java` | edit — Demo 5a/5b/5c |
-| `sampler/src/test/java/com/vaadin/swingbridge/sampler/AwtWidgetsWarnInventoryTest.java` | edit — fourth bucket + user-path steps |
+| `sampler/src/main/java/com/vaadin/swingbridge/sampler/AwtTextAreaPanel.java` | new — Demos 1a/1b/1c |
+| `sampler/src/test/java/com/vaadin/swingbridge/sampler/AwtTextAreaWarnInventoryTest.java` | new — API bucket + user path |
+| `sampler/src/main/java/com/vaadin/swingbridge/sampler/SamplerCatalogue.java` | edit — one `"AWT"` / `TextArea` line |
 | `sampler/description.md` | edit — the exit-gate inventory line |
 | `CLAUDE.md` | edit — component-surface list gains `vaadinx.awt.TextArea` (+ `TextComponent`) |
-| `ideas/awt-widgets.md` | edit — the `TextField, TextArea` row; **the parent rewrites this, not this slice** |
-
-No `SamplerCatalogue.java` edit — the `AWT widgets` route already exists.
 
 ---
 
@@ -559,7 +549,9 @@ No `SamplerCatalogue.java` edit — the `AWT widgets` route already exists.
    to post an event if TextArea.setText() replaces text by same text"* — which only makes
    sense if `peer.setText` posts one. I could not run a headful AWT test (no display), and
    the answer may differ between XAWT and the Windows peer. **This is the highest-value
-   thing a human with a desktop JDK could settle in five minutes.** If AWT is actually
+   thing to measure** — under `xvfb-run -a`, as [D_emulator_owned_state](../emulators/decisions.md#D_emulator_owned_state)'s
+   procedure does for AWT widgets; the sibling TextField pass's reading of `XTextFieldPeer`
+   (quirk 1 there) points to yes for XAWT. If AWT is actually
    silent, the fix is a one-line `isFromClient()` filter in the surrogate's listener, and
    the "Vaadin's equality guard == AWT's guard" argument above is decoration rather than
    design.
@@ -587,8 +579,8 @@ No `SamplerCatalogue.java` edit — the `AWT widgets` route already exists.
 ## Effort
 
 - **`TextArea` alone, once the `TextComponent` base exists: ~1 session.** The surrogate is
-  small (no `Document`, no caret object, no field shadows), the emulator is a thin shell,
-  and every mechanism it needs — `ComponentMixin`, `callSwing`, `whenInputElementReady`,
+  small (no `Document`, no caret object, no field shadows), the emulator is the JDK's few
+  fields and bodies (D_emulator_owned_state), and every mechanism it needs — `ComponentMixin`, `callSwing`, `whenInputElementReady`,
   `CssConvert.columnsToCssWidth`, the peer attach/detach → `addNotify`/`removeNotify` wiring —
   is already built.
 - **`TextArea` first, base included: ~1.5–2 sessions**, and the base is the bigger half

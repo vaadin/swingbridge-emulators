@@ -37,7 +37,7 @@ import java.util.function.Consumer;
 
 /**
  * {@link vaadinx.awt.Scrollbar} WARN inventory exit gate — D_awt_scrollbar / SD_sscrollbar; the
- * AWT lane's rationale is {@code ideas/awt-widgets.md}. Every test fails if any
+ * AWT lane's rationale is {@code D_awt_lane}. Every test fails if any
  * {@code onUnimplemented} fires along the asserted path:
  *
  * <ol>
