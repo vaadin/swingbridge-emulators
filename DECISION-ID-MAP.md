@@ -7,7 +7,7 @@ until they meet. A slug is derived from what the decision says, so two branches 
 they have actually decided the same thing — which is a merge conflict worth having.
 
 This table exists so an old ID still lands somewhere. Commit messages, PR descriptions, and
-`ideas/` drafts written before the rename all speak the old language; nothing rewrites those.
+idea drafts (now GitHub issues) written before the rename all speak the old language; nothing rewrites those.
 
 Anchors are now explicit — an `<a id>` tag carrying the slug verbatim — rather than derived from heading text,
 so rewording a heading no longer breaks every link to it.
@@ -389,12 +389,12 @@ so rewording a heading no longer breaks every link to it.
 | `R12` | `R_no_vaadin_in_api` |  |
 | `R13` | `R_decline_effect_only` |  |
 
-## placeholders in ideas/ — resolve, do not map
+## placeholders in idea drafts — resolve, do not map
 
 | was | is | note |
 |---|---|---|
-| `D7x` | `(delete)` | ideas/awt-textarea.md placeholder; slugs remove the need |
-| `SD5x` | `(delete)` | ideas/awt-textarea.md placeholder; slugs remove the need |
+| `D7x` | `(delete)` | placeholder in the `java.awt.TextArea` design ([#5](https://github.com/vaadin/swingbridge-emulators/issues/5)); slugs remove the need |
+| `SD5x` | `(delete)` | placeholder in the `java.awt.TextArea` design ([#5](https://github.com/vaadin/swingbridge-emulators/issues/5)); slugs remove the need |
 
 ## slug → slug renames
 

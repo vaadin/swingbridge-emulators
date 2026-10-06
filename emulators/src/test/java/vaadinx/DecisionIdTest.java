@@ -80,12 +80,10 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Code has cited sub-questions that lived only in a since-deleted idea note, and
  * nothing said so until a reader went looking.
  *
- * <p>{@code ideas/} is exempt from the resolve check on purpose. Those docs are
- * thinking-in-progress and name slugs a decision has not earned yet — a
- * forward reference there marks work worth doing, exactly as a wiki-link to an
- * unwritten page does. They are still checked for <em>duplicate</em> definitions.
+ * <p>Ideas live in GitHub issues, outside this scan, so a forward reference to a slug no
+ * decision has earned yet belongs there rather than in the repository.
  *
- * <p>Three other exemptions, each for a reason that is not tidiness:
+ * <p>Three exemptions, each for a reason that is not tidiness:
  * {@code DECISION-ID-MAP.md} is the translation table and must keep saying the old
  * numbers; any {@code generated} directory holds Vaadin's minified frontend bundles,
  * whose mangled identifiers collide with every ID shape here; and this file is
@@ -145,7 +143,7 @@ class DecisionIdTest {
 
         Map<String, List<String>> dangling = new TreeMap<>();
         for (File f : sources()) {
-            if (isUnderIdeas(f) || isTheMap(f)) {
+            if (isTheMap(f)) {
                 continue;
             }
             Matcher m = TOKEN.matcher(read(f));
@@ -332,10 +330,6 @@ class DecisionIdTest {
 
     private String rel(File f) {
         return repoRoot.toPath().relativize(f.toPath()).toString();
-    }
-
-    private boolean isUnderIdeas(File f) {
-        return rel(f).startsWith("ideas/");
     }
 
     private static boolean isTheMap(File f) {

@@ -372,7 +372,7 @@ public abstract class Component implements java.awt.image.ImageObserver, java.aw
      * Swing ancestor to inherit displayability from. Its peer entering the live
      * UI is the only realisation signal it will ever get, so we take it. Mixing
      * is not otherwise designed yet — see
-     * {@code ideas/mixed-emulator-vaadin-trees.md} — but a rootless
+     * <a href="https://github.com/vaadin/swingbridge-emulators/issues/24">issue #24</a> — but a rootless
      * emulator that renders and never becomes displayable is the worst of the
      * available answers, since every hook keyed off displayability then stays
      * silent while the component is visibly on screen.

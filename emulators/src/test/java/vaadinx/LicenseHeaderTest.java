@@ -155,8 +155,7 @@ class LicenseHeaderTest {
             "testapps/jlawyer-shape/", "hand-built shape of a third-party app, carrying a j-lawyer header",
             "third-party/jgoodies-forms-1.2.1/", "BSD fork — every forked file keeps its upstream header",
             "third-party/jcalendar-1.4/", "Vaadin-authored but LGPL-2.1, upstream's licence — see rule 5",
-            SEEDS, "Vaadin-authored but 0BSD, copied into the migrator's own app — see rule 7",
-            "ideas/", "throwaway probe code that ships in nothing");
+            SEEDS, "Vaadin-authored but 0BSD, copied into the migrator's own app — see rule 7");
 
     /** The two trees where the name rule applies; elsewhere a JDK name is coincidence. */
     private static final List<String> EMULATOR_MAIN =

@@ -135,5 +135,5 @@ call sites, and it has never run.
 
 Two things a re-run is *not*: it is not the app actually booting (the runtime half of Phase 6 is a
 separate workflow), and it is not the **gated migration rounds**, which
-`ideas/inventory-testapp-migration.md` owns on its own prerequisites. Don't merge the two; a doc probe
+[#16](https://github.com/vaadin/swingbridge-emulators/issues/16) owns on its own prerequisites. Don't merge the two; a doc probe
 that never boots the app and a round that does are measuring different things.

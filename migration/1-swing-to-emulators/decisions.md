@@ -100,7 +100,7 @@ The migrator annotates their main `JFrame` subclass with `@MainWindow` and paste
 
 `EXIT_ON_CLOSE → session-close` (rather than `System.exit`) is critical: one stray `System.exit(0)` from a migrated `WindowListener` would kill every user's session, not just the caller's.
 
-**Exit-side transform — port the main window's `WINDOW_CLOSING` handler to a dialog-free session-destroy hook.** A desktop app's `WINDOW_CLOSING`/`windowClosing` listener commonly *prompts* ("unsaved changes — really quit?") and gates cleanup (close a TCP client, flush, mark offline) on the answer. On a **real** browser tab-close the user is gone, so there is no UI to host that confirm dialog — the emulator's shutdown-path modal park throws an actionable "shutting down" `IllegalStateException` ([D_shutdown_lifecycle](../../emulators/decisions.md#D_shutdown_lifecycle) / `vaadinx.awt.Dialog.parkUntilClose`) rather than showing it, which would abort the handler *before* the cleanup behind the dialog. So the reliable port is to lift the *server-side cleanup* out of `WINDOW_CLOSING` into a Vaadin session-destroy hook, **dropping the confirm** (no user to confirm on close). This pairs with M1D_static_taxonomy's singleton taxonomy — the singleton the desktop app closed from `WINDOW_CLOSING` (e.g. an app-scoped TCP client) is closed from the session-destroy hook instead. SB-Emulators' runtime still fires `WINDOW_CLOSING` best-effort for un-ported apps; this transform is what makes the cleanup actually run (and, once [tab-scope#3](https://github.com/mvysny/vaadin-tab-scope/issues/3) lands, run promptly). A natural mechanical port for the [local-LLM stage-2 target](../../ideas/local-llm-migration-target.md); full framing (incl. the rejected drop-`@PreserveOnRefresh` alternative and the ~85–91 % beacon-reliability ceiling) in [D_shutdown_lifecycle](../../emulators/decisions.md#D_shutdown_lifecycle).
+**Exit-side transform — port the main window's `WINDOW_CLOSING` handler to a dialog-free session-destroy hook.** A desktop app's `WINDOW_CLOSING`/`windowClosing` listener commonly *prompts* ("unsaved changes — really quit?") and gates cleanup (close a TCP client, flush, mark offline) on the answer. On a **real** browser tab-close the user is gone, so there is no UI to host that confirm dialog — the emulator's shutdown-path modal park throws an actionable "shutting down" `IllegalStateException` ([D_shutdown_lifecycle](../../emulators/decisions.md#D_shutdown_lifecycle) / `vaadinx.awt.Dialog.parkUntilClose`) rather than showing it, which would abort the handler *before* the cleanup behind the dialog. So the reliable port is to lift the *server-side cleanup* out of `WINDOW_CLOSING` into a Vaadin session-destroy hook, **dropping the confirm** (no user to confirm on close). This pairs with M1D_static_taxonomy's singleton taxonomy — the singleton the desktop app closed from `WINDOW_CLOSING` (e.g. an app-scoped TCP client) is closed from the session-destroy hook instead. SB-Emulators' runtime still fires `WINDOW_CLOSING` best-effort for un-ported apps; this transform is what makes the cleanup actually run (and, once [tab-scope#3](https://github.com/mvysny/vaadin-tab-scope/issues/3) lands, run promptly). A natural mechanical port for the [local-LLM stage-2 target](https://github.com/vaadin/swingbridge-emulators/issues/21); full framing (incl. the rejected drop-`@PreserveOnRefresh` alternative and the ~85–91 % beacon-reliability ceiling) in [D_shutdown_lifecycle](../../emulators/decisions.md#D_shutdown_lifecycle).
 
 **Source:** D_jframe_as_route, [`emulators/architecture.md` §"Main window route"](../../emulators/architecture.md).
 
@@ -144,7 +144,7 @@ A hand-rolled `LayoutManager` does pixel `setBounds` arithmetic driven by child 
 
 **Why not throw, why not silent.** Throw was rejected (R_layouts_close_enough files layout divergence as a *minor* WARN-bucket gap, not one of the enumerated throw triggers). The prior silent no-op was rejected as a debugging trap (M1D_no_silent_improvements) — the app looked laid-out-wrong with no signal.
 
-**Why not runtime async measurement.** Running the real layout via a browser round-trip (ResizeObserver → measure → push absolute bounds) buys faithfulness at high cost (async jank, intrinsic-size fidelity, feedback loops); with A ("runs") and B ("faithful when someone invests") covering the space, it's parked near-permanently. Custom layout is also a natural first "island" for the [local-LLM migration target](../../ideas/local-llm-migration-target.md): the local model falls back to A, a human or cloud model authors the B artifact.
+**Why not runtime async measurement.** Running the real layout via a browser round-trip (ResizeObserver → measure → push absolute bounds) buys faithfulness at high cost (async jank, intrinsic-size fidelity, feedback loops); with A ("runs") and B ("faithful when someone invests") covering the space, it's parked near-permanently. Custom layout is also a natural first "island" for the [local-LLM migration target](https://github.com/vaadin/swingbridge-emulators/issues/21): the local model falls back to A, a human or cloud model authors the B artifact.
 
 **Accepted limitation.** B expresses CSS *intent* — a layout that genuinely needs runtime sibling measurement (e.g. "align B to the tallest of A/C") has no pure-CSS form and is handed back to the migrator (their island, or rewrite the view). B delegates such layouts, it doesn't solve them.
 
@@ -182,7 +182,7 @@ reorder, and not a rewrite of any node**: the nodes and their order are untouche
 says the opposite of what the node asks) and `Q_counter` were always the allowlist, and every
 confidently-matched verdict is exactly what it was. What changes is the **direction of the error under
 uncertainty**. The prior tree fell through to *"may stay static"*, so an unsure migrator — or an unsure
-[local-LLM agent](../../ideas/local-llm-migration-target.md) — produced a silent cross-user leak;
+[local-LLM agent](https://github.com/vaadin/swingbridge-emulators/issues/21) — produced a silent cross-user leak;
 inverted, the same uncertainty produces an over-scoped field, whose worst case is a rebuilt cache and
 a memory cost. Choose the default whose failure is loud and cheap.
 
@@ -386,7 +386,7 @@ call sites, and its body becomes a scope look-up (the frame from the tab's tree,
 and it is idiomatic vanilla Vaadin rather than a migration hack: a `static` getter resolving from
 `UI.getCurrent()` and throwing when there is none is a normal pattern. It also preserves call-site
 shape, which is exactly the lever
-[`../../ideas/local-llm-migration-target.md`](../../ideas/local-llm-migration-target.md) depends on.
+[#21](https://github.com/vaadin/swingbridge-emulators/issues/21) depends on.
 Two constraints make it safe, and both are stated in the migrator-facing worked example:
 
 - **The accessor finds; it never creates.** The memoizing `if (_instance == null)` line must go. The
@@ -437,12 +437,12 @@ ignore it. Resolved the other way round from the draft, at
 [M1D_static_sweep_allowlist](#M1D_static_sweep_allowlist): the non-`final` tier stays absolute, and the
 logging facades join the *immutable-type* set instead, so the fix is to add `final` and the fixed field
 then passes. Local-LLM routing: the whole sweep is **sensitive** (scopes the app's own user data —
-on-prem only) and **⚠silent** — see [`../../ideas/local-llm-migration-target.md`](../../ideas/local-llm-migration-target.md).
+on-prem only) and **⚠silent** — see [#21](https://github.com/vaadin/swingbridge-emulators/issues/21).
 
 **Coupling to multi-tab — decided for alpha, re-opens only under option 3.** SB-Emulators is committed to
 one-app-per-session (D_active_ui_pointer / multi-tab option 1) for the alpha, so the taxonomy targets today's
 reality (tab ≈ session). Only if SB-Emulators ever relaxes to genuinely concurrent tabs
-([multi-tab option 3](../../ideas/multi-tab-and-session-scoping.md)) do the application-scope verdicts
+([multi-tab option 3](https://github.com/vaadin/swingbridge-emulators/issues/25)) do the application-scope verdicts
 (shared cache, counter) get re-examined — a per-tab app instance changes what "shared across the
 session" means. That is the *only* multi-tab dependency; nothing here waits on it.
 
@@ -912,7 +912,7 @@ in the API.
 
 Three further reasons the resolver is SB-Emulators' rather than each app's. **The store stays private** — and
 under this framing that is the *contract*, not merely prudence: if
-[multi-tab option 3](../../ideas/multi-tab-and-session-scoping.md) ever lands, "one running app instance"
+[multi-tab option 3](https://github.com/vaadin/swingbridge-emulators/issues/25) ever lands, "one running app instance"
 may stop mapping 1:1 onto a browser tab, and a lifetime-named API survives that where "the tab-scope
 holder" would have to be re-taught to every migrated app. (It also keeps a choice that was got wrong twice
 in one afternoon's drafting revisable at one line per app.) **The contexts are not discoverable.** `TabScope.getCurrent()` requires a current `UI`, and the one place a
@@ -1029,7 +1029,7 @@ or benign. The barrier is not rebuilt, it is relocated per field.
 - **Routing root-reachable components to an instance field on the `@MainWindow` frame** instead (the tree
   is the storage; derived-from-the-tree cannot go stale) — rejected: the most common shape in a desktop
   Swing app is the frame singleton, and making the most common case the exception is bad guidance design,
-  especially for the [local-LLM target](../../ideas/local-llm-migration-target.md) where every branch is a
+  especially for the [local-LLM target](https://github.com/vaadin/swingbridge-emulators/issues/21) where every branch is a
   chance to route wrong. The staleness worry does not survive inspection either, though no longer for the reason first given
   here: the registry used to be visibility-based, so `setVisible(false)` dropped the frame while the
   desktop `static` held on. [D_window_registry](../../emulators/decisions.md#D_window_registry)
@@ -1039,7 +1039,7 @@ or benign. The barrier is not rebuilt, it is relocated per field.
 **One holder per app; a split needs a compile fact, not a size judgement.** The row this closes
 (`Q_holder_granularity`) had leaned on "probably a per-app-size judgement the addendum states rather than
 decides", and that lean fails this design's own bar: *"is this app large enough to warrant splitting?"* is
-exactly what the [local-LLM agent](../../ideas/local-llm-migration-target.md) cannot answer, and will
+exactly what the [local-LLM agent](https://github.com/vaadin/swingbridge-emulators/issues/21) cannot answer, and will
 answer inconsistently. So the rule is stated, and its trigger is something the agent can *read*:
 
 - **Default — one holder**, in the module holding `main()` / the `@MainWindow` frame. Never split for size.
@@ -1175,7 +1175,7 @@ is not one anybody should trust on an unread app — it miscounted two of the 15
 method whose parameter list wraps, both read as fields) and breaks on multi-line declarations, generic
 methods (`static <T> T of(…)`) and annotated fields. A classifier whose
 correctness is per-app-unfalsifiable is the thing the
-[local-LLM target](../../ideas/local-llm-migration-target.md) must not be built on. **Since
+[local-LLM target](https://github.com/vaadin/swingbridge-emulators/issues/21) must not be built on. **Since
 [M1D_static_sweep_tool](#M1D_static_sweep_tool), Step 1 and these two verdicts come from the stage-1
 class files, not from the LSP** — the compiler's own answer, which is neither a regex nor a language
 server; the paragraph above is why a regex is refused, and it still is.
@@ -1318,7 +1318,7 @@ rule as fussiness and discount the parts that matter.
 
 **Source:** M1D_static_taxonomy (the taxonomy and its silent-failure argument), M1D_former_singletons (the holder whose completeness diff
 this feeds), CLAUDE.md § Building (the JDT output-directory hazard),
-[local-llm-migration-target.md](../../ideas/local-llm-migration-target.md) (the "mechanical for a 30B model"
+[#21](https://github.com/vaadin/swingbridge-emulators/issues/21) (the "mechanical for a 30B model"
 bar the ruling is measured against), `testapps/inventory/1-emulators/STUMBLES.md` stumble 1 (the run that
 walked through the branchless stop, and the substitute it improvised).
 
@@ -1709,7 +1709,7 @@ This is the only ⚠silent §7 hazard a scan *could* reach and did not.
   It reads fine in a terminal, and two renderers is surface with no second consumer, the same argument
   M1D_import_swap_tool made for the swap report.
 - **An `*LLM:*` overlay column** (`Q_llm_overlay_column`) — not v1, and held as loosely as the overlay
-  itself ([local-llm-migration-target.md](../../ideas/local-llm-migration-target.md)). The report already
+  itself ([#21](https://github.com/vaadin/swingbridge-emulators/issues/21)). The report already
   names each section's `H_` id, which is the hook such a column would hang on; if it lands, the
   consistency test checks it too, because a second copy of the overlay is the thing this entry exists
   to prevent.
@@ -1991,7 +1991,7 @@ round.
 reasoning the relaxation rule generalizes, and the `RetentionPolicy.CLASS` mutation check the module's
 `Vetted` fixture carries forward), M1D_static_taxonomy (Step 0's closure, which by-name matching
 respects), M1D_lsp_prerequisite (the discoverability bar the builder is measured against),
-`ideas/local-llm-migration-target.md`.
+[#21](https://github.com/vaadin/swingbridge-emulators/issues/21).
 
 
 <a id="M1D_static_sweep_tool"></a>
@@ -2572,7 +2572,7 @@ holding per-user state leaks it between users** — a former singleton in bean f
 `MigrationGuardrails` has anything to flag, and a migrated Spring app can pass every guardrail while
 one user's open document shows in another's session. The faithful remedy — one `ApplicationContext`
 per tab, as tab scope is one JVM per tab — is unresearched and is parked in
-[`spring-context-per-tab.md`](../../ideas/spring-context-per-tab.md).
+[#29](https://github.com/vaadin/swingbridge-emulators/issues/29).
 
 **Unsupported, not halted.** The migration still runs, since a DI container is not a stop (the
 earlier "detect Spring, halt the agent" gate was withdrawn unbuilt and stays withdrawn). What is

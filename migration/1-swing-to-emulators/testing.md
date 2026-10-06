@@ -79,7 +79,7 @@ If the agent finishes the migration without needing `[reference-needed]`, the do
 `SWINGBRIDGE_HOME` — the unpacked kit — and everything in there is fair game, because a customer sees
 all of it: the guides, the kit's own `CLAUDE.md`, its welcome README, each add-on's `MIGRATION.md`,
 and the tools it is told to *run* rather than read. What stays out of scope is what a customer does
-not have: this repository's `CLAUDE.md` files, the decision logs, `ideas/`, the sibling
+not have: this repository's `CLAUDE.md` files, the decision logs, the GitHub issues, the sibling
 docs in this directory (`spec.md`, `decisions.md`, this file), `emulators/src`, `surrogates/src`,
 `loom/src`, `sampler/` and `third-party/*/src`.
 
@@ -183,7 +183,7 @@ A guide-loop round grades the docs and stops at a crash check; a **gated round**
 app against a fixed ladder of gates — the "separate workflow" the done condition above leaves out of
 scope. Same tree, different measurement: **don't merge the two exercises.** None has run yet; the
 plan for the first ones, on `inventory`, is
-[`ideas/inventory-testapp-migration.md`](../../ideas/inventory-testapp-migration.md).
+[#16](https://github.com/vaadin/swingbridge-emulators/issues/16).
 
 **Decided 2026-08-25: there is no separate scoring scheme.** Each gate emits a comparable figure of
 its own, so a round's result is the four readings side by side:
@@ -197,7 +197,7 @@ its own, so a round's result is the four readings side by side:
 - **Journey gate** — N named journeys (for `inventory`: login → add category → add vendor → add
   item → stock query → transfer → return), captured against the *desktop* app via `swing-mcp` as
   behavioural ground truth, replayed against the migrated web app. It is the capture→review→generate
-  pipeline of [`ideas/migrated-app-testing.md`](../../ideas/migrated-app-testing.md) applied to a
+  pipeline of [#22](https://github.com/vaadin/swingbridge-emulators/issues/22) applied to a
   testapp, which that file's § "Decided" (2026-09-10) makes the place the pipeline is developed: the
   rounds are repeated, so suite-authoring cost amortizes, and the pipeline stays optional, so a round
   can still run "migration pure" without it.
@@ -217,7 +217,7 @@ incomparable — the lack of a score is not.
 - **Integration-testing the migrated app.** The guides deliberately say nothing about it: how a
   migrator gains confidence the ported app still behaves like the desktop one is an unbrainstormed
   hole, and a half-answer in a migrator-facing doc is worse than an acknowledged gap. The proposal
-  is [`ideas/migrated-app-testing.md`](../../ideas/migrated-app-testing.md) — capture scenarios off
+  is [#22](https://github.com/vaadin/swingbridge-emulators/issues/22) — capture scenarios off
   the running *desktop* app through [swing-mcp](https://github.com/vaadin/swing-mcp), generate tests
   that replay them against the migrated one, so the expectations come from the app that already
   worked. Its graduation target is a `guides/testing.md` offered as an **optional recommended

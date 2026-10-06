@@ -43,7 +43,7 @@ Step folders are the **sources** — internal scratch where we work things out t
 
 Per-step brainstorming is **deliberately split, not shared**: step 2 builds on a finished step 1, the problems differ, and focus wins over cross-step DRY. Revisit only if real repetition emerges.
 
-**Loose ideas do not live here — they live in the repo-root [`ideas/`](../ideas), one file per idea.** A step folder holds only the *worked-out* material: `spec.md` (settled understanding), `decisions.md` (ruled, with rationale), `testing.md` (the protocol). Step 1 originally carried an `ideas.md` too, authored two months before the root folder existed; it was split into per-idea files and retired, and step 2 gets no equivalent. One home for ideas is the point — two drift, and an idea that graduates has one place to be deleted from.
+**Loose ideas do not live here — they live in [GitHub issues](https://github.com/vaadin/swingbridge-emulators/issues) labelled `enhancement`, one issue per idea.** A step folder holds only the *worked-out* material: `spec.md` (settled understanding), `decisions.md` (ruled, with rationale), `testing.md` (the protocol). Step 1 originally carried an `ideas.md` too; it was split per idea and retired, and step 2 gets no equivalent. One home for ideas is the point — two drift, and an idea that graduates has one place to be closed in.
 
 ## Steps
 

@@ -64,7 +64,7 @@ The three `## Not a doc gap` kinds are not doc fixes at all, and each has a name
   an edit to make — surface it to the user as such. Never make a stage-1 edit silently; the baseline
   is what makes the stage-2 diff mean anything.
 - **(b) An `:emulators` / `:surrogates` / add-on shortfall.** Not docs. Hand it back to the user with
-  a one-line note of what's missing — it belongs in `ideas/` or a `D*`/`SD*` triage, and
+  a one-line note of what's missing — it belongs in a GitHub issue or a `D*`/`SD*` triage, and
   this skill doesn't own any of those.
 - **(c) An environment failure.** Not docs either. A build failing in code the agent never touched is
   one of `/build-kit`'s stale-tree modes; name which one if the entry lets you tell, and hand it back.
@@ -143,7 +143,7 @@ the spec sources. The strict-scope discipline is the *migration's* job, not docf
   invariant 1).
 - Not a place to add new content not motivated by a stumble. If you spot an unrelated doc improvement
   while reading, mention it but don't bundle it in.
-- Not the owner of `ideas/` or the `D*`/`SD*` logs. Emulator shortfalls get handed back,
+- Not the owner of the GitHub issues or the `D*`/`SD*` logs. Emulator shortfalls get handed back,
   not filed.
 
 ## See also

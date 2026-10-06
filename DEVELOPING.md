@@ -184,7 +184,7 @@ authoritative copy:
 |---|---|
 | `emulators/src/`, `emulators-printing/src/` | **GPLv2+CE** ([`LICENSE`](./LICENSE)) |
 | `:surrogates`, `:emulators-spring`, `:sampler`, `:migration-annotations`, `:migration-guardrails`, `:migration-tool`, `:zip-distro`, `:generator`, `testapps/crud` | **Apache-2.0** ([`LICENSE-APACHE-2.0`](./LICENSE-APACHE-2.0)) |
-| the docs (root `*.md`, the emulator modules' own READMEs, `architecture.md` and decision log, `guides/`, `migration/`, `ideas/`), `.claude/skills/`, `.github/`, the poms — and anything the map does not name | **Apache-2.0** |
+| the docs (root `*.md`, the emulator modules' own READMEs, `architecture.md` and decision log, `guides/`, `migration/`), `.claude/skills/`, `.github/`, the poms — and anything the map does not name | **Apache-2.0** |
 | `guides/1-swing-to-emulators/seed/` — the host-app seeds a migrator copies into their own app | **0BSD** ([`seed/LICENSE`](./guides/1-swing-to-emulators/seed/LICENSE)) |
 | `third-party/jcalendar-1.4` | **LGPL-2.1** |
 | `third-party/jgoodies-forms-1.2.1`, `testapps/inventory`, `testapps/jlawyer-shape` | upstream's own |

@@ -94,7 +94,7 @@ This is the spine of the argument, and it is why SB-Emulators' own README calls 
 
 So the claim is not *"don't rewrite"*. It is **"you will rewrite either way; the choice is whether you do it blind or second."**
 
-One consequence worth flagging as exploratory: a mechanical, oracle-checked port is plausibly within reach of a *local* model where a from-scratch rewrite is frontier-cloud-only, which would mean the customer's source never leaves its network. That is [an idea under exploration](./ideas/local-llm-migration-target.md), not a shipped capability, and must be said that way.
+One consequence worth flagging as exploratory: a mechanical, oracle-checked port is plausibly within reach of a *local* model where a from-scratch rewrite is frontier-cloud-only, which would mean the customer's source never leaves its network. That is [an idea under exploration](https://github.com/vaadin/swingbridge-emulators/issues/21), not a shipped capability, and must be said that way.
 
 ## Where SB-Emulators is weaker
 

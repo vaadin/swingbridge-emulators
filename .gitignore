@@ -49,7 +49,4 @@ inventoryApp.db.mv.db
 /temp/
 .vscode
 
-# Python bytecode from the ideas/ measurement scripts
-__pycache__/
-*.pyc
 .playwright-mcp

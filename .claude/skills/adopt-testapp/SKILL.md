@@ -372,7 +372,7 @@ The subagent's report is the load-bearing artefact of this whole step, which is 
 narrowed to a machine-checkable verdict. An airlocked alternative — the scan's prose never entering
 the main context, a validator script relaying only a bounded-alphabet verdict — was designed and
 deliberately parked; the reasoning is in
-[`ideas/adopt-testapp-scan-airlock.md`](../../../ideas/adopt-testapp-scan-airlock.md).
+[#2](https://github.com/vaadin/swingbridge-emulators/issues/2).
 
 **Capture the licence grant — cheapest as part of the same scan.** The subagent is reading the
 `README`/licence files anyway, so have it return the grant **verbatim** (with the file and line
@@ -498,7 +498,7 @@ there maps to a *subuid* that cannot write the host-owned `.m2` mount, and the b
 
 **Record both JDK outcomes separately — the combination is the informative result.** Runs on 21 but
 fails on 24 is evidence for the *Vaadin-level* downport
-([`ideas/vaadin-24-23-downport.md`](../../../ideas/vaadin-24-23-downport.md)), not for a loom
+([#33](https://github.com/vaadin/swingbridge-emulators/issues/33)), not for a loom
 backport — the loom strategy's JDK 24+ floor is closed as won't-implement (CLAUDE.md, "JDK 24+ is
 mandatory"), so a 21-only app reaches SB-Emulators only through a non-virtual-thread blocking
 strategy. Weigh it comparatively: "modernize your JDK before migrating your UI framework" is a fair
@@ -809,4 +809,4 @@ from here on.
 Gap ledger + routing (implement in SB-Emulators / pre-rewritten fork / island hand-port / accept-and-WARN) is
 migration work, not adoption work. The inventory app is the worked example, and the routings are
 what its `testapps/inventory/README.md` records — the ledger itself was prose in
-`ideas/inventory-testapp-migration.md` that got consumed row by row as each row closed.
+[#16](https://github.com/vaadin/swingbridge-emulators/issues/16) that got consumed row by row as each row closed.
