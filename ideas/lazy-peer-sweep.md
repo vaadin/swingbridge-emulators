@@ -55,13 +55,9 @@ write follows); this is the worklist for what remains. Rule numbers below are D_
 - **Open, not yet measured:** a surrogate's own `onAttach` runs before the emulator's drain listener,
   so a nested peer with queued writes meets attach with its pre-drain state.
   `JTable.installEditorComponents` reads `comp.getPeer()` outside a write — browser-driven today.
-- **Docs that still describe the synchronous seam** and change once this closes: R_swing_is_truth
-  (the `preventPeerEvents` guard is no longer the primary echo filter; `isFromClient()` is, per
-  rule 10); SD_toggle_checkbox_first_cut's Validation paragraph (still says the emulator's events
-  come through a bridged surrogate pulse); R_no_vaadin_in_api (names `getPeer` as the sanctioned
-  accessor), R_tolerate_off_ui_thread limb 2 (names it as the chokepoint) and limb 3 (`withPeer` is
-  synchronous — it now queues), R_match_swing_errors case (7) (writes no longer need a context),
-  D_attach_aware_hop, D_no_context_throws, D_sync_ui_hop, SD_sjbutton, `emulators/architecture.md`
-  § "The peer field" / § "Peer instantiation" / § "Threading", and CLAUDE.md § Current scope (most
-  emulators "rendered by a surrogate peer while owning their state" stays true, the concurrency
-  paragraph does not).
+- **Docs that still describe the synchronous seam** and change once this closes (CLAUDE.md's hard
+  rules already describe the queue): SD_toggle_checkbox_first_cut's Validation paragraph (still
+  says the emulator's events come through a bridged surrogate pulse); R_no_vaadin_in_api (names
+  `getPeer` as the sanctioned accessor — changes when `getPeer()` leaves the migrator's surface,
+  above); D_attach_aware_hop, D_no_context_throws, D_sync_ui_hop, SD_sjbutton, and
+  `emulators/architecture.md` § "The peer field" / § "Peer instantiation" / § "Threading".
