@@ -258,6 +258,26 @@ class JLabelTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("text positions reach the peer, whatever order they are set in")
+    void textPositionsReachThePeer() {
+        // The toolbar idiom: icon above, text centred below it.
+        JLabel l = new JLabel("HOME");
+        l.setHorizontalTextPosition(SwingConstants.CENTER);
+        l.setVerticalTextPosition(SwingConstants.BOTTOM);
+        assertEquals("column", peerOf(l).getElement().getStyle().get("flex-direction"));
+
+        // Back to a row: the horizontal half must survive the column shape SJLabel cannot
+        // encode it in, so LEADING (text before icon) comes back rather than the default.
+        l.setHorizontalTextPosition(SwingConstants.LEADING);
+        l.setVerticalTextPosition(SwingConstants.CENTER);
+        assertEquals("row-reverse", peerOf(l).getElement().getStyle().get("flex-direction"));
+        assertEquals(SwingConstants.LEADING, l.getHorizontalTextPosition());
+
+        l.setVerticalTextPosition(SwingConstants.TOP);
+        assertEquals("column-reverse", peerOf(l).getElement().getStyle().get("flex-direction"));
+    }
+
+    @Test
     @DisplayName("setText reaches the rendered SJLabel when hosted in a frame")
     void setTextReachesTheRenderedLabel() {
         // End-to-end: a JLabel inside a visible JFrame renders via its

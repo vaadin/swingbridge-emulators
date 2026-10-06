@@ -416,6 +416,24 @@ class JScrollPaneTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("JViewport add(view) sets the view, as the JDK's addImpl does")
+    void viewportAddSetsTheView() {
+        JScrollPane sp = new JScrollPane();
+        JLabel first = new JLabel("first");
+        sp.getViewport().add(first);
+        assertSame(first, sp.getViewportView());
+        assertSame(first.getPeer(), peerOf(sp).getContent());
+        assertEquals(1, sp.getViewport().getComponentCount());
+
+        JLabel second = new JLabel("second");
+        sp.getViewport().add(second, "ignored", 0);
+        assertSame(second, sp.getViewportView());
+        assertSame(second.getPeer(), peerOf(sp).getContent());
+        assertEquals(1, sp.getViewport().getComponentCount(), "add replaces the view, never appends");
+        assertNull(first.getParent());
+    }
+
+    @Test
     @DisplayName("JViewport addChangeListener stores but never fires")
     void viewportChangeListenerStoresButNeverFires() {
         JViewport vp = new JScrollPane().getViewport();

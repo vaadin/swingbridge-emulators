@@ -180,6 +180,16 @@ public class JViewport extends vaadinx.swing.JComponent implements javax.accessi
         }
     }
 
+    /**
+     * Every {@code add(...)} overload makes {@code child} the view, as the JDK's does —
+     * {@code scrollPane.getViewport().add(view)} is the common spelling of
+     * {@code setViewportView(view)}. Constraints and index are ignored.
+     */
+    @Override
+    protected void addImpl(vaadinx.awt.Component child, java.lang.Object constraints, int index) {
+        setView(child);
+    }
+
     // --- Round-trip-only viewport state ---------------------------------
 
     public java.awt.Dimension getExtentSize() {
