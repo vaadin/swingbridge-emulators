@@ -175,6 +175,7 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
     super();
     _installSwingClass();
     this.textSpan = new Span();
+    textSpan.getElement().getStyle().set("white-space", "nowrap");
     getElement().appendChild(textSpan.getElement());
     // Seed JDK JLabel layout defaults (LEADING / CENTER / TRAILING /
     // CENTER + gap 4px) into host CSS so getters return the right
@@ -238,6 +239,10 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
    * {@link Span#setText}. Transitioning HTML → plain clears DOM
    * children before reseeding the text node. {@code null} writes
    * land as {@code ""}.
+   *
+   * <p>Plain text renders on one line ({@code white-space: nowrap}), as a
+   * JDK JLabel paints it — a {@code \n} included, which the JDK does not
+   * break on either. HTML text wraps, as the JDK's HTML view does.
    */
   @Override
   public void setText(String text) {
@@ -247,12 +252,16 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
       return;
     if (isHtmlString(next)) {
       textSpan.getElement().setProperty("innerHTML", stripHtmlBodyWrapper(next));
+      if (htmlText == null) {
+        textSpan.getElement().getStyle().remove("white-space");
+      }
       htmlText = next;
     } else {
       if (htmlText != null) {
         // Transition out of HTML mode: drop the parsed children
         // before setText can reseed a single text node.
         textSpan.getElement().setProperty("innerHTML", "");
+        textSpan.getElement().getStyle().set("white-space", "nowrap");
         htmlText = null;
       }
       textSpan.setText(next);

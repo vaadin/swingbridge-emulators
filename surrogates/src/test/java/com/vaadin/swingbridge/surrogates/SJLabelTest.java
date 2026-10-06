@@ -76,6 +76,15 @@ class SJLabelTest extends AbstractKaribuTest {
                 .orElse(null);
     }
 
+    /** The inner text Span's {@code white-space}, or {@code null} when unset. */
+    private static String whiteSpace(SJLabel l) {
+        return l.getElement().getChildren()
+                .filter(it -> "span".equals(it.getTag()))
+                .findFirst()
+                .map(it -> it.getStyle().get("white-space"))
+                .orElse(null);
+    }
+
     // --- Ctors / defaults --------------------------------------------
 
     @Test
@@ -201,6 +210,19 @@ class SJLabelTest extends AbstractKaribuTest {
         SJLabel l = new SJLabel();
         l.setText("<html><body style='width:230px'>plain</body></html>");
         assertEquals("plain", innerHtml(l));
+    }
+
+    @Test
+    @DisplayName("plain text never wraps; html text does, and plain again does not")
+    void plainTextNeverWrapsHtmlDoes() {
+        SJLabel l = new SJLabel("Item Name");
+        assertEquals("nowrap", whiteSpace(l));
+
+        l.setText("<html>a long caption the html view may wrap</html>");
+        assertNull(whiteSpace(l), "html text wraps, as the JDK's HTML view does");
+
+        l.setText("Rack Number");
+        assertEquals("nowrap", whiteSpace(l));
     }
 
     @Test

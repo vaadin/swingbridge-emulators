@@ -39,7 +39,11 @@ Ordered by certainty, not size. Each names its root cause where one was confirme
    because one of its fields has no column count and does fill. Fix at whichever layer owns the
    preferred-width-vs-stretch rule — probably not the add-on, since `GridBagLayout` `fill` would hit
    the same thing.
-4. **`JLabel` plain text wraps.** Its peer carries `white-space: normal`; a Swing `JLabel` without
+4. **Done 2026-10-06** for `JLabel` (`SJLabel`'s text span is `white-space: nowrap` in plain-text
+   mode, unset in HTML mode; `SJLabelTest.plainTextNeverWrapsHtmlDoes`; Return's and the home
+   screen's labels confirmed one-line on screen). Still open: **button captions wrap too** — Return
+   and Transfer's "Add Item" breaks onto two lines where the desktop's does not.
+   **`JLabel` plain text wraps.** Its peer carries `white-space: normal`; a Swing `JLabel` without
    `<html>` never wraps. "Item Name", "Rack Number", "New userName:" break onto two lines, and the
    home screen's welcome sentence becomes three. Check against
    [jlabel-html-body-width.md](./jlabel-html-body-width.md) before fixing: the `<html>` case *must*

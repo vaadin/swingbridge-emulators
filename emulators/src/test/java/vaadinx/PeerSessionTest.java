@@ -159,10 +159,13 @@ class PeerSessionTest extends AbstractKaribuTest {
                 failure.set(e);
             }
         }), "racing-writer");
-        writer.start();
         try {
             for (int i = 0; i < 200 && failure.get() == null; i++) {
                 ui.add(label.getPeer());
+                // Not before: until the first attach records a session the writer never blocks, so
+                // its backlog grows with however long the peer takes to build, and draining it all
+                // at once exhausts the heap. A pre-attach backlog is the test above's subject.
+                if (i == 0) writer.start();
                 session.unlock();
                 Thread.onSpinWait();
                 session.lock();
