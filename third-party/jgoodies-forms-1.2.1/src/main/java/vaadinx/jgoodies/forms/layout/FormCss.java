@@ -188,12 +188,17 @@ final class FormCss {
      * The {@code justify-self} / {@code align-self} for one cell, resolving
      * {@code CellConstraints.DEFAULT} against the track's own default alignment — which is
      * what "default" means in Forms, and differs per axis (columns fill, rows centre).
+     *
+     * @param specDefault the cell's one spec's default alignment, or {@code null} when the cell
+     *                    spans several, where {@code DEFAULT} means fill
      */
     static String selfAlignment(CellConstraints.Alignment cellAlignment,
                                 FormSpec.DefaultAlignment specDefault) {
-        String name = (cellAlignment == null || cellAlignment == CellConstraints.DEFAULT)
-                ? String.valueOf(specDefault)
-                : String.valueOf(cellAlignment);
+        boolean isDefault = cellAlignment == null || cellAlignment == CellConstraints.DEFAULT;
+        if (isDefault && specDefault == null) {
+            return "stretch";
+        }
+        String name = isDefault ? String.valueOf(specDefault) : String.valueOf(cellAlignment);
         switch (name) {
             case "fill":
                 return "stretch";

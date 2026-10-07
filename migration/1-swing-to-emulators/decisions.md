@@ -564,6 +564,17 @@ reachable base. Harmless for that library; **R_leaf_peer_lockdown lock-down redi
 either a different base or a lock-down carve-out. Expect this to be the recurring friction, not
 missing hooks.
 
+**The one core change an add-on has needed, and what it reported: a contract added to the seam later
+must land on the seam's own type.** [D_layout_owns_child_sizing](../../emulators/decisions.md#D_layout_owns_child_sizing),
+which came after both ports, made every `CssEmittingLayoutManager` responsible for writing two
+child-sizing CSS variables — and documented the builder as a `:surrogates` class, which the Forms
+port's pom deliberately does not depend on. The port never wrote them, so a `JTextField(columns)` in a
+FILL cell kept its column width instead of filling (the inventory app's forms, 2026-10-07). The fix is
+the add-on's own `childCss`; what core lacked was the call on the seam:
+`CssEmittingLayoutManager.sizingCss` now forwards to the builder, so a custom layout — an add-on's or
+a migrator's ([M1D_custom_layoutmanager](#M1D_custom_layoutmanager)) — rules on child sizing without
+reaching past the type it implements. Nothing in core learned the add-on exists.
+
 **Reactor: default modules, no profile.** Two small modules cost nothing to build, and a profile is a
 foot-gun — a fork drifts against a `vaadinx.awt` change and CI stays green because nobody built it.
 Revisit at ~10 modules.

@@ -33,6 +33,8 @@
 
 package vaadinx.awt;
 
+import com.vaadin.swingbridge.surrogates.util.LayoutCss;
+
 import java.util.Map;
 
 /**
@@ -56,6 +58,10 @@ import java.util.Map;
  *                       "grid-template-columns", "auto 1fr",
  *                       "gap", "4px 8px");
  *     }
+ *     // Each child fills its cell's width, so a JTextField(20)'s preferred width yields.
+ *     public Map<String,String> childCss(Container parent, Component child) {
+ *         return CssEmittingLayoutManager.sizingCss(true, false);
+ *     }
  * }
  * // parent.setLayout(new TwoColumnLayout());   // children flow into the grid
  * }</pre>
@@ -78,12 +84,12 @@ import java.util.Map;
  * <p><b>Child sizing (D_layout_owns_child_sizing).</b> A child's
  * {@link Component#setPreferredSize} does not write {@code width} / {@code height}
  * outright — it writes {@code width: var(--emul-layout-w, Npx)}, and the parent layout
- * rules on each axis by writing that variable from {@link #childCss}:
- * {@code com.vaadin.swingbridge.surrogates.util.LayoutCss.sizingCss(layoutSizesWidth, layoutSizesHeight)}
- * builds the pair. Say {@code true} for an axis this layout sizes itself (the pref is
- * ignored, as {@code BorderLayout} NORTH ignores the pref width), {@code false} to let
- * the pref stand. A layout that returns neither variable leaves whatever the last layout
- * wrote in place, so emit both for every child — {@code sizingCss} always does.
+ * rules on each axis by writing that variable from {@link #childCss}, with
+ * {@link #sizingCss} building the pair. This is the rule a CSS {@code stretch} alone
+ * cannot express: a cell's {@code justify-self: stretch} grows only an auto-sized child,
+ * so a child carrying its preferred width keeps it until the layout says otherwise. A
+ * layout that returns neither variable leaves whatever the last layout wrote in place, so
+ * emit both for every child — {@code sizingCss} always does.
  *
  * <p><b>Map semantics.</b> A returned map applies key-by-key: a value sets the property,
  * {@code null} removes it, an absent key is left untouched — so a layout can clear a
@@ -109,6 +115,19 @@ public interface CssEmittingLayoutManager extends LayoutManager {
      */
     default Map<String, String> childCss(Container parent, Component child) {
         return null;
+    }
+
+    /**
+     * The per-child sizing pair for {@link #childCss}: which axes of the child this layout
+     * sizes itself, and which it leaves to the child's preferred size. Say {@code true} for
+     * an axis the layout sizes (the pref is ignored, as {@code BorderLayout} NORTH ignores
+     * the pref width, or a {@code GridBagLayout} cell whose {@code fill} covers the axis),
+     * {@code false} to let the pref stand.
+     *
+     * @return a new map holding both variables; merge it into the child's CSS
+     */
+    static Map<String, String> sizingCss(boolean layoutSizesWidth, boolean layoutSizesHeight) {
+        return LayoutCss.sizingCss(layoutSizesWidth, layoutSizesHeight);
     }
 
     /** Name used in the non-Div ERROR log for {@link #containerCss} writes. */

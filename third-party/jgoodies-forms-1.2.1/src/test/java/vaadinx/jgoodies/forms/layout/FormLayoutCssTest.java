@@ -19,6 +19,7 @@ import com.vaadin.swingbridge.surrogates.SHelper;
 import vaadinx.EHelper;
 import vaadinx.jgoodies.forms.factories.FormFactory;
 import vaadinx.swing.JPanel;
+import vaadinx.swing.JTextField;
 
 import java.awt.Insets;
 import java.util.ArrayList;
@@ -253,6 +254,47 @@ class FormLayoutCssTest {
 
         assertEquals("start", style(c, "justify-self"), "column spec says left");
         assertEquals("center", style(c, "align-self"), "row spec says center");
+    }
+
+    /**
+     * Upstream's {@code CellConstraints.extent}: a FILL cell gives its component the whole cell,
+     * every other alignment the component's own size. A {@code JTextField(columns)} carries that
+     * size as its CSS width, which a cell's {@code stretch} alone does not override — the
+     * inventory app's Category Name field rendered at 120px in a 240px column.
+     */
+    @Test
+    @DisplayName("a fill cell sizes its child's width; a left cell leaves the preferred width")
+    void aFillCellSizesItsChildsWidthALeftCellLeavesThePreferredWidth() {
+        JPanel panel = inventoryPanel();
+        JTextField filled = new JTextField(10);
+        JTextField left = new JTextField(10);
+        panel.add(filled, "4, 2, fill, default");
+        panel.add(left, "2, 2, left, default");
+        panel.doLayout();
+
+        assertEquals("var(--emul-layout-w, calc(10ch + 2em))", style(filled, "width"),
+                "the column count stays the preferred width");
+        assertEquals("auto", style(filled, "--emul-layout-w"), "FILL takes the width over");
+        assertEquals("initial", style(left, "--emul-layout-w"), "LEFT keeps the preferred width");
+        assertEquals("initial", style(filled, "--emul-layout-h"), "a default row centres, so the height is the field's");
+    }
+
+    /** Upstream's concreteAlignment: a spanning cell has no one spec, so DEFAULT means FILL. */
+    @Test
+    @DisplayName("a spanning cell's default alignment is fill, whatever its first column says")
+    void aSpanningCellsDefaultAlignmentIsFill() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new FormLayout(
+                new ColumnSpec[]{ColumnSpec.decode("left:default"), ColumnSpec.decode("left:default")},
+                new RowSpec[]{FormFactory.DEFAULT_ROWSPEC}));
+        vaadinx.awt.Component wide = component();
+        panel.add(wide, "1, 1, 2, 1");
+        panel.doLayout();
+
+        assertEquals("stretch", style(wide, "justify-self"));
+        assertEquals("auto", style(wide, "--emul-layout-w"));
+        assertEquals("center", style(wide, "align-self"), "one row: its spec still decides");
+        assertEquals(List.of(), warns);
     }
 
     /**

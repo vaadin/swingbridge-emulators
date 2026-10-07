@@ -1286,9 +1286,11 @@ public final class FormLayout implements LayoutManager2, vaadinx.awt.CssEmitting
     }
 
     /**
-     * Places one child in its cell. A child with no constraints is left alone rather than
-     * guessed at — it was added without going through this layout, so grid-placing it would
-     * invent a position.
+     * Places one child in its cell, and sizes it on each axis its alignment fills — upstream's
+     * {@code CellConstraints.extent} gives a FILL cell the whole cell and every other alignment
+     * the component's own size. A child with no constraints is left alone rather than guessed
+     * at — it was added without going through this layout, so grid-placing it would invent a
+     * position.
      */
     public java.util.Map<String, String> childCss(Container parent, Component child) {
         CellConstraints cc = (CellConstraints) constraintMap.get(child);
@@ -1302,13 +1304,21 @@ public final class FormLayout implements LayoutManager2, vaadinx.awt.CssEmitting
             // faithfully inside a grid cell.
             vaadinx.EHelper.onUnimplemented("FormLayout", "CellConstraints.insets", cc.insets);
         }
+        // A spanning cell has no single spec to inherit from, so upstream's concreteAlignment
+        // resolves its DEFAULT to FILL; a null spec default says the same to selfAlignment.
+        String justify = FormCss.selfAlignment(cc.hAlign,
+                cc.gridWidth != 1 || colSpecs.isEmpty() ? null : colSpec(cc.gridX).getDefaultAlignment());
+        String align = FormCss.selfAlignment(cc.vAlign,
+                cc.gridHeight != 1 || rowSpecs.isEmpty() ? null : rowSpec(cc.gridY).getDefaultAlignment());
         java.util.Map<String, String> css = new java.util.LinkedHashMap<String, String>();
         css.put("grid-column", FormCss.gridLine(cc.gridX, cc.gridWidth));
         css.put("grid-row", FormCss.gridLine(cc.gridY, cc.gridHeight));
-        css.put("justify-self", FormCss.selfAlignment(cc.hAlign,
-                colSpecs.isEmpty() ? null : colSpec(cc.gridX).getDefaultAlignment()));
-        css.put("align-self", FormCss.selfAlignment(cc.vAlign,
-                rowSpecs.isEmpty() ? null : rowSpec(cc.gridY).getDefaultAlignment()));
+        css.put("justify-self", justify);
+        css.put("align-self", align);
+        // stretch only grows an auto-sized child; one carrying its preferred width (a
+        // JTextField's column count) keeps it unless the layout takes the axis over.
+        css.putAll(vaadinx.awt.CssEmittingLayoutManager.sizingCss(
+                "stretch".equals(justify), "stretch".equals(align)));
         return css;
     }
 

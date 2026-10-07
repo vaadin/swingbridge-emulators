@@ -4857,7 +4857,10 @@ return isEnabledSelf;
 axis: `auto` — "this layout sizes the axis, the pref is ignored" — or `initial`, the
 guaranteed-invalid value, which makes the child's `var()` fall back to its own pref. Built with
 `com.vaadin.swingbridge.surrogates.util.LayoutCss.sizingCss(layoutSizesWidth, layoutSizesHeight)`; the two axis
-constants and `prefWidth` / `prefHeight` live beside it.
+constants and `prefWidth` / `prefHeight` live beside it. A layout outside core — a migrator's own
+([M1D_custom_layoutmanager](../migration/1-swing-to-emulators/decisions.md#M1D_custom_layoutmanager))
+or an add-on's — reaches the builder as `vaadinx.awt.CssEmittingLayoutManager.sizingCss`, on the seam
+it already implements, so it needs no `:surrogates` import.
 
 **A preferred size means nothing on its own, which is why this cannot live on the child.** In AWT
 the child never sizes itself — `layoutContainer` calls `setBounds` on it, and each manager decides
