@@ -68,6 +68,12 @@ class SButtonTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("the label never wraps, as AWT paints it")
+    void theLabelNeverWraps() {
+        assertEquals("nowrap", new SButton("Add Item").getElement().getStyle().get("white-space"));
+    }
+
+    @Test
     @DisplayName("setLabel null renders blank rather than NPEing the peer")
     void setLabelNullRendersBlankRatherThanNpeingThePeer() {
         // Vaadin's setText NPEs on null; setLabel maps it to "" so a

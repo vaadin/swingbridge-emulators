@@ -124,6 +124,12 @@ class SJButtonTest extends AbstractKaribuTest {
     }
 
     @Test
+    @DisplayName("the caption never wraps, as a JDK button paints it")
+    void theCaptionNeverWraps() {
+        assertEquals("nowrap", style(new SJButton("Add Item")).get("white-space"));
+    }
+
+    @Test
     @DisplayName("setText reaches Vaadin Button textNode (rendered caption)")
     void setTextReachesTextNode() {
         // Regression for the latent bug pre-fix: mixin used to write

@@ -332,6 +332,7 @@ class SJToggleButtonTest extends AbstractKaribuTest {
         assertEquals("center", style.get("justify-content"));
         assertEquals("center", style.get("align-items"));
         assertEquals("4px", style.get("gap"));
+        assertEquals("nowrap", style.get("white-space"), "a JDK button's caption never wraps");
     }
 
     @Test

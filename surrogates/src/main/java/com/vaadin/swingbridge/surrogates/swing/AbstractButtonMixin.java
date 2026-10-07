@@ -163,6 +163,8 @@ public interface AbstractButtonMixin extends JComponentMixin, java.awt.ItemSelec
         style.set("justify-content", "center");      // h-align CENTER
         style.set("align-items", "center");          // v-align CENTER
         style.set("gap", "4px");                     // iconTextGap default
+        // A JDK button paints its caption on one line; the browser would wrap it.
+        style.set("white-space", "nowrap");
     }
 
     /**

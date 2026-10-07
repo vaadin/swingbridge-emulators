@@ -86,6 +86,8 @@ public class SButton extends Button implements ComponentMixin {
     public SButton(String label) {
         super();
         _installSwingClass();
+        // An AWT button paints its label on one line; the browser would wrap it.
+        getElement().getStyle().set("white-space", "nowrap");
         // One Vaadin subscription drives the whole ActionListener fan-out
         // (R_vaadin_first's shared-subscription wiring shape). R_callswing_envelope: the browser → AWT
         // seam funnels through callSwing so a listener that opens a modal
