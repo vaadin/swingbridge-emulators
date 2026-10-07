@@ -264,17 +264,30 @@ class JLabelTest extends AbstractKaribuTest {
         JLabel l = new JLabel("HOME");
         l.setHorizontalTextPosition(SwingConstants.CENTER);
         l.setVerticalTextPosition(SwingConstants.BOTTOM);
-        assertEquals("column", peerOf(l).getElement().getStyle().get("flex-direction"));
+        assertEquals(SwingConstants.CENTER, peerOf(l).getHorizontalTextPosition());
+        assertEquals(SwingConstants.BOTTOM, peerOf(l).getVerticalTextPosition());
 
-        // Back to a row: the horizontal half must survive the column shape SJLabel cannot
-        // encode it in, so LEADING (text before icon) comes back rather than the default.
+        // Back side by side: the horizontal half survives the stacked shape.
         l.setHorizontalTextPosition(SwingConstants.LEADING);
         l.setVerticalTextPosition(SwingConstants.CENTER);
-        assertEquals("row-reverse", peerOf(l).getElement().getStyle().get("flex-direction"));
-        assertEquals(SwingConstants.LEADING, l.getHorizontalTextPosition());
+        assertEquals(SwingConstants.LEADING, peerOf(l).getHorizontalTextPosition());
+        assertEquals(SwingConstants.CENTER, peerOf(l).getVerticalTextPosition());
 
         l.setVerticalTextPosition(SwingConstants.TOP);
-        assertEquals("column-reverse", peerOf(l).getElement().getStyle().get("flex-direction"));
+        assertEquals(SwingConstants.TOP, peerOf(l).getVerticalTextPosition());
+    }
+
+    @Test
+    @DisplayName("alignment and icon-text gap reach the peer")
+    void alignmentAndGapReachThePeer() {
+        JLabel l = new JLabel("Total:", SwingConstants.RIGHT);
+        assertEquals(SwingConstants.RIGHT, peerOf(l).getHorizontalAlignment());
+
+        l.setVerticalAlignment(SwingConstants.TOP);
+        assertEquals(SwingConstants.TOP, peerOf(l).getVerticalAlignment());
+
+        l.setIconTextGap(10);
+        assertEquals(10, peerOf(l).getIconTextGap());
     }
 
     @Test

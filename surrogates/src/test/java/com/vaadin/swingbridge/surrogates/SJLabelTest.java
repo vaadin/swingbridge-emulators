@@ -78,10 +78,15 @@ class SJLabelTest extends AbstractKaribuTest {
 
     /** The inner text Span's {@code white-space}, or {@code null} when unset. */
     private static String whiteSpace(SJLabel l) {
+        return textStyle(l, "white-space");
+    }
+
+    /** One property of the inner text Span's style, or {@code null} when unset. */
+    private static String textStyle(SJLabel l, String property) {
         return l.getElement().getChildren()
                 .filter(it -> "span".equals(it.getTag()))
                 .findFirst()
-                .map(it -> it.getStyle().get("white-space"))
+                .map(it -> it.getStyle().get(property))
                 .orElse(null);
     }
 
@@ -384,23 +389,24 @@ class SJLabelTest extends AbstractKaribuTest {
         assertSame(target, events.get(0).getNewValue());
     }
 
-    // --- Layout setters (drive inline-flex CSS) ---------------------
+    // --- Layout setters (drive inline-grid CSS) ---------------------
     // R_match_swing_errors IAE preserved; the four alignment / text-position / iconTextGap
-    // setters round-trip via local fields and write the corresponding
-    // flex CSS to the host <label>. SHelper.onNoop / onUnimplemented
-    // never fires from this surface — silent at the WARN-inventory level.
+    // setters write grid CSS to the host <label> and its text span, and read it back.
+    // SHelper.onNoop / onUnimplemented never fires from this surface — silent at the
+    // WARN-inventory level.
 
     @Test
-    @DisplayName("host label runs as inline-flex with JDK defaults")
-    void hostLabelRunsAsInlineFlexWithJdkDefaults() {
+    @DisplayName("host label runs as inline-grid with JDK defaults")
+    void hostLabelRunsAsInlineGridWithJdkDefaults() {
         SJLabel l = new SJLabel();
         Style style = l.getElement().getStyle();
-        assertEquals("inline-flex", style.get("display"));
-        // JDK defaults: TRAILING h-text-pos + CENTER v-text-pos → row.
-        assertEquals("row", style.get("flex-direction"));
-        // LEADING h-align → flex-start; CENTER v-align → center; gap 4px.
-        assertEquals("flex-start", style.get("justify-content"));
-        assertEquals("center", style.get("align-items"));
+        assertEquals("inline-grid", style.get("display"));
+        // JDK defaults: TRAILING h-text-pos + CENTER v-text-pos → side by side, icon first.
+        assertEquals("column", style.get("grid-auto-flow"));
+        assertNull(textStyle(l, "order"));
+        // LEADING h-align → start; CENTER v-align → center; gap 4px.
+        assertEquals("start", style.get("justify-content"));
+        assertEquals("center", style.get("align-content"));
         assertEquals("4px", style.get("gap"));
     }
 
@@ -413,15 +419,16 @@ class SJLabelTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("setHorizontalAlignment writes justify-content with TRAILING canonical readback")
+    @DisplayName("setHorizontalAlignment writes justify-content, physical and relative values distinct")
     void setHorizontalAlignmentWritesJustifyContent() {
-        // R_vaadin_first lossy round-trip: RIGHT and TRAILING both write `flex-end`,
-        // and the getter reads back as TRAILING (canonical) — same
-        // shape as setBorder/getBorder per SD_border_css_lossy.
         SJLabel l = new SJLabel();
         l.setHorizontalAlignment(SwingConstants.RIGHT);
+        assertEquals(SwingConstants.RIGHT, l.getHorizontalAlignment());
+        assertEquals("right", l.getElement().getStyle().get("justify-content"));
+
+        l.setHorizontalAlignment(SwingConstants.TRAILING);
         assertEquals(SwingConstants.TRAILING, l.getHorizontalAlignment());
-        assertEquals("flex-end", l.getElement().getStyle().get("justify-content"));
+        assertEquals("end", l.getElement().getStyle().get("justify-content"));
         assertNoWarns();
     }
 
@@ -445,12 +452,12 @@ class SJLabelTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("setVerticalAlignment round-trips and writes align-items")
-    void setVerticalAlignmentRoundTripsAndWritesAlignItems() {
+    @DisplayName("setVerticalAlignment round-trips and writes align-content")
+    void setVerticalAlignmentRoundTripsAndWritesAlignContent() {
         SJLabel l = new SJLabel();
         l.setVerticalAlignment(SwingConstants.TOP);
         assertEquals(SwingConstants.TOP, l.getVerticalAlignment());
-        assertEquals("flex-start", l.getElement().getStyle().get("align-items"));
+        assertEquals("start", l.getElement().getStyle().get("align-content"));
     }
 
     @Test
@@ -461,47 +468,94 @@ class SJLabelTest extends AbstractKaribuTest {
     }
 
     @Test
-    @DisplayName("setVerticalTextPosition TOP promotes layout to column-reverse")
-    void setVerticalTextPositionTopPromotesToColumnReverse() {
-        // TOP = text above icon → DOM order [icon, text] needs reversing
-        // along the column axis, so column-reverse.
+    @DisplayName("alignment stays on its physical axis when the label stacks")
+    void alignmentStaysOnItsAxisWhenStacked() {
+        // A flexbox would swap the axes here; the grid must not.
+        SJLabel l = new SJLabel("HOME");
+        l.setVerticalTextPosition(SwingConstants.BOTTOM);
+        l.setHorizontalAlignment(SwingConstants.CENTER);
+        l.setVerticalAlignment(SwingConstants.TOP);
+        Style style = l.getElement().getStyle();
+        assertEquals("center", style.get("justify-content"));
+        assertEquals("start", style.get("align-content"));
+    }
+
+    @Test
+    @DisplayName("setVerticalTextPosition TOP stacks the text above the icon")
+    void setVerticalTextPositionTopStacksTextAbove() {
         SJLabel l = new SJLabel();
         l.setVerticalTextPosition(SwingConstants.TOP);
-        assertEquals("column-reverse", l.getElement().getStyle().get("flex-direction"));
+        assertEquals("row", l.getElement().getStyle().get("grid-auto-flow"));
+        assertEquals("-1", textStyle(l, "order"));
+        assertEquals(SwingConstants.TOP, l.getVerticalTextPosition());
     }
 
     @Test
-    @DisplayName("setVerticalTextPosition BOTTOM uses column direction")
-    void setVerticalTextPositionBottomUsesColumn() {
+    @DisplayName("setVerticalTextPosition BOTTOM stacks the text below the icon")
+    void setVerticalTextPositionBottomStacksTextBelow() {
         SJLabel l = new SJLabel();
         l.setVerticalTextPosition(SwingConstants.BOTTOM);
-        assertEquals("column", l.getElement().getStyle().get("flex-direction"));
+        assertEquals("row", l.getElement().getStyle().get("grid-auto-flow"));
+        assertNull(textStyle(l, "order"));
+        assertEquals(SwingConstants.BOTTOM, l.getVerticalTextPosition());
     }
 
     @Test
-    @DisplayName("setHorizontalTextPosition LEADING flips to row-reverse")
-    void setHorizontalTextPositionLeadingFlipsToRowReverse() {
+    @DisplayName("setHorizontalTextPosition LEADING puts the text first")
+    void setHorizontalTextPositionLeadingPutsTextFirst() {
         SJLabel l = new SJLabel();
         l.setHorizontalTextPosition(SwingConstants.LEADING);
-        assertEquals("row-reverse", l.getElement().getStyle().get("flex-direction"));
+        assertEquals("column", l.getElement().getStyle().get("grid-auto-flow"));
+        assertEquals("-1", textStyle(l, "order"));
     }
 
     @Test
-    @DisplayName("setHorizontalTextPosition TRAILING uses row direction (JDK default)")
-    void setHorizontalTextPositionTrailingUsesRow() {
+    @DisplayName("setHorizontalTextPosition TRAILING puts the icon first (JDK default)")
+    void setHorizontalTextPositionTrailingPutsIconFirst() {
         SJLabel l = new SJLabel();
         l.setHorizontalTextPosition(SwingConstants.LEADING);  // flip away from default
         l.setHorizontalTextPosition(SwingConstants.TRAILING);
-        assertEquals("row", l.getElement().getStyle().get("flex-direction"));
+        assertNull(textStyle(l, "order"));
     }
 
     @Test
-    @DisplayName("vertical text-position non-CENTER overrides horizontal direction")
-    void verticalTextPositionNonCenterOverridesHorizontal() {
+    @DisplayName("stacked, horizontalTextPosition places the text against the icon and survives")
+    void stackedHorizontalTextPositionPlacesTextAgainstIcon() {
+        // The toolbar idiom: text centred under the icon.
         SJLabel l = new SJLabel();
-        l.setHorizontalTextPosition(SwingConstants.LEADING);  // would set row-reverse
-        l.setVerticalTextPosition(SwingConstants.BOTTOM);     // promotes to column
-        assertEquals("column", l.getElement().getStyle().get("flex-direction"));
+        l.setHorizontalTextPosition(SwingConstants.CENTER);
+        l.setVerticalTextPosition(SwingConstants.BOTTOM);
+        assertEquals("center", textStyle(l, "justify-self"));
+        assertEquals("center", l.getElement().getStyle().get("justify-items"));
+
+        // LEADING hangs the text off the icon's leading edge: text at start, icon at end.
+        l.setHorizontalTextPosition(SwingConstants.LEADING);
+        assertEquals("start", textStyle(l, "justify-self"));
+        assertEquals("end", l.getElement().getStyle().get("justify-items"));
+        assertNull(textStyle(l, "order"), "BOTTOM keeps the text after the icon");
+
+        // Back side by side, the horizontal position the stacked shape held comes back.
+        l.setVerticalTextPosition(SwingConstants.CENTER);
+        assertEquals(SwingConstants.LEADING, l.getHorizontalTextPosition());
+        assertEquals("-1", textStyle(l, "order"));
+    }
+
+    @Test
+    @DisplayName("text-position setters fire PCE with real old and new values")
+    void textPositionSettersFirePce() {
+        SJLabel l = new SJLabel();
+        List<PropertyChangeEvent> events = new ArrayList<>();
+        l.addPropertyChangeListener(events::add);
+        l.setVerticalTextPosition(SwingConstants.BOTTOM);
+        l.setHorizontalTextPosition(SwingConstants.CENTER);
+        l.setHorizontalTextPosition(SwingConstants.CENTER);   // unchanged: no event
+        assertEquals(2, events.size());
+        assertEquals("verticalTextPosition", events.get(0).getPropertyName());
+        assertEquals(SwingConstants.CENTER, events.get(0).getOldValue());
+        assertEquals(SwingConstants.BOTTOM, events.get(0).getNewValue());
+        assertEquals("horizontalTextPosition", events.get(1).getPropertyName());
+        assertEquals(SwingConstants.TRAILING, events.get(1).getOldValue());
+        assertEquals(SwingConstants.CENTER, events.get(1).getNewValue());
     }
 
     @Test

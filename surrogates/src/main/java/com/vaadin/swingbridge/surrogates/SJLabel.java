@@ -79,41 +79,42 @@ import java.util.concurrent.atomic.AtomicLong;
  * attribute.</li>
  * </ul>
  *
- * <h2>Layout — {@code display: inline-flex} drives alignment + text-position + gap</h2>
+ * <h2>Layout — {@code display: inline-grid} drives alignment + text-position + gap</h2>
  *
- * The host {@code <label>} runs as {@code display: inline-flex}; the
- * four alignment / text-position setters and {@code iconTextGap} all
- * map onto flex CSS:
+ * The host {@code <label>} runs as {@code display: inline-grid}, whose
+ * tracks are the JDK's icon-plus-text block; the four alignment /
+ * text-position setters and {@code iconTextGap} all map onto grid CSS:
  *
  * <ul>
- * <li>{@code horizontalTextPosition} drives {@code flex-direction} on
- * the row axis: {@code TRAILING}/{@code RIGHT} → {@code row} (icon
- * before text, JDK default), {@code LEADING}/{@code LEFT} →
- * {@code row-reverse} (text before icon).</li>
- * <li>{@code verticalTextPosition} promotes the layout to a column when
- * non-CENTER: {@code TOP} → {@code column-reverse} (text above icon),
- * {@code BOTTOM} → {@code column} (text below icon). When
- * {@code verticalTextPosition == CENTER} the row direction wins —
- * matches JDK's "icon and text side-by-side" default.</li>
- * <li>{@code horizontalAlignment} drives {@code justify-content}:
- * {@code LEFT}/{@code LEADING} → {@code flex-start},
- * {@code CENTER} → {@code center}, {@code RIGHT}/{@code TRAILING} →
- * {@code flex-end}. Visible only when the label has explicit width;
- * a shrink-wrap label (no size set) lays out flush either way.</li>
- * <li>{@code verticalAlignment} drives {@code align-items}:
- * {@code TOP} → {@code flex-start}, {@code CENTER} → {@code center},
- * {@code BOTTOM} → {@code flex-end}. Same shrink-wrap caveat.</li>
+ * <li>{@code horizontalAlignment} → {@code justify-content} and
+ * {@code verticalAlignment} → {@code align-content}: where the block
+ * sits in the label. Visible only when the label is larger than its
+ * content — a shrink-wrap label lays out flush either way, as in the
+ * JDK.</li>
+ * <li>{@code verticalTextPosition} picks the shape: {@code CENTER} puts
+ * icon and text side by side ({@code grid-auto-flow: column}),
+ * {@code TOP} / {@code BOTTOM} stack the text above / below the icon
+ * ({@code row}).</li>
+ * <li>{@code horizontalTextPosition} orders the pair side by side
+ * ({@code TRAILING} / {@code RIGHT} icon first, otherwise text first),
+ * and when stacked places the text against the icon: {@code CENTER}
+ * centres it underneath, {@code LEADING} hangs it off the icon's
+ * leading edge.</li>
  * <li>{@code iconTextGap} → CSS {@code gap}.</li>
  * </ul>
  *
+ * <p>A grid rather than a flexbox because its alignment axes are fixed:
+ * a flexbox aligns along its main axis, which turns vertical when the
+ * label stacks, so {@code horizontalAlignment} would move the block
+ * vertically.
+ *
  * <p>R_match_swing_errors IAE preserved before any CSS write (bad SwingConstants axis
- * still throws). Getters lossy-parse CSS back per R_vaadin_first — same shape as
- * {@code setBorder} / {@code getBorder} (SD_border_css_lossy): LEFT and LEADING both
- * round-trip as LEADING (canonical), RIGHT and TRAILING as TRAILING;
- * {@code verticalTextPosition} non-CENTER masks
- * {@code horizontalTextPosition} (column/column-reverse can't encode
- * the row-axis value, so {@code getHorizontalTextPosition} reports the
- * JDK default TRAILING in that state).
+ * still throws). Getters parse the CSS back per R_vaadin_first, the shape of
+ * {@code setBorder} / {@code getBorder} (SD_border_css_lossy); CSS has
+ * both the physical ({@code left}) and the writing-direction-relative
+ * ({@code start}) value, so every alignment and text position round-trips.
+ * The one shape that renders approximately is a {@code CENTER} text position
+ * side by side, which the JDK paints over the icon: it renders text first.
  *
  * <p>{@code displayedMnemonic} / {@code displayedMnemonicIndex} stay
  * Bucket B noops — JLabel's mnemonic visually underlines a character,
@@ -178,14 +179,15 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
     textSpan.getElement().getStyle().set("white-space", "nowrap");
     getElement().appendChild(textSpan.getElement());
     // Seed JDK JLabel layout defaults (LEADING / CENTER / TRAILING /
-    // CENTER + gap 4px) into host CSS so getters return the right
-    // canonical without setters being called first.
+    // CENTER + gap 4px) into the CSS so getters return them without
+    // setters being called first.
     Style style = getElement().getStyle();
-    style.set("display", "inline-flex");
-    style.set("flex-direction", "row");           // h-text-pos TRAILING + v-text-pos CENTER
-    style.set("justify-content", "flex-start");   // h-align LEADING (lossy: reads back as LEADING)
-    style.set("align-items", "center");           // v-align CENTER
+    style.set("display", "inline-grid");
+    style.set("align-items", "center");           // icon and text centred against each other
+    style.set("justify-content", "start");        // h-align LEADING
+    style.set("align-content", "center");         // v-align CENTER
     style.set("gap", "4px");                      // iconTextGap default
+    writeTextPosition(SwingConstants.TRAILING, SwingConstants.CENTER);
   }
 
   public SJLabel(String text) {
@@ -401,95 +403,85 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
    */
   private static final AtomicLong LABEL_FOR_ID_COUNTER = new AtomicLong();
 
-  // --- Layout setters (drive inline-flex CSS directly per R_vaadin_first) ------
+  // --- Layout setters (drive inline-grid CSS directly per R_vaadin_first) ------
   //
-  // Setters write CSS; getters lossy-parse CSS back. Validation that
-  // JDK throws on (SwingConstants axis check, mnemonic index bounds)
-  // is preserved per R_match_swing_errors — the throw fires before any state mutation,
-  // so a user passing an invalid argument still surfaces the
-  // programming error. PCE old/new values are the canonical
-  // CSS-readback so they match what the getter returns.
+  // Setters write CSS; getters parse it back, so no value is stored twice.
+  // Validation that JDK throws on (SwingConstants axis check, mnemonic index
+  // bounds) is preserved per R_match_swing_errors — the throw fires before any
+  // state mutation. PCE old/new values are the CSS readback, so they match what
+  // the getter returns.
   //
-  // Layout effects:
-  //   * flex-direction: verticalTextPosition non-CENTER promotes to
-  //     column (BOTTOM) or column-reverse (TOP), masking
-  //     horizontalTextPosition. CENTER stays on the row axis;
-  //     TRAILING/RIGHT → row, LEADING/LEFT/CENTER → row-reverse.
-  //   * justify-content (h-align): LEFT/LEADING → flex-start,
-  //     CENTER → center, RIGHT/TRAILING → flex-end.
-  //   * align-items (v-align): TOP → flex-start, CENTER → center,
-  //     BOTTOM → flex-end.
+  // A grid rather than a flexbox because grid alignment is tied to the physical
+  // axes: justify-* is always horizontal and align-* always vertical, whichever
+  // way the icon and text are arranged. In a flexbox both pairs follow the main
+  // axis, so a stacked (column) label would align its block on the wrong axis,
+  // and `flex-start` flips sides under a reversed direction.
+  //
+  //   * The block of icon + text — the JDK's union of iconR and textR — is the
+  //     grid's tracks; justify-content places it horizontally (horizontalAlignment)
+  //     and align-content vertically (verticalAlignment).
+  //   * grid-auto-flow is the shape: `column` puts icon and text side by side
+  //     (verticalTextPosition CENTER), `row` stacks them (TOP / BOTTOM). The text
+  //     span's `order: -1` puts the text first: above the icon for TOP, before it
+  //     for LEADING / LEFT / CENTER side by side.
+  //   * horizontalTextPosition is also each child's place in a stacked column —
+  //     the icon's via justify-items, the text's via its own justify-self — so
+  //     CENTER centres the text under the icon and LEADING hangs it off the
+  //     icon's leading edge. Side by side each child has its own track, so the
+  //     two are invisible there and serve only as the getter's source.
   //   * gap: iconTextGap px.
   //
-  // Lossy readback (R_vaadin_first accepted): justify-content flex-start →
-  // LEADING (canonical), flex-end → TRAILING; column-shape
-  // flex-direction reports horizontalTextPosition as TRAILING (the
-  // value can't be reconstructed from column CSS alone).
+  // Lossless except for one shape: side by side, a CENTER text position (the
+  // JDK paints the text over the icon) renders as LEADING (text before icon).
 
   public int getHorizontalAlignment() {
-    return justifyContentToSwing(getElement().getStyle().get("justify-content"));
+    return cssToHorizontal(getElement().getStyle().get("justify-content"));
   }
 
   public void setHorizontalAlignment(int alignment) {
     int validated = checkHorizontalKey(alignment, "horizontalAlignment");
-    Style style = getElement().getStyle();
-    String oldCss = style.get("justify-content");
-    String newCss = swingToJustifyContent(validated);
-    if (newCss.equals(oldCss)) return;
-    int oldCanonical = justifyContentToSwing(oldCss);
-    style.set("justify-content", newCss);
-    firePropertyChange("horizontalAlignment", oldCanonical, justifyContentToSwing(newCss));
+    int old = getHorizontalAlignment();
+    if (old == validated) return;
+    getElement().getStyle().set("justify-content", horizontalToCss(validated));
+    firePropertyChange("horizontalAlignment", old, validated);
   }
 
   public int getVerticalAlignment() {
-    return alignItemsToSwing(getElement().getStyle().get("align-items"));
+    return cssToVertical(getElement().getStyle().get("align-content"));
   }
 
   public void setVerticalAlignment(int alignment) {
     int validated = checkVerticalKey(alignment, "verticalAlignment");
-    Style style = getElement().getStyle();
-    String oldCss = style.get("align-items");
-    String newCss = swingToAlignItems(validated);
-    if (newCss.equals(oldCss)) return;
-    int oldCanonical = alignItemsToSwing(oldCss);
-    style.set("align-items", newCss);
-    firePropertyChange("verticalAlignment", oldCanonical, alignItemsToSwing(newCss));
+    int old = getVerticalAlignment();
+    if (old == validated) return;
+    getElement().getStyle().set("align-content", verticalToCss(validated));
+    firePropertyChange("verticalAlignment", old, validated);
   }
 
   public int getHorizontalTextPosition() {
-    return flexDirectionToHTextPos(getElement().getStyle().get("flex-direction"));
+    return cssToHorizontal(textSpan.getElement().getStyle().get("justify-self"));
   }
 
   public void setHorizontalTextPosition(int textPosition) {
     int validated = checkHorizontalKey(textPosition, "horizontalTextPosition");
-    Style style = getElement().getStyle();
-    String oldCss = style.get("flex-direction");
-    int currentVTextPos = flexDirectionToVTextPos(oldCss);
-    String newCss = flexDirectionCss(validated, currentVTextPos);
-    if (newCss.equals(oldCss)) return;
-    int oldCanonical = flexDirectionToHTextPos(oldCss);
-    style.set("flex-direction", newCss);
-    firePropertyChange("horizontalTextPosition", oldCanonical, flexDirectionToHTextPos(newCss));
+    int old = getHorizontalTextPosition();
+    if (old == validated) return;
+    writeTextPosition(validated, getVerticalTextPosition());
+    firePropertyChange("horizontalTextPosition", old, validated);
   }
 
   public int getVerticalTextPosition() {
-    return flexDirectionToVTextPos(getElement().getStyle().get("flex-direction"));
+    if (!"row".equals(getElement().getStyle().get("grid-auto-flow"))) return SwingConstants.CENTER;
+    return textSpan.getElement().getStyle().get("order") != null
+        ? SwingConstants.TOP : SwingConstants.BOTTOM;
   }
 
   public void setVerticalTextPosition(int textPosition) {
     int validated = checkVerticalKey(textPosition, "verticalTextPosition");
-    Style style = getElement().getStyle();
-    String oldCss = style.get("flex-direction");
-    // Promotion to/from column shape masks horizontalTextPosition;
-    // we use the canonical readback (TRAILING when in column shape)
-    // to compute the new flex-direction. Accepted lossy round-trip
-    // per R_vaadin_first.
-    int currentHTextPos = flexDirectionToHTextPos(oldCss);
-    String newCss = flexDirectionCss(currentHTextPos, validated);
-    if (newCss.equals(oldCss)) return;
-    int oldCanonical = flexDirectionToVTextPos(oldCss);
-    style.set("flex-direction", newCss);
-    firePropertyChange("verticalTextPosition", oldCanonical, flexDirectionToVTextPos(newCss));
+    int old = getVerticalTextPosition();
+    if (old == validated) return;
+    writeTextPosition(getHorizontalTextPosition(), validated);
+    firePropertyChange("verticalTextPosition", old, validated);
   }
 
   public int getIconTextGap() {
@@ -506,75 +498,70 @@ public class SJLabel extends NativeLabel implements JComponentMixin {
     firePropertyChange("iconTextGap", oldGap, iconTextGap);
   }
 
-  private static String flexDirectionCss(int hTextPos, int vTextPos) {
-    // Vertical text-position takes priority when non-CENTER (column shape).
-    if (vTextPos == SwingConstants.TOP) return "column-reverse";
-    if (vTextPos == SwingConstants.BOTTOM) return "column";
-    // CENTER → row layout; horizontal text-position decides icon-text order.
-    // TRAILING/RIGHT keeps the icon-first DOM order (row); LEADING/LEFT/CENTER
-    // flips so text comes before icon (row-reverse).
-    return switch (hTextPos) {
-      case SwingConstants.RIGHT, SwingConstants.TRAILING -> "row";
-      default -> "row-reverse";
-    };
+  /** Writes the shape, the text's order and both children's place in a stacked column. */
+  private void writeTextPosition(int hTextPos, int vTextPos) {
+    Style host = getElement().getStyle();
+    Style text = textSpan.getElement().getStyle();
+    boolean stacked = vTextPos != SwingConstants.CENTER;
+    boolean textFirst = stacked
+        ? vTextPos == SwingConstants.TOP
+        : hTextPos != SwingConstants.TRAILING && hTextPos != SwingConstants.RIGHT;
+    host.set("grid-auto-flow", stacked ? "row" : "column");
+    if (textFirst) {
+      text.set("order", "-1");
+    } else {
+      text.remove("order");
+    }
+    String textSide = horizontalToCss(hTextPos);
+    text.set("justify-self", textSide);
+    host.set("justify-items", oppositeSide(textSide));   // the icon's, which has no justify-self
   }
 
-  private static String swingToJustifyContent(int alignment) {
+  /** LEADING / TRAILING are writing-direction-relative, LEFT / RIGHT physical — CSS has both. */
+  private static String horizontalToCss(int alignment) {
     return switch (alignment) {
-      case SwingConstants.LEFT, SwingConstants.LEADING -> "flex-start";
-      case SwingConstants.CENTER -> "center";
-      case SwingConstants.RIGHT, SwingConstants.TRAILING -> "flex-end";
-      default -> "flex-start";
-    };
-  }
-
-  private static String swingToAlignItems(int alignment) {
-    return switch (alignment) {
-      case SwingConstants.TOP -> "flex-start";
-      case SwingConstants.CENTER -> "center";
-      case SwingConstants.BOTTOM -> "flex-end";
+      case SwingConstants.LEFT -> "left";
+      case SwingConstants.RIGHT -> "right";
+      case SwingConstants.LEADING -> "start";
+      case SwingConstants.TRAILING -> "end";
       default -> "center";
     };
   }
 
-  /** Lossy readback: flex-start → LEADING (JLabel JDK default), flex-end → TRAILING; otherwise CENTER. */
-  private static int justifyContentToSwing(String css) {
+  private static int cssToHorizontal(String css) {
     if (css == null) return SwingConstants.CENTER;
     return switch (css) {
-      case "flex-start" -> SwingConstants.LEADING;
-      case "flex-end" -> SwingConstants.TRAILING;
+      case "left" -> SwingConstants.LEFT;
+      case "right" -> SwingConstants.RIGHT;
+      case "start" -> SwingConstants.LEADING;
+      case "end" -> SwingConstants.TRAILING;
       default -> SwingConstants.CENTER;
     };
   }
 
-  private static int alignItemsToSwing(String css) {
-    if (css == null) return SwingConstants.CENTER;
+  private static String oppositeSide(String css) {
     return switch (css) {
-      case "flex-start" -> SwingConstants.TOP;
-      case "flex-end" -> SwingConstants.BOTTOM;
-      default -> SwingConstants.CENTER;
+      case "left" -> "right";
+      case "right" -> "left";
+      case "start" -> "end";
+      case "end" -> "start";
+      default -> css;
     };
   }
 
-  /**
-   * Lossy readback for horizontal text-position. row → TRAILING,
-   * row-reverse → LEADING (canonical); column / column-reverse mask
-   * the row axis and report TRAILING (JDK default — accepted loss).
-   */
-  private static int flexDirectionToHTextPos(String css) {
-    if (css == null) return SwingConstants.TRAILING;
-    return switch (css) {
-      case "row-reverse" -> SwingConstants.LEADING;
-      // row, column, column-reverse, anything else → JDK default TRAILING
-      default -> SwingConstants.TRAILING;
+  private static String verticalToCss(int alignment) {
+    return switch (alignment) {
+      case SwingConstants.TOP -> "start";
+      case SwingConstants.BOTTOM -> "end";
+      default -> "center";
     };
   }
 
-  private static int flexDirectionToVTextPos(String css) {
+  private static int cssToVertical(String css) {
     if (css == null) return SwingConstants.CENTER;
     return switch (css) {
-      case "column-reverse" -> SwingConstants.TOP;
-      case "column" -> SwingConstants.BOTTOM;
+      case "start" -> SwingConstants.TOP;
+      case "end" -> SwingConstants.BOTTOM;
       default -> SwingConstants.CENTER;
     };
   }
